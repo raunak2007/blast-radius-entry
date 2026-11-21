@@ -6,3 +6,6 @@
 !tpcds.pkl.gz
 !globals_refs.pkl.gz
 !genmem.pkl.gz
+!dictkeys.pkl.gz
+!cmp.pkl.gz
+!argreq.pkl.gz

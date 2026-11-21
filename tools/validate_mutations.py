@@ -154,6 +154,30 @@ if module_values:
                 spans.append(((v.lineno, v.col_offset), (v.end_lineno, v.end_col_offset)))
         return spans
     files = [f for f in files if any(rel_ok for rel_ok in [f])]
+
+# BR_SITES=class-dict-entries: only mutate inside one entry (key or value) of a dict assigned
+# to a class attribute that the dict-key index can narrow (to test that narrowing)
+dict_entries = os.environ.get("BR_SITES") == "class-dict-entries"
+if dict_entries:
+    dk = pickle.load(gzip.open(os.environ["BR_DICTKEYS"]))
+    safe_attrs = set(dk["tracked"]) - set(dk["unsafe"])
+
+    def value_spans(text):
+        spans = []
+        for cls in ast.walk(ast.parse(text)):
+            if not isinstance(cls, ast.ClassDef):
+                continue
+            for node in cls.body:
+                targets = node.targets if isinstance(node, ast.Assign) else [node.target] if isinstance(node, ast.AnnAssign) else []
+                if len(targets) != 1 or not isinstance(targets[0], ast.Name) or targets[0].id not in safe_attrs:
+                    continue
+                if not isinstance(getattr(node, "value", None), ast.Dict):
+                    continue
+                for k, v in zip(node.value.keys, node.value.values):
+                    if k is not None and k.lineno == v.end_lineno:
+                        spans.append(((k.lineno, k.col_offset), (v.end_lineno, v.end_col_offset)))
+        return spans
+    module_values = True  # reuse the span filter below
 results = []
 picked = set()
 attempts = 0
@@ -171,6 +195,24 @@ while len(results) < n and attempts < n * 50:
         sites = [x for x in sites if any(a <= (x[0], x[1]) and (x[0], x[2]) <= b for a, b in spans)]
         pool = [(x, "module") for x in sites]
         sites = []
+    if os.environ.get("BR_SITES") == "arg-types":
+        # only True/False flips inside an expression class's arg_types (to test that narrowing)
+        flips = set()
+        if rel.startswith("sqlglot/expressions/"):
+            for cls in ast.walk(ast.parse(text)):
+                if isinstance(cls, ast.ClassDef):
+                    for node in cls.body:
+                        if isinstance(node, ast.Assign) and len(node.targets) == 1 and \
+                                getattr(node.targets[0], "id", None) == "arg_types" and isinstance(node.value, ast.Dict):
+                            for v in node.value.values:
+                                if isinstance(v, ast.Constant) and isinstance(v.value, bool):
+                                    flips.add((v.lineno, v.col_offset))
+        sites = [x for x in sites if (x[0], x[1]) in flips]
+        if sites:
+            want_class = True
+    if os.environ.get("BR_SITES") == "cmp-swaps":
+        # only swaps to the neighbouring operator (is -> ==, < -> <=, ...), to test that narrowing
+        sites = [x for x in sites if x[5] == "compare" and x[3] in ("is", "<", "<=", ">", ">=")]
     for s in sites:
         sc = scope_of(text, s[0])
         executed = s[0] in covered.get(rel, {})

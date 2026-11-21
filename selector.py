@@ -34,6 +34,12 @@ MAP = Path(os.environ.get("BR_MAP", str(Path(__file__).with_name("blast_map.pkl.
 TPCDS_DATA = Path(os.environ.get("BR_TPCDS", str(Path(__file__).with_name("tpcds.pkl.gz"))))
 GLOBALS_DATA = Path(os.environ.get("BR_GLOBALS", str(Path(__file__).with_name("globals_refs.pkl.gz"))))
 GENMEM_DATA = Path(os.environ.get("BR_GENMEM", str(Path(__file__).with_name("genmem.pkl.gz"))))
+DICTKEYS_DATA = Path(os.environ.get("BR_DICTKEYS", str(Path(__file__).with_name("dictkeys.pkl.gz"))))
+CMP_DATA = Path(os.environ.get("BR_CMP", str(Path(__file__).with_name("cmp.pkl.gz"))))
+ARGREQ_DATA = Path(os.environ.get("BR_ARGREQ", str(Path(__file__).with_name("argreq.pkl.gz"))))
+CMP_NAMES = {ast.Is: "is", ast.IsNot: "is not", ast.Eq: "==", ast.NotEq: "!=", ast.Lt: "<", ast.LtE: "<=",
+             ast.Gt: ">", ast.GtE: ">=", ast.In: "in", ast.NotIn: "not in"}
+CMP_ALT = {"is": "==", "is not": "!=", "<": "<=", "<=": "<", ">": ">=", ">=": ">"}  # as tools/cmp_plugin.py
 GENMEM_TEST = "tests/test_generator.py::TestGenerator::test_generator_memory"
 TPCDS_TEST = "tests/test_executor.py::TestExecutor::test_execute_tpcds"
 # Plan a TPC-DS replay only if its estimated CPU is at most this share of the time it would
@@ -387,7 +393,8 @@ class Selector:
             return self.module_fallback(rel, idx)
         lo, hi = span
         if st["scope"] == "function":
-            m = self.line_union(rel, lo, hi)
+            cm = self.compare_mask(rel, st, line, blk, span) if blk is not None else None
+            m = self.line_union(rel, lo, hi) if cm is None else cm
             if self.touches_import(rel, lo, hi):
                 func = st["func"]
                 m |= self.broad_for_function(rel, idx, func)
@@ -415,6 +422,56 @@ class Selector:
             if entry is not None:
                 return entry | self.subprocess
         return self.module_fallback(rel, idx, st["node"])
+
+    # ---- a comparison operator swapped for another
+
+    def compare_mask(self, rel, st, line, blk, span):
+        """A one-line edit that only swaps the operator of a single comparison `a OP b`:
+        the tests where that swap changes the comparison's result, from the weak-mutation
+        run at the pinned commit (tools/build_cmp.py), for the neighbouring operator that
+        run computed (is -> ==, is not -> !=, < -> <=, <= -> <, > -> >=, >= -> >): only the
+        tests where the two disagreed. None for any other edit, or if they also disagreed
+        outside tests."""
+        if len(blk["removed"]) != 1 or len(blk["added"]) != 1:
+            return None
+        old_line, new_line = blk["removed_text"][0], blk["added_text"][0]
+        lo, hi = changed_range(old_line, new_line)
+        target = None
+        for node in ast.walk(st["node"]):
+            if isinstance(node, ast.Compare) and len(node.ops) == 1:
+                left, right = node.left, node.comparators[0]
+                if left.end_lineno == line == right.lineno and left.end_col_offset <= lo and hi <= right.col_offset:
+                    target = node
+                    break
+        if target is None or type(target.ops[0]) not in CMP_NAMES:
+            return None
+        new_st, _ = self.new_idx.stmt_at(blk["added"][0])
+        if new_st is None:
+            return None
+        new_cmp = None
+        for node in ast.walk(new_st["node"]):
+            if isinstance(node, ast.Compare) and node.lineno == target.lineno and node.col_offset == target.col_offset:
+                new_cmp = node
+                break
+        if new_cmp is None or len(new_cmp.ops) != 1 or type(new_cmp.ops[0]) not in CMP_NAMES:
+            return None
+        if ast.dump(new_cmp.left) != ast.dump(target.left) or \
+                ast.dump(new_cmp.comparators[0]) != ast.dump(target.comparators[0]):
+            return None
+        old_op, new_op = CMP_NAMES[type(target.ops[0])], CMP_NAMES[type(new_cmp.ops[0])]
+        if old_op == new_op:
+            return None
+        data = load_cmp()
+        if data is None:
+            return None
+        key = (rel, target.lineno, target.col_offset)
+        if key in data["outside"] or data["ops"].get(key, old_op) != old_op:
+            return None
+        if CMP_ALT.get(old_op) != new_op:
+            return None  # only the neighbouring operator was computed; any other swap flips results
+        m = data["differs"].get(key, 0)
+        # tests the instrumented run couldn't see (fresh interpreters) or that failed there
+        return m | (self.line_union(rel, span[0], span[1]) & (self.subprocess | data["failed"]))
 
     # ---- module-level constants
 
@@ -530,6 +587,126 @@ class Selector:
                 return None
         return None
 
+    def argreq_mask(self, rel, st, node, line, blk):
+        """A one-line True/False flip of one entry of an expression class's arg_types. Those
+        values only build required_args (at class creation), which only error_messages reads,
+        so the flip can only change what it reports for that class, or a class that copies
+        its arg_types, when that arg is missing: the tests where that happened in the
+        instrumented run at the pinned commit (tools/build_argreq.py). None if unsure."""
+        if not rel.startswith("sqlglot/expressions/") or len(blk["removed"]) != 1 or len(blk["added"]) != 1:
+            return None
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+        if len(targets) != 1 or not isinstance(targets[0], ast.Name) or targets[0].id != "arg_types" \
+                or not isinstance(node.value, ast.Dict):
+            return None
+        lo, hi = changed_range(blk["removed_text"][0], blk["added_text"][0])
+        old = self.entry_at(node, line, lo, hi)
+        if old is None or not (isinstance(old[0], ast.Constant) and isinstance(old[0].value, str)):
+            return None
+        if not (isinstance(old[1], ast.Constant) and isinstance(old[1].value, bool)):
+            return None
+        if (old[1].lineno, old[1].col_offset) > (line, lo):
+            return None  # the edit reaches the key
+        new_st, _ = self.new_idx.stmt_at(blk["added"][0])
+        if new_st is None or not isinstance(new_st["node"], ast.Assign) or not isinstance(new_st["node"].value, ast.Dict):
+            return None
+        nlo, nhi = changed_range(blk["added_text"][0], blk["removed_text"][0])
+        new = self.entry_at(new_st["node"], blk["added"][0], nlo, nhi)
+        if new is None or not (isinstance(new[0], ast.Constant) and new[0].value == old[0].value) \
+                or not (isinstance(new[1], ast.Constant) and isinstance(new[1].value, bool)):
+            return None
+        data = load_argreq()
+        if data is None:
+            return None
+        module = rel[:-3].replace("/", ".")
+        owners, todo = set(), [f"{module}.{st['cls']}"]
+        while todo:
+            o = todo.pop()
+            if o in owners:
+                continue
+            owners.add(o)
+            short = o.rsplit(".", 1)[-1]
+            if short in data["unsafe_names"]:
+                return None
+            todo.extend(data["derived"].get(short, ()))
+        key = old[0].value
+        m = data["test_reads"]
+        for o in owners:
+            if (o, key) in data["outside"]:
+                return None
+            m |= data["missing"].get((o, key), 0)
+        return m
+
+    @staticmethod
+    def key_names(k):
+        """Canonical names a dict key's source can stand for (as dictkeys_plugin writes
+        them), or None if it can't be told from the source."""
+        if isinstance(k, ast.Constant):
+            if isinstance(k.value, str):
+                return {"s:" + k.value}
+            if isinstance(k.value, (int, float, bool)) or k.value is None:
+                return {"r:" + repr(k.value)}
+            return None
+        if isinstance(k, ast.Attribute):  # exp.DType.X, TokenType.X, exp.Anonymous
+            return {"e:" + k.attr, "c:" + k.attr}
+        return None
+
+    @staticmethod
+    def entry_at(node, line, lo, hi):
+        """(key, value) of the dict entry in `node` holding columns [lo, hi) of `line`."""
+        for d in ast.walk(node):
+            if not isinstance(d, ast.Dict):
+                continue
+            for k, v in zip(d.keys, d.values):
+                if k is None:
+                    continue
+                if (k.lineno, k.col_offset) <= (line, lo) and (line, hi) <= (v.end_lineno, v.end_col_offset):
+                    return k, v
+        return None
+
+    def dict_key_mask(self, rel, node, line, blk):
+        """A one-line edit to one entry (its key, its value, or both) of a class-level dict
+        constant: the tests that looked up the old or the new key in any dict of that name,
+        or read such a dict whole from test code (tools/build_dictkeys.py, which also rules
+        out names whose dicts are copied, aliased, written or derived from). None if unsure."""
+        if len(blk["removed"]) != 1 or len(blk["added"]) != 1:
+            return None
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+        if len(targets) != 1 or not isinstance(targets[0], ast.Name):
+            return None
+        attr = targets[0].id
+        data = load_dictkeys()
+        if data is None or attr not in data["tracked_set"] or attr in data["unsafe"]:
+            return None
+        old_line, new_line = blk["removed_text"][0], blk["added_text"][0]
+        lo, hi = changed_range(old_line, new_line)
+        old = self.entry_at(node, line, lo, hi)
+        if old is None:
+            return None
+        names = self.key_names(old[0])
+        if names is None:
+            return None
+        key_touched = (old[0].end_lineno, old[0].end_col_offset) >= (line, lo) and \
+            (old[0].lineno, old[0].col_offset) <= (line, hi)
+        if key_touched:
+            new_st, _ = self.new_idx.stmt_at(blk["added"][0])
+            if new_st is None or not isinstance(new_st["node"], (ast.Assign, ast.AnnAssign)):
+                return None
+            nlo, nhi = changed_range(new_line, old_line)
+            new = self.entry_at(new_st["node"], blk["added"][0], nlo, nhi)
+            new_names = self.key_names(new[0]) if new is not None else None
+            if new_names is None:
+                return None
+            names = names | new_names
+        per = data["keys"].get(attr, {})
+        m = 0
+        for tid in data["full_tests"].get(attr, ()):
+            m |= self.test_bit.get(tid, 0)
+        for k in names:
+            for tid in per.get(k, ()):
+                m |= self.test_bit.get(tid, 0)
+        return m
+
     @staticmethod
     def plain_data_class(cls_node):
         """Enums, dataclasses and named tuples use class attributes without attribute reads."""
@@ -554,6 +731,10 @@ class Selector:
         if self.plain_data_class(idx.class_node(st["cls"])):
             return None
         mask = self.dict_entry_mask(rel, node, line, blk)
+        if mask is None:
+            mask = self.dict_key_mask(rel, node, line, blk)
+        if mask is None:
+            mask = self.argreq_mask(rel, st, node, line, blk)
         if len(blk["removed"]) != 1 or len(blk["added"]) != 1:
             return mask
         targets = node.targets if isinstance(node, ast.Assign) else [node.target]
@@ -905,6 +1086,50 @@ _TPCDS = None
 
 _GLOBALS = None
 _GENMEM = None
+_DICTKEYS = None
+_CMP = None
+_ARGREQ = None
+
+
+def load_argreq():
+    """Per (expression class, arg): tests that checked it while missing (tools/build_argreq.py)."""
+    global _ARGREQ
+    if _ARGREQ is None:
+        try:
+            with gzip.open(ARGREQ_DATA, "rb") as fh:
+                _ARGREQ = pickle.load(fh)
+        except Exception as error:
+            log(f"no arg_types data ({error!r}); such flips keep the class-wide selection")
+            _ARGREQ = False
+    return _ARGREQ or None
+
+
+def load_cmp():
+    """Weak-mutation data for comparisons, at the pinned commit (tools/build_cmp.py)."""
+    global _CMP
+    if _CMP is None:
+        try:
+            with gzip.open(CMP_DATA, "rb") as fh:
+                _CMP = pickle.load(fh)
+        except Exception as error:
+            log(f"no comparison data ({error!r}); operator swaps keep the line-coverage selection")
+            _CMP = False
+    return _CMP or None
+
+
+def load_dictkeys():
+    """Per-key reads of class-level dict constants, at the pinned commit (tools/build_dictkeys.py)."""
+    global _DICTKEYS
+    if _DICTKEYS is None:
+        try:
+            with gzip.open(DICTKEYS_DATA, "rb") as fh:
+                data = pickle.load(fh)
+            data["tracked_set"] = set(data["tracked"])
+            _DICTKEYS = data
+        except Exception as error:
+            log(f"no dict-key index ({error!r}); such edits keep the class-wide selection")
+            _DICTKEYS = False
+    return _DICTKEYS or None
 GENMEM_MODULE_S = 0.004  # importing one sqlglot module in the child (measured ~1-2 ms), with margin
 
 
