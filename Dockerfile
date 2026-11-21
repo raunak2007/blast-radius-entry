@@ -11,7 +11,8 @@ ENV PYTHONDONTWRITEBYTECODE=1
 # operands.pkl.gz     per test, the operands each comparison saw (tools/operand_plugin.py)
 # dictreads.pkl.gz    per test, the keys each module/class-level dict literal gave out (same run)
 # defaults.pkl.gz     per test, the defaulted parameters some call left at their default
-COPY requirements.lock selector.py blast_map.pkl.gz sqlglot_src.tar.gz tpcds.pkl.gz globals_refs.pkl.gz genmem.pkl.gz dictkeys.pkl.gz cmp.pkl.gz argreq.pkl.gz import_users.pkl.gz operands.pkl.gz dictreads.pkl.gz defaults.pkl.gz /app/
+# attr_owners.pkl.gz  per test, the class constants it read, by the class that holds them
+COPY requirements.lock selector.py blast_map.pkl.gz sqlglot_src.tar.gz tpcds.pkl.gz globals_refs.pkl.gz genmem.pkl.gz dictkeys.pkl.gz cmp.pkl.gz argreq.pkl.gz import_users.pkl.gz operands.pkl.gz dictreads.pkl.gz defaults.pkl.gz attr_owners.pkl.gz /app/
 
 RUN pip install --no-cache-dir --disable-pip-version-check -q -r /app/requirements.lock
 

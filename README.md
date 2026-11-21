@@ -2,7 +2,7 @@
 
 Picks the sqlglot tests each patch can break, then packs them onto workers.
 
-**Sample set (30 commits):** 97.5 s simulated, 0 misses, about 3 s of CPU. The starter scores 1210.5 s.
+**Sample set (30 commits):** 97.3 s simulated, 0 misses, about 3 s of CPU. The starter scores 1210.5 s.
 
 ## How it decides
 
@@ -28,6 +28,8 @@ Every map comes from running sqlglot's own tests at the pinned commit (`eb11aec4
 
 - **Import-time state is checked, not assumed changed.** When a changed function line also ran while modules were imported (the parser runs while the DuckDB generator parses its SQL templates), the selection is normally widened to everything importing them. If the narrower selection would save at least 3 s, a fresh interpreter (fixed hash seed, CPU and memory capped) imports every sqlglot module and the six test modules whose import runs sqlglot code, once with the patch and once without, and fingerprints all module and class state: values, containers, expression trees, function defaults and closures, the objects they reach, and which imports fail. Code is left out, since what runs later is what coverage decides; tuples are compared by value and class-only sequences by name, since their identity and order follow memory addresses. Equal fingerprints mean the edit only matters where its lines run in tests, and the commit is planned (TPC-DS replay included) as ordinary function code.
 
+- **A changed class constant** (an UPPER_CASE class attribute's literal value, for names no import-time code reads) selects the tests whose reads of it resolved to that class: `tools/attrs_plugin.py` replaces every such constant with a descriptor that returns the same value and records the reader, so a read through a subclass that doesn't override it counts, and one through a subclass that does doesn't. `ClickHouseGenerator.TABLE_HINTS` goes from the 736 tests that read any `TABLE_HINTS` to none.
+
 - **A changed default value** selects only the tests in which some call left that parameter out (`tools/defaults_plugin.py`, sys.monitoring on every module- and class-level function with defaults; an explicit argument that is the very same object counts as left out).
 
 - **Checks run on commits that also change a data file** (a fixture next to a code edit), on the tests that never open the changed file; its readers stay selected.
@@ -45,6 +47,7 @@ Tests are packed longest-first, trying 1 to 8 workers and keeping the cheapest.
 | `selector.py` | The program the scorer runs (stdlib only) |
 | `blast_map.pkl.gz` | Coverage, file reads, and dialect/expression usage per test |
 | `tpcds.pkl.gz` | Per-query coverage, CPU and pristine outputs of `test_execute_tpcds`, plus its tables (`tools/build_tpcds.py`, then `tools/build_tpcds_ctx.py`, which records each query's coverage from a fresh pool worker, split by what checks each part) |
+| `attr_owners.pkl.gz` | Per class constant, the tests whose reads resolved to it (`tools/attrs_plugin.py`, `tools/build_attr_owners.py`) |
 | `defaults.pkl.gz` | Per function and defaulted parameter, the tests in which a call left it at its default (`tools/defaults_plugin.py`, `tools/build_defaults.py`) |
 | `operands.pkl.gz`, `dictreads.pkl.gz` | Per test, the operands each comparison saw and the keys each module/class-level dict literal gave out (`tools/operand_plugin.py`, `tools/build_operands.py`, repacked by `tools/build_lazy.py`) |
 | `import_users.pkl.gz` | Function-body lines that run while other modules are imported, with the modules that affects (`tools/build_import_users.py`) |

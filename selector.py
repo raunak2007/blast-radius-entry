@@ -42,6 +42,7 @@ IMPORTS_DATA = Path(os.environ.get("BR_IMPORTS", str(Path(__file__).with_name("i
 OPERANDS_DATA = Path(os.environ.get("BR_OPERANDS", str(Path(__file__).with_name("operands.pkl.gz"))))
 DICTREADS_DATA = Path(os.environ.get("BR_DICTREADS", str(Path(__file__).with_name("dictreads.pkl.gz"))))
 DEFAULTS_DATA = Path(os.environ.get("BR_DEFAULTS", str(Path(__file__).with_name("defaults.pkl.gz"))))
+ATTR_OWNERS_DATA = Path(os.environ.get("BR_ATTR_OWNERS", str(Path(__file__).with_name("attr_owners.pkl.gz"))))
 CMP_NAMES = {ast.Is: "is", ast.IsNot: "is not", ast.Eq: "==", ast.NotEq: "!=", ast.Lt: "<", ast.LtE: "<=",
              ast.Gt: ">", ast.GtE: ">=", ast.In: "in", ast.NotIn: "not in"}
 CMP_ALT = {"is": "==", "is not": "!=", "<": "<=", "<=": "<", ">": ">=", ">=": ">"}  # as tools/cmp_plugin.py
@@ -1381,6 +1382,38 @@ class Selector:
         # tests in a fresh interpreter weren't seen by the recording run
         return m | (self.line_union(rel, node.lineno, node.end_lineno) & self.subprocess)
 
+    def owner_reads_mask(self, rel, st, node, blk):
+        """A one-line edit to the literal value of an UPPER_CASE class constant: the tests whose
+        reads of it resolved to this class (tools/attrs_plugin.py), for names no import-time
+        code reads. None if unsure."""
+        if len(blk["removed"]) != 1 or len(blk["added"]) != 1 or self.new_idx is None:
+            return None
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+        if len(targets) != 1 or not isinstance(targets[0], ast.Name) or node.value is None:
+            return None
+        name = targets[0].id
+        if not name.isupper() or name.startswith("_") or name not in self.doc["attr_read_masks"]:
+            return None  # not a wrapped constant, or some read of it runs at import
+        new_st, _ = self.new_idx.stmt_at(blk["added"][0])
+        if new_st is None or not isinstance(new_st["node"], type(node)) or new_st["cls"] != st["cls"]:
+            return None
+        new = new_st["node"]
+        new_targets = new.targets if isinstance(new, ast.Assign) else [new.target]
+        if [getattr(t, "id", None) for t in new_targets] != [name] or new.value is None:
+            return None
+        if not (self.literal_default(node.value) and self.literal_default(new.value)):
+            return None
+        if isinstance(node, ast.AnnAssign) and ast.dump(node.annotation) != ast.dump(new.annotation):
+            return None
+        data = load_attr_owners()
+        if data is None:
+            return None
+        entry = (data.get(rel) or {}).get((st["cls"], name))
+        if entry is None or entry["outside"]:
+            return None
+        log(f"class constant edit in {rel}:{blk['removed'][0]} narrowed to the reads of {st['cls']}.{name}")
+        return entry["mask"]
+
     @staticmethod
     def plain_data_class(cls_node):
         """Enums, dataclasses and named tuples use class attributes without attribute reads."""
@@ -1413,6 +1446,10 @@ class Selector:
             mask = self.operand_dict_mask(rel, node, line, blk)
         if len(blk["removed"]) != 1 or len(blk["added"]) != 1:
             return mask
+        if mask is None:
+            owned = self.owner_reads_mask(rel, st, node, blk)
+            if owned is not None:
+                return owned
         targets = node.targets if isinstance(node, ast.Assign) else [node.target]
         if targets and all(isinstance(t, ast.Name) for t in targets):
             reads = [self.doc["attr_read_masks"].get(t.id) for t in targets]
@@ -1975,6 +2012,21 @@ _IMPORTS = None
 _OPERANDS = None
 _DICTREADS = None
 _DEFAULTS = None
+_ATTR_OWNERS = None
+
+
+def load_attr_owners():
+    """Per class constant, the tests whose reads resolved to it (tools/attrs_plugin.py), packed
+    per source file; loaded on first use."""
+    global _ATTR_OWNERS
+    if _ATTR_OWNERS is None:
+        try:
+            with gzip.open(ATTR_OWNERS_DATA, "rb") as fh:
+                _ATTR_OWNERS = Blobs(pickle.load(fh)["by_file"])
+        except Exception as error:
+            log(f"no class-constant read data ({error!r}); such edits keep the name-level reads")
+            _ATTR_OWNERS = False
+    return _ATTR_OWNERS or None
 
 
 def load_defaults():
