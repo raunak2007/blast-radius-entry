@@ -22,7 +22,7 @@ pristine, work, selector, map_path, tests_path, n, seed, out_path, tpcds_path = 
 class_weight = 0.0
 n, seed = int(n), int(seed)
 rng = random.Random(seed)
-VENV_PY = "/home/claude/rwx/.venv313/bin/python"
+VENV_PY = os.environ.get("BR_PYTHON", sys.executable)  # a Python with requirements.lock installed
 
 tests = json.load(open(tests_path))["tests"]
 by_id = {t["id"]: t for t in tests}
@@ -185,7 +185,7 @@ while len(results) < n and attempts < n * 80:
     target.write_text(new_text)
     try:
         junit = f"/tmp/tpcds_junit_{seed}.xml"
-        env = dict(os.environ, PYTHONPATH=work, SKIP_INTEGRATION="0")
+        env = dict(os.environ, PYTHONPATH=work, SKIP_INTEGRATION="0", PYTHONDONTWRITEBYTECODE="1")  # no stale .pyc between runs
         subprocess.run([VENV_PY, "-m", "pytest", TPCDS_ID, "-q", "-p", "no:cacheprovider", "--timeout", "600",
                         f"--junitxml={junit}"], cwd=work, env=env, capture_output=True, timeout=1500)
         failed = TPCDS_ID in failing_tests(junit)

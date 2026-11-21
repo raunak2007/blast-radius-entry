@@ -4,3 +4,5 @@
 !sqlglot_src.tar.gz
 !requirements.lock
 !tpcds.pkl.gz
+!globals_refs.pkl.gz
+!genmem.pkl.gz

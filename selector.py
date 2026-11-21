@@ -32,7 +32,17 @@ DATA = Path(os.environ.get("BR_DATA", "/data"))
 SRC = Path(os.environ.get("BR_SRC", "/opt/sqlglot"))
 MAP = Path(os.environ.get("BR_MAP", str(Path(__file__).with_name("blast_map.pkl.gz"))))
 TPCDS_DATA = Path(os.environ.get("BR_TPCDS", str(Path(__file__).with_name("tpcds.pkl.gz"))))
+GLOBALS_DATA = Path(os.environ.get("BR_GLOBALS", str(Path(__file__).with_name("globals_refs.pkl.gz"))))
+GENMEM_DATA = Path(os.environ.get("BR_GENMEM", str(Path(__file__).with_name("genmem.pkl.gz"))))
+GENMEM_TEST = "tests/test_generator.py::TestGenerator::test_generator_memory"
 TPCDS_TEST = "tests/test_executor.py::TestExecutor::test_execute_tpcds"
+# Plan a TPC-DS replay only if its estimated CPU is at most this share of the time it would
+# save. Full replays run the executor on changed code, where outputs often differ late and
+# changed plans can run slower, so they get a stricter gate.
+TPCDS_GATE = {"front": 0.8, "full": 0.5}
+TPCDS_BUDGET = 0.85  # the replay child is stopped (and the test kept) past this share of the saving
+TPCDS_RERUN_SHARE = 0.5  # second front pass only if its estimate fits in half of what's left
+TPCDS_EARLY_RERUNS = 3  # changed plans run to the end at once, before deferring the rest
 WORKER_MS = 2000
 MAX_WORKERS = 8
 
@@ -401,7 +411,77 @@ class Selector:
             entry = self.dict_entry_mask(rel, st["node"], line, blk)
             if entry is not None:
                 return entry | self.subprocess
+            entry = self.module_value_mask(rel, st["node"], blk)
+            if entry is not None:
+                return entry | self.subprocess
         return self.module_fallback(rel, idx, st["node"])
+
+    # ---- module-level constants
+
+    PURE_CALLS = {"set", "frozenset", "dict", "tuple", "list", "sorted", "len", "range", "str", "int",
+                  "float", "bool", "chr", "ord"}
+    PURE_METHODS = {"lower", "upper", "strip", "fromkeys", "items", "keys", "values", "format", "join", "split"}
+
+    @classmethod
+    def pure_value(cls, node):
+        """True if evaluating this expression at import time can't do anything but build a value."""
+        for sub in ast.walk(node):
+            if isinstance(sub, (ast.Await, ast.Yield, ast.YieldFrom, ast.NamedExpr, ast.Lambda)):
+                return False
+            if isinstance(sub, ast.Call):
+                f = sub.func
+                if isinstance(f, ast.Name) and f.id in cls.PURE_CALLS:
+                    continue
+                if isinstance(f, ast.Attribute) and f.attr in cls.PURE_METHODS:
+                    continue
+                return False
+        return True
+
+    def module_value_mask(self, rel, node, blk):
+        """A line-for-line edit inside the value of a plain module-level assignment reaches
+        only code that reads the name: the tests that ran those reads (per the reference
+        index built from the pinned commit), or that called a function taking it as a
+        default argument. None unless that is provable: every read must run after import
+        and be visible to coverage, and both old and new values must be side-effect free."""
+        if len(blk["removed"]) != len(blk["added"]) or not blk["removed"]:
+            return None
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+        value = node.value
+        if value is None or not targets or not all(isinstance(t, ast.Name) for t in targets):
+            return None
+        start, end = (value.lineno, value.col_offset), (value.end_lineno, value.end_col_offset)
+        for ln, old_line, new_line in zip(blk["removed"], blk["removed_text"], blk["added_text"]):
+            lo, hi = changed_range(old_line, new_line)
+            if not (start <= (ln, lo) and (ln, hi) <= end):
+                return None  # the edit reaches past the value (a target, another statement)
+        new_st, _ = self.new_idx.stmt_at(blk["added"][0])
+        if new_st is None or new_st["scope"] != "module" or not isinstance(new_st["node"], type(node)):
+            return None
+        new_node = new_st["node"]
+        new_targets = new_node.targets if isinstance(new_node, ast.Assign) else [new_node.target]
+        if [getattr(t, "id", None) for t in new_targets] != [t.id for t in targets] or new_node.value is None:
+            return None
+        if not (self.pure_value(value) and self.pure_value(new_node.value)):
+            return None
+        index = load_globals()
+        if index is None:
+            return None
+        m = 0
+        for t in targets:
+            entry = index["names"].get(t.id)
+            if entry is None or entry["unsafe"] or rel not in index["defined"].get(t.id, ()):
+                return None
+            for f, lo, hi in entry["runtime"] + entry["defaults"]:
+                imp = self.import_lines.get(f)
+                if imp and any(ln in imp for ln in range(lo, hi + 1)):
+                    return None  # this read also runs at import time, before any test
+                m |= self.line_union(f, lo, hi)
+            for f in entry["test_files"]:
+                tm = self.doc["test_files"].get(f)
+                if tm is None:
+                    return None
+                m |= tm
+        return m
 
     # ---- class attribute changes
 
@@ -505,6 +585,7 @@ class Selector:
             new_idx = SourceIndex(new_text)
         except SyntaxError:
             raise Fallback(f"syntax error in {rel}")
+        self.new_idx = new_idx
         m = 0
         for blk in blocks:
             if self.comment_only(blk, idx, new_idx):
@@ -660,12 +741,52 @@ class Selector:
         key = "front_cpu" if front else "cpu"
         estimate = sum(q[key] for q in reached) + 1.0
         saving = (pack_cost(chosen, duration) - pack_cost([n for n in chosen if n != tpcds_number], duration)) / 1000
-        if estimate > (0.8 if front else 0.5) * saving:
+        if estimate > TPCDS_GATE["front" if front else "full"] * saving:
             return None
         reached.sort(key=lambda q: q[key])  # cheapest first: a changed output usually shows early
+        # The child stops and keeps the test once it has used this much CPU. In front mode
+        # it also re-runs to the end the queries whose optimizer output changed, if that
+        # still fits, since a different plan often gives the same rows.
+        budget = TPCDS_BUDGET * saving
         log(f"TPC-DS replay planned: {'front' if front else 'full'}, {len(reached)} queries, "
+            f"est {estimate:.1f}s to save {saving:.1f}s, budget {budget:.1f}s")
+        return {"mode": "front" if front else "full", "queries": [q["index"] for q in reached],
+                "estimate": estimate, "budget": budget}
+
+    # ---- test_generator_memory: rerun its per-dialect check only for dialects the edit can reach
+
+    def genmem_plan(self, chosen, duration, genmem_number):
+        """Which dialects to recheck, or None to keep the test as is.
+
+        The test builds every dialect's generator 1,100 times and checks that the last 1,000
+        builds leave under 1 KB behind. Only sqlglot modules that are loaded when a dialect's
+        generator is built can change that dialect's result (tools/build_genmem.py records
+        them per dialect, from a fresh interpreter). Only for commits that change nothing but
+        sqlglot/ Python files."""
+        if not self.verifiable or not self.patched:
+            return None
+        rels = set(self.patched) | {rel for rel, _, _, _ in self.touched}
+        if not rels or any(not (r.startswith("sqlglot/") and r.endswith(".py")) for r in rels):
+            return None
+        data = load_genmem()
+        if data is None:
+            return None
+        dialects = [d for d in data["order"] if rels & data["loaded_sets"][d]]
+        # the test module itself imports a few sqlglot modules; if one changed, the child
+        # imports the test module first, since an import-time failure there fails the test
+        import_check = bool(rels & data["module_loaded_set"])
+        modules = set().union(*(data["loaded_sets"][d] for d in dialects)) if dialects else set()
+        if import_check:
+            modules |= data["module_loaded_set"]
+        estimate = (0.3 + GENMEM_MODULE_S * len(modules) + sum(data["seconds"][d] for d in dialects)) \
+            if dialects or import_check else 0.0
+        saving = (pack_cost(chosen, duration) - pack_cost([n for n in chosen if n != genmem_number], duration)) / 1000
+        if estimate > 0.8 * saving:
+            return None
+        log(f"generator memory check planned: {len(dialects)} of {len(data['order'])} dialects, "
             f"est {estimate:.1f}s to save {saving:.1f}s")
-        return {"mode": "front" if front else "full", "queries": [q["index"] for q in reached], "estimate": estimate}
+        return {"dialects": dialects, "import_check": import_check, "estimate": estimate,
+                "budget": max(0.85 * saving, estimate + 1.0)}
 
 
 # --------------------------------------------------------------------------- packing
@@ -782,6 +903,39 @@ if _root and _src:
 _TPCDS = None
 
 
+_GLOBALS = None
+_GENMEM = None
+GENMEM_MODULE_S = 0.004  # importing one sqlglot module in the child (measured ~1-2 ms), with margin
+
+
+def load_genmem():
+    global _GENMEM
+    if _GENMEM is None:
+        try:
+            with gzip.open(GENMEM_DATA, "rb") as fh:
+                data = pickle.load(fh)
+            data["loaded_sets"] = {d: set(v) for d, v in data["loaded"].items()}
+            data["module_loaded_set"] = set(data["module_loaded"])
+            _GENMEM = data
+        except Exception as error:
+            log(f"no generator-memory data ({error!r}); that test runs whenever it's selected")
+            _GENMEM = False
+    return _GENMEM or None
+
+
+def load_globals():
+    """Where each module-level name is read, at the pinned commit (tools/build_globals.py)."""
+    global _GLOBALS
+    if _GLOBALS is None:
+        try:
+            with gzip.open(GLOBALS_DATA, "rb") as fh:
+                _GLOBALS = pickle.load(fh)
+        except Exception as error:
+            log(f"no module-constant index ({error!r}); such edits keep the broad selection")
+            _GLOBALS = False
+    return _GLOBALS or None
+
+
 def load_tpcds():
     """Per-query coverage, CPU times and pristine outputs of test_execute_tpcds, recorded at the
     pinned commit (tools/build_tpcds.py). Loaded once in the parent; forked checks share it."""
@@ -829,10 +983,25 @@ def enter_overlay(patched):
 def child_tpcds(patched, plan, wfd):
     """In a forked child: replay the planned TPC-DS queries on the patched sources the way
     test_execute_tpcds runs them (parse, pickle to the worker, execute, pickle back, plus the
-    duckdb transpilation) and report the test as failing unless every output is identical."""
+    duckdb transpilation) and report the test as failing unless every output is identical.
+
+    Front mode (changed code runs only inside optimize() for these queries): a first pass
+    stops each query right after optimize() and compares a digest of its output. Queries
+    whose optimizer output is unchanged are settled, since nothing after optimize() runs
+    changed code. If some changed, a second pass runs just those to the end, reusing the
+    first pass's optimizer output, and compares their rows, provided that fits the budget.
+    Full mode runs every planned query to the end. Either way the child gives up (and the
+    test stays selected) once its own CPU passes the plan's budget."""
     import hashlib
     import shutil
+    import signal
+    import time
 
+    budget = plan.get("budget", float("inf"))
+    if budget != float("inf"):
+        # a hard stop: a changed plan can make one query run far longer than recorded
+        signal.signal(signal.SIGPROF, lambda *_: os._exit(3))
+        signal.setitimer(signal.ITIMER_PROF, budget)
     overlay = enter_overlay(patched)
     data = load_tpcds()
     from sqlglot import find_tables, parse_one, transpile
@@ -844,43 +1013,125 @@ def child_tpcds(patched, plan, wfd):
     schema, tables = pickle.loads(pickle.dumps((data["schema"], tables)))
     by_index = {q["index"]: q for q in data["queries"]}
     front = plan["mode"] == "front"
-    seen = {}
+    debug = bool(os.environ.get("BR_DEBUG"))
     original_optimize = executor_module.optimize
+    current = {}
+    optimized = {}  # first-pass optimizer output of the queries whose digest changed
 
     class Stop(BaseException):
         pass
 
-    def optimize_then_stop(*args, **kwargs):
+    def optimize_hook(*args, **kwargs):
+        q = current["q"]
+        if q["index"] in optimized:  # second pass: carry on from the first pass's output
+            return optimized.pop(q["index"])
         result = original_optimize(*args, **kwargs)
-        seen["digest"] = hashlib.sha256(repr(result.dump()).encode()).hexdigest()
+        current["digest"] = hashlib.sha256(repr(result.dump()).encode()).hexdigest()
+        if current["digest"] != q["opt_digest"]:
+            optimized[q["index"]] = result
         raise Stop
 
-    if front:
-        executor_module.optimize = optimize_then_stop
-    same = True
-    for i in plan["queries"]:
-        q = by_index[i]
+    def spent():
+        return time.process_time()  # this forked child's own CPU, imports included
+
+    def run(q):
+        """One query the way the test's pool worker runs it; True if its rows are unchanged."""
+        current.clear()
+        current["q"] = q
         expression = pickle.loads(pickle.dumps(parse_one(q["sql"])))
         used = {t.name: tables[t.name] for t in find_tables(expression)}
-        if front:
-            seen.clear()
-            try:
-                execute(expression, schema=schema, tables=used)
-            except Stop:
-                pass
-            if seen.get("digest") != q["opt_digest"]:
-                same = False
-                break
-        else:
+        try:
             result = pickle.loads(pickle.dumps(execute(expression, schema=schema, tables=used)))
-            if tuple(result.columns) != q["columns"] or list(result.rows) != q["rows"]:
+        except Stop:
+            return None
+        return tuple(result.columns) == q["columns"] and list(result.rows) == q["rows"]
+
+    same = True
+    early = 0
+    if front:
+        executor_module.optimize = optimize_hook
+    try:
+        for i in plan["queries"]:
+            q = by_index[i]
+            if transpile(q["sql"], write="duckdb")[0] != q["duck_sql"]:
+                same = False  # the expected side of the test's comparison moved
+                break
+            if run(q) is False:  # full mode: rows changed (front mode always stops early)
                 same = False
                 break
-        if transpile(q["sql"], write="duckdb")[0] != q["duck_sql"]:
-            same = False
-            break
+            if q["index"] in optimized and early < TPCDS_EARLY_RERUNS:
+                # the first few changed plans run to the end right away: when the edit breaks
+                # results, this is where it shows, long before the first pass would finish
+                early += 1
+                if run(q) is not True:
+                    same = False
+                    break
+            if spent() > budget:
+                same = False
+                break
+        if debug:
+            print(f"tpcds child: first pass same={same} spent={spent():.2f}s changed_plans={len(optimized)} "
+                  f"budget={budget:.2f}s", file=sys.stderr)
+        if same and optimized:
+            todo = sorted((by_index[i] for i in optimized), key=lambda q: q["cpu"] - q["front_cpu"])
+            rerun = sum(max(q["cpu"] - q["front_cpu"], 0.0) for q in todo)
+            if rerun > TPCDS_RERUN_SHARE * (budget - spent()):
+                same = False  # too many changed plans to afford, with room for them running slower
+            for q in todo if same else ():
+                if run(q) is not True or spent() > budget:
+                    if debug:
+                        print(f"tpcds child: query {q['index']} differs or over budget, spent={spent():.2f}s",
+                              file=sys.stderr)
+                    same = False
+                    break
+    finally:
+        executor_module.optimize = original_optimize
+    if debug:
+        print(f"tpcds child: same={same} spent={spent():.2f}s", file=sys.stderr)
     shutil.rmtree(overlay, ignore_errors=True)
     os.write(wfd, json.dumps([] if same else [TPCDS_TEST]).encode())
+    os.close(wfd)
+
+
+def child_genmem(patched, plan, wfd):
+    """In a forked child: test_generator_memory's body, on the patched sources, for the planned
+    dialects only (in the test's order). Reports the test as failing if any of them leaks."""
+    import gc
+    import shutil
+    import signal
+    import tracemalloc
+
+    signal.signal(signal.SIGPROF, lambda *_: os._exit(3))
+    signal.setitimer(signal.ITIMER_PROF, plan["budget"])
+    overlay = enter_overlay(patched)
+    import importlib
+
+    importlib.import_module("tests.test_generator")  # an import error fails the test (and this child)
+    from sqlglot.dialects.dialect import Dialect, Dialects
+
+    wanted = set(plan["dialects"])
+    ok = True
+    for name in Dialects:
+        if name.value not in wanted:
+            continue
+        dialect = Dialect.get_or_raise(name)
+        for _ in range(100):
+            dialect.generator()
+        gc.collect()
+        tracemalloc.start()
+        try:
+            before = tracemalloc.get_traced_memory()[0]
+            for _ in range(1000):
+                dialect.generator()
+            gc.collect()
+            after = tracemalloc.get_traced_memory()[0]
+        finally:
+            tracemalloc.stop()
+        if not after - before < 1024:
+            ok = False
+            break
+    shutil.rmtree(overlay, ignore_errors=True)
+    os.write(wfd, json.dumps([] if ok else [GENMEM_TEST]).encode())
     os.close(wfd)
 
 
@@ -1011,7 +1262,8 @@ def warm(jobs):
              "concurrent.futures dataclasses contextlib ast unittest unittest.mock difflib heapq csv "
              "sqlite3 importlib.metadata importlib.abc importlib.util select signal zoneinfo uuid hashlib "
              "textwrap pprint operator numbers weakref types").split()
-    if any(t.split("::")[0] in HEAVY_FILES for job in jobs if "__tpcds__" not in job[3] for t in job[2]):
+    if any(t.split("::")[0] in HEAVY_FILES for job in jobs
+           if "__tpcds__" not in job[3] and "__genmem__" not in job[3] for t in job[2]):
         names += ["numpy", "pandas", "pandas.testing", "duckdb"]
     for name in names:
         try:
@@ -1046,6 +1298,8 @@ def run_checks(jobs, budget_s):
                         os.dup2(devnull, 2)
                     if "__tpcds__" in limits:
                         child_tpcds(patched, limits["__tpcds__"], w)
+                    elif "__genmem__" in limits:
+                        child_genmem(patched, limits["__genmem__"], w)
                     else:
                         child_run(patched, test_ids, limits, w)
                     os._exit(0)
@@ -1124,6 +1378,7 @@ def main():
     answers = {}
     jobs, tpcds_jobs = [], []
     tpcds_number = number_of.get(TPCDS_TEST)
+    genmem_number = number_of.get(GENMEM_TEST)
     for patch in sorted((DATA / "commits").glob("*.patch")):
         commit = patch.name[: -len(".patch")]
         patched, verifiable = {}, False
@@ -1151,6 +1406,15 @@ def main():
                 tpcds_jobs.append(((commit, "tpcds"), patched, [TPCDS_TEST],
                                    {"__tpcds__": plan, TPCDS_TEST: duration[tpcds_number] / 1000},
                                    10 + 3 * plan["estimate"]))
+        if RUN and verifiable and selector is not None and genmem_number in chosen:
+            gplan = selector.genmem_plan(chosen, duration, genmem_number)
+            if gplan is not None and not gplan["dialects"] and not gplan["import_check"]:
+                chosen = [n for n in chosen if n != genmem_number]  # no dialect loads what changed
+                answers[commit] = chosen
+            elif gplan is not None:
+                tpcds_jobs.append(((commit, "genmem"), patched, [GENMEM_TEST],
+                                   {"__genmem__": gplan, GENMEM_TEST: duration[genmem_number] / 1000},
+                                   10 + 3 * gplan["estimate"]))
         if RUN and verifiable and chosen:
             check = plan_check(chosen, duration, info)
             if check:
