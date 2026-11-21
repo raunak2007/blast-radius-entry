@@ -2569,10 +2569,10 @@ def warm(jobs):
             pass
 
 
-# A check child may allocate at most this much beyond what it inherited: the run has 4 GB
-# for everything, two checks run at once, and an edit that breaks a plan can make one
-# query's intermediate results explode. Past it, allocations fail and the check fails,
-# which keeps its tests.
+# A TPC-DS replay child may allocate at most this much beyond what it inherited: the run has
+# 4 GB for everything, two checks run at once, and an edit that breaks a plan can make one
+# query's intermediate results explode. Past it, allocations fail and the replay fails,
+# which keeps the test. (Not for test checks: duckdb reserves address space it never uses.)
 CHILD_MEMORY = int(os.environ.get("BR_CHILD_MEMORY", str(1280 << 20)))
 
 
@@ -2612,8 +2612,8 @@ def run_checks(jobs, budget_s):
                     os.dup2(devnull, 1)
                     if not os.environ.get("BR_DEBUG"):
                         os.dup2(devnull, 2)
-                    limit_memory()
                     if "__tpcds__" in limits:
+                        limit_memory()  # only the replay: duckdb's own tests reserve far more address space
                         child_tpcds(patched, limits["__tpcds__"], w)
                     elif "__genmem__" in limits:
                         child_genmem(patched, limits["__genmem__"], w)

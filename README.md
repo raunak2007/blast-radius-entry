@@ -34,7 +34,7 @@ Every map comes from running sqlglot's own tests at the pinned commit (`eb11aec4
 
 - **Checks run on commits that also change a data file** (a fixture next to a code edit), on the tests that never open the changed file; its readers stay selected.
 
-- **Check children may allocate at most 1.25 GB beyond what they inherit**, so an edit that makes one query's intermediate results explode fails its own check instead of exhausting the run's 4 GB.
+- **A TPC-DS replay child may allocate at most 1.25 GB beyond what it inherits**, so an edit that makes one query's intermediate results explode fails its own replay instead of exhausting the run's 4 GB. (Test checks are left uncapped: duckdb reserves far more address space than it uses.)
 
 - **Code that runs while other modules import** (the trie builder every tokenizer class calls, the error formatter a dialect's import-time parse reaches) selects every test that uses those modules, a module whose import imports them, or imports one of them while it runs (`from sqlglot.dialects import X` inside a test) (`import_users.pkl.gz`), and the generator's first-use dispatch table selects every test that builds a generator.
 
