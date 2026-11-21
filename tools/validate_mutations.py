@@ -168,6 +168,8 @@ if dict_entries:
     safe_attrs = set(dk["tracked"]) - set(dk["unsafe"])
     if os.environ.get("BR_SITES") == "key-level":
         safe_attrs = set(dk.get("key_level", ()))  # names narrowable except for certain keys
+        if os.environ.get("BR_KL_ATTRS"):
+            safe_attrs &= set(os.environ["BR_KL_ATTRS"].split(","))
 
     def value_spans(text):
         spans = []

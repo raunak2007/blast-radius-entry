@@ -763,6 +763,11 @@ class Selector:
             names = names | new_names
         if key_level is not None and names & key_level:
             return None
+        # keys with these characters feed a structure built from the keys at import time
+        # (the tokenizer's keyword trie takes keys with a space or a single-token character)
+        chars = data.get("key_level_chars", {}).get(attr)
+        if chars and any(n.startswith("s:") and any(c in n[2:] for c in chars) for n in names):
+            return None
         per = data["keys"].get(attr, {})
         m = 0
         for tid in data["full_tests"].get(attr, ()):
@@ -1543,6 +1548,18 @@ def child_tpcds(patched, plan, wfd):
     class Stop(BaseException):
         pass
 
+    from sqlglot.serde import META, TYPE
+
+    def strip_meta(payloads):
+        """serde.dump() payloads without node metadata (values left as they are)."""
+        out = []
+        for p in payloads:
+            p = {k: v for k, v in p.items() if k != META}
+            if TYPE in p:
+                p[TYPE] = strip_meta(p[TYPE])
+            out.append(p)
+        return out
+
     def optimize_hook(*args, **kwargs):
         q = current["q"]
         if q["index"] in optimized:  # second pass: carry on from the first pass's output
@@ -1550,8 +1567,16 @@ def child_tpcds(patched, plan, wfd):
         result = original_optimize(*args, **kwargs)
         if modes.get(q["index"]) == "full":
             return result
-        current["digest"] = hashlib.sha256(repr(result.dump()).encode()).hexdigest()
-        if current["digest"] != q["opt_digest"]:
+        payloads = result.dump()
+        current["digest"] = hashlib.sha256(repr(payloads).encode()).hexdigest()
+        changed = current["digest"] != q["opt_digest"]
+        if changed and q.get("meta_blind") and q.get("opt_digest_nometa") is not None and \
+                hashlib.sha256(repr(strip_meta(payloads)).encode()).hexdigest() == q["opt_digest_nometa"]:
+            # Only node metadata differs, and for this query nothing after optimize() (the
+            # log line, planning, execution) ever reads metadata (tools/build_tpcds_meta.py),
+            # so the rest of the run takes the same path and gives the same rows.
+            changed = False
+        if changed:
             optimized[q["index"]] = result  # re-run to the end later, from this output
         elif modes.get(q["index"]) == "log":
             # Unchanged output, but changed code renders it next: execute() evaluates
