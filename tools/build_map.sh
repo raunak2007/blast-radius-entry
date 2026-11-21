@@ -25,5 +25,17 @@ uv pip install -q --python "$WORK/venv/bin/python" -r requirements.lock coverage
 PYTHONPATH="$WORK/sqlglot" "$WORK/venv/bin/python" tools/build_map.py \
   "$WORK/sqlglot" "$WORK/coverage.db" "$WORK/trace.json" "$WORK/usage.json" sample/tests.json blast_map.pkl.gz
 
+# second run: the operands each comparison sees and the keys each dict literal gives out,
+# per test (operand_plugin rewrites sqlglot's comparisons and module/class-level dicts)
+rm -f "$WORK"/operands.pkl*
+(cd "$WORK/sqlglot" && \
+  PATH="$WORK/venv/bin:$PATH" PYTHONPATH="$WORK/sqlglot:$PWD/tools" SKIP_INTEGRATION=0 \
+  USAGE_OUT="$WORK/usage-operands.json" OPERAND_ROOT="$WORK/sqlglot" OPERAND_OUT="$WORK/operands.pkl" \
+  "$WORK/venv/bin/python" -m pytest tests -q -p no:cacheprovider -p usage_plugin -p operand_plugin -n 2)
+"$WORK/venv/bin/python" tools/build_operands.py "$WORK/operands.pkl" blast_map.pkl.gz "$WORK/operands_whole.pkl.gz"
+# repack for lazy loading: per-file comparison sites and dict reads, per-name dict keys as test masks
+"$WORK/venv/bin/python" tools/build_lazy.py blast_map.pkl.gz dictkeys.pkl.gz "$WORK/dictkeys3.pkl.gz" \
+  "$WORK/operands_whole.pkl.gz" operands.pkl.gz dictreads.pkl.gz && mv "$WORK/dictkeys3.pkl.gz" dictkeys.pkl.gz
+
 (cd "$WORK/sqlglot" && find sqlglot tests -name '*.py' -not -path '*/__pycache__/*' | sort | \
   tar --owner=0 --group=0 --numeric-owner --mtime='2026-11-18 00:00:00' -czf "$OLDPWD/sqlglot_src.tar.gz" -T -)

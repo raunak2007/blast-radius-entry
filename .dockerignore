@@ -10,3 +10,5 @@
 !cmp.pkl.gz
 !argreq.pkl.gz
 !import_users.pkl.gz
+!operands.pkl.gz
+!dictreads.pkl.gz

@@ -39,6 +39,8 @@ DICTKEYS_DATA = Path(os.environ.get("BR_DICTKEYS", str(Path(__file__).with_name(
 CMP_DATA = Path(os.environ.get("BR_CMP", str(Path(__file__).with_name("cmp.pkl.gz"))))
 ARGREQ_DATA = Path(os.environ.get("BR_ARGREQ", str(Path(__file__).with_name("argreq.pkl.gz"))))
 IMPORTS_DATA = Path(os.environ.get("BR_IMPORTS", str(Path(__file__).with_name("import_users.pkl.gz"))))
+OPERANDS_DATA = Path(os.environ.get("BR_OPERANDS", str(Path(__file__).with_name("operands.pkl.gz"))))
+DICTREADS_DATA = Path(os.environ.get("BR_DICTREADS", str(Path(__file__).with_name("dictreads.pkl.gz"))))
 CMP_NAMES = {ast.Is: "is", ast.IsNot: "is not", ast.Eq: "==", ast.NotEq: "!=", ast.Lt: "<", ast.LtE: "<=",
              ast.Gt: ">", ast.GtE: ">=", ast.In: "in", ast.NotIn: "not in"}
 CMP_ALT = {"is": "==", "is not": "!=", "<": "<=", "<=": "<", ">": ">=", ">=": ">"}  # as tools/cmp_plugin.py
@@ -213,16 +215,11 @@ class SourceIndex:
         self.tree = ast.parse(text.encode("utf-8", "surrogateescape"))
         self.lines = text.split("\n")
         self.stmts = []  # dicts
-        self.string_lines = set()
+        self._in_string = {}
         self.continued = set()
         for idx, line in enumerate(self.lines, start=1):
             if line.rstrip().endswith("\\"):
                 self.continued.add(idx)
-        for node in ast.walk(self.tree):
-            if isinstance(node, (ast.Constant, ast.JoinedStr)) and isinstance(getattr(node, "value", ""), (str, bytes, list)):
-                end = getattr(node, "end_lineno", node.lineno)
-                if end and end > node.lineno:
-                    self.string_lines.update(range(node.lineno + 1, end + 1))
         self._walk(self.tree.body, scope="module", cls=None, depth=0, func=None)
         nlines = len(self.lines) + 2
         self.own_at = [None] * nlines
@@ -268,6 +265,40 @@ class SourceIndex:
                 self._walk(handler.body, scope, cls, depth + 2, func)
             for case in getattr(node, "cases", []) or []:
                 self._walk(case.body, scope, cls, depth + 2, func)
+
+    BODY_FIELDS = ("body", "orelse", "finalbody", "handlers", "cases")
+
+    def in_string(self, line):
+        """Whether `line` lies inside a string literal that starts on an earlier line. Only
+        the statement owning the line is searched (a compound statement's header, not its
+        body): a string spanning the line belongs to it."""
+        hit = self._in_string.get(line)
+        if hit is not None:
+            return hit
+        hit = False
+        i = self.own_at[line] if 0 < line < len(self.own_at) else None
+        if i is not None:
+            todo = [self.stmts[i]["node"]]
+            compound = isinstance(todo[0], (ast.ClassDef, ast.ExceptHandler) + DEFS + COMPOUND)
+            first = True
+            while todo and not hit:
+                node = todo.pop()
+                if isinstance(node, (ast.Constant, ast.JoinedStr)) \
+                        and isinstance(getattr(node, "value", ""), (str, bytes, list)):
+                    end = getattr(node, "end_lineno", None) or node.lineno
+                    if node.lineno < line <= end:
+                        hit = True
+                        break
+                for field, value in ast.iter_fields(node):
+                    if first and compound and field in self.BODY_FIELDS:
+                        continue
+                    if isinstance(value, ast.AST):
+                        todo.append(value)
+                    elif isinstance(value, list):
+                        todo.extend(v for v in value if isinstance(v, ast.AST))
+                first = False
+        self._in_string[line] = hit
+        return hit
 
     def stmt_at(self, line):
         if 0 < line < len(self.own_at):
@@ -322,6 +353,340 @@ def is_comment_or_blank(text):
     return not s or s.startswith("#")
 
 
+class Blobs:
+    """A mapping whose values are stored pickled and unpickled on first use, so loading a data
+    file costs little and a run pays only for the entries its commits look at."""
+
+    _MISSING = object()
+
+    def __init__(self, blobs):
+        self._blobs = blobs or {}
+        self._cache = {}
+
+    def get(self, key, default=None):
+        v = self._cache.get(key, self._MISSING)
+        if v is self._MISSING:
+            b = self._blobs.get(key)
+            if b is None:
+                return default
+            v = self._cache[key] = pickle.loads(b)
+        return v
+
+    def __getitem__(self, key):
+        v = self.get(key, self._MISSING)
+        if v is self._MISSING:
+            raise KeyError(key)
+        return v
+
+    def __contains__(self, key):
+        return key in self._blobs
+
+
+# --------------------------------------------------------------------------- recorded operands
+#
+# A second profiled run of the suite at the pinned commit (tools/operand_plugin.py) records,
+# per test, the operands each single-operator comparison in sqlglot/ saw, and the keys each
+# module- or class-level dict literal gave out. The dict literals are wrapped when they are
+# created, so a reference another object keeps to one (the tokenizer holds on to
+# NUMERIC_ESCAPES) still records its reads, and reads made while importing are recorded so
+# those keys can be refused.
+#
+# Comparisons: when an edit only swaps a comparison's operator or changes a literal operand,
+# the old and new comparison are evaluated on those inputs; a test whose every recorded
+# result is unchanged runs exactly as before. Anything we can't evaluate keeps the test.
+
+
+class Unknown(Exception):
+    pass
+
+
+class Operands:
+    def __init__(self, data):
+        self.sites = Blobs(data.get("sites_by_file"))  # rel -> {(line, col): site}
+        self.enums = data.get("enums", {})
+        self.dicts = Blobs(data.get("dicts_by_file"))  # rel -> {(line, col): dict reads}
+
+    def site(self, rel, line, col):
+        return (self.sites.get(rel) or {}).get((line, col))
+
+    def dict_at(self, rel, line, col):
+        return (self.dicts.get(rel) or {}).get((line, col))
+
+    PURE_VALUE = (ast.Constant, ast.Name, ast.Attribute, ast.Tuple, ast.List, ast.Set, ast.Dict, ast.UnaryOp,
+                  ast.BinOp, ast.operator, ast.unaryop, ast.expr_context, ast.Lambda, ast.arguments, ast.arg)
+
+    def dict_readers(self, rel, dict_node, key, old_value, new_value):
+        """Tests that read `key` of the module/class-level dict literal `dict_node` (or read
+        it in bulk). Unknown if import-time code read it, or the values aren't plain."""
+        d = self.dict_at(rel, dict_node.lineno, dict_node.col_offset)
+        if d is None or d["import_bulk"]:
+            raise Unknown
+        for v in (old_value, new_value):
+            if not all(isinstance(x, self.PURE_VALUE) for x in ast.walk(v)):
+                raise Unknown
+        if isinstance(key, ast.Constant) and type(key.value) in (str, int, bytes, float, type(None), bool):
+            wanted = {("v", type(key.value).__name__, key.value)}
+            match = lambda r: r in wanted
+        elif isinstance(key, ast.Attribute):
+            # enum member or class keys: match on the member / class name (a superset is safe)
+            name = key.attr
+            match = lambda r: (r[0] == "e" and r[2] == name) or (r[0] == "c" and r[1].rsplit(".", 1)[-1] == name)
+        else:
+            raise Unknown
+        if any(match(r) or r == ("?",) for r in d["import_keys"]):
+            raise Unknown
+        m = d["bulk"]
+        for r, mask in d["reads"].items():
+            if match(r) or r == ("?",):
+                m |= mask
+        return m
+
+    # ---- abstract evaluation; reps: ("v", type, value) primitives, ("e", enum, member),
+    # ("c", class), ("t"|"l"|"s", items), ("o", type, identity_eq)
+
+    @staticmethod
+    def identical(a, b):
+        """Whether the objects are the same, from their reps alone, or None."""
+        if a[0] != b[0]:
+            return False  # different kinds are different types, so different objects
+        if a[0] == "v":
+            if a[1] in ("NoneType", "bool") or b[1] in ("NoneType", "bool"):
+                return a == b
+            return None
+        if a[0] in ("e", "c"):
+            return a == b
+        return None
+
+    def enum_info(self, rep):
+        info = self.enums.get(rep[1])
+        if info is None:
+            raise Unknown
+        return info
+
+    def eq(self, a, b):
+        ka, kb = a[0], b[0]
+        if ka == "v" and kb == "v":
+            return a[2] == b[2]
+        if ka == "o" or kb == "o":
+            o, other = (a, b) if ka == "o" else (b, a)
+            if not o[2] or other[0] == "o":
+                raise Unknown
+            if other[0] == "e" and not self.enum_info(other)["identity"]:
+                raise Unknown
+            return False  # default equality is identity, and these are different objects
+        if ka == "e" and kb == "e":
+            ia, ib = self.enum_info(a), self.enum_info(b)
+            if ia["identity"] and ib["identity"]:
+                return a == b
+            if a[1] == b[1] and ia.get("mixin") in ("str", "int", "bytes"):
+                va, vb = ia["members"].get(a[2]), ia["members"].get(b[2])
+                if va is None or vb is None or va[0] != "v" or vb[0] != "v":
+                    raise Unknown
+                return va[2] == vb[2]
+            raise Unknown
+        if ka == "e" or kb == "e":
+            e = a if ka == "e" else b
+            if self.enum_info(e)["identity"]:
+                return False
+            raise Unknown
+        if ka == "c" or kb == "c":
+            return a == b
+        if ka in ("t", "l", "s") and kb in ("t", "l", "s"):
+            if ka != kb:
+                return False
+            if len(a[1]) != len(b[1]):
+                return False if ka != "s" else self.set_eq(a, b)
+            if ka == "s":
+                return self.set_eq(a, b)
+            return all(self.eq(x, y) for x, y in zip(a[1], b[1]))
+        return False  # a container against a primitive
+
+    @staticmethod
+    def set_eq(a, b):
+        if all(x[0] == "v" for x in a[1] + b[1]):
+            return frozenset(x[2] for x in a[1]) == frozenset(x[2] for x in b[1])
+        raise Unknown
+
+    def contains(self, item, box):
+        if box[0] == "v":
+            if item[0] == "v" and box[1] in ("str", "bytes") and item[1] == box[1]:
+                return item[2] in box[2]
+            raise Unknown
+        if box[0] in ("t", "l"):
+            for e in box[1]:
+                if self.identical(e, item) is True or self.eq(e, item):
+                    return True
+            return False
+        if box[0] == "s":
+            elems = box[1]
+            if all(e[0] == "v" for e in elems) and item[0] == "v":
+                return item[2] in frozenset(e[2] for e in elems)
+            if all(e[0] == "e" and self.enum_info(e)["identity"] for e in elems):
+                if item[0] == "e" and self.enum_info(item)["identity"]:
+                    return item in elems
+                if item[0] in ("v", "c"):
+                    return False
+            raise Unknown
+        raise Unknown
+
+    def evaluate(self, op, a, b, same):
+        if op in ("is", "is not"):
+            r = same if same is not None else self.identical(a, b)
+            if r is None:
+                raise Unknown
+            return r if op == "is" else not r
+        if op in ("==", "!="):
+            if a[0] == "o" and b[0] == "o":
+                if not (a[2] and b[2]) or same is None:
+                    raise Unknown
+                r = same
+            else:
+                r = self.eq(a, b)
+            return r if op == "==" else not r
+        if op in ("in", "not in"):
+            r = self.contains(a, b)
+            return r if op == "in" else not r
+        if a[0] == "v" and b[0] == "v":
+            num = ("int", "float", "bool")
+            if (a[1] in num and b[1] in num) or (a[1] == b[1] and a[1] in ("str", "bytes")):
+                x, y = a[2], b[2]
+                return {"<": x < y, "<=": x <= y, ">": x > y, ">=": x >= y}[op]
+        raise Unknown
+
+    # ---- the new operand of an edited comparison
+
+    def literal(self, node):
+        if isinstance(node, ast.Constant):
+            v = node.value
+            if type(v) in (type(None), bool, int, float, str, bytes):
+                return ("v", type(v).__name__, v)
+            raise Unknown
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub) and isinstance(node.operand, ast.Constant) \
+                and type(node.operand.value) in (int, float):
+            v = -node.operand.value
+            return ("v", type(v).__name__, v)
+        raise Unknown
+
+    def new_operand(self, old, new, recorded, depth=0):
+        """Rep of the new operand, given the old operand's AST and its recorded reps."""
+        try:
+            return self.literal(new)
+        except Unknown:
+            pass
+        if isinstance(new, ast.Attribute) and isinstance(old, ast.Attribute) \
+                and ast.dump(new.value) == ast.dump(old.value):
+            classes = {r[1] for r in recorded}
+            if len(classes) == 1 and all(r[0] == "e" and r[2] == old.attr for r in recorded):
+                cls = classes.pop()
+                info = self.enums.get(cls)
+                if info and new.attr in info.get("canonical", ()):
+                    return ("e", cls, new.attr)
+            raise Unknown
+        if depth == 0 and isinstance(new, (ast.Tuple, ast.List, ast.Set)) and type(new) is type(old):
+            kind = {ast.Tuple: "t", ast.List: "l", ast.Set: "s"}[type(new)]
+            # elements map to the old display's elements by position when unchanged
+            old_items = {}
+            for i, e in enumerate(old.elts):
+                reps = {r[1][i] for r in recorded if r[0] == kind and len(r[1]) == len(old.elts)}
+                if len(reps) == 1 and kind != "s":
+                    old_items[ast.dump(e)] = reps.pop()
+            items = []
+            for e in new.elts:
+                if ast.dump(e) in old_items:
+                    items.append(old_items[ast.dump(e)])
+                    continue
+                try:
+                    items.append(self.literal(e))
+                    continue
+                except Unknown:
+                    pass
+                if isinstance(e, ast.Attribute):
+                    # an enum member next to members of the same enum in the old display
+                    base = ast.dump(e.value)
+                    peers = {old_items.get(ast.dump(o)) for o in old.elts
+                             if isinstance(o, ast.Attribute) and ast.dump(o.value) == base}
+                    peers.discard(None)
+                    classes = {p[1] for p in peers if p[0] == "e"}
+                    if len(classes) == 1 and len(peers) == len([p for p in peers if p[0] == "e"]):
+                        cls = classes.pop()
+                        if e.attr in self.enums.get(cls, {}).get("canonical", ()):
+                            items.append(("e", cls, e.attr))
+                            continue
+                raise Unknown
+            if kind == "s":
+                items.sort(key=repr)
+            return (kind, tuple(items))
+        raise Unknown
+
+    def keep_for(self, rel, old, new, everyone):
+        """Tests that may see a different result when comparison `old` becomes `new`."""
+        if len(old.ops) != 1 or len(new.ops) != 1:
+            raise Unknown
+        site = self.site(rel, old.lineno, old.col_offset)
+        if site is None:
+            return everyone  # never evaluated: keep whoever ran the line
+        if site["import"]:
+            raise Unknown
+        old_op = site["op"]
+        new_op = {ast.Eq: "==", ast.NotEq: "!=", ast.Lt: "<", ast.LtE: "<=", ast.Gt: ">", ast.GtE: ">=",
+                  ast.Is: "is", ast.IsNot: "is not", ast.In: "in", ast.NotIn: "not in"}.get(type(new.ops[0]))
+        if new_op is None:
+            raise Unknown
+        sides_old = (old.left, old.comparators[0])
+        sides_new = (new.left, new.comparators[0])
+        unchanged = [ast.dump(o) == ast.dump(n) for o, n in zip(sides_old, sides_new)]
+        replaced = [None, None]
+        for i in (0, 1):
+            if not unchanged[i]:
+                replaced[i] = self.new_operand(sides_old[i], sides_new[i], {s[0][i] for s in site["samples"]})
+        keep = site["over"]
+        observed = site["over"]
+        for (a, b, same), m in site["samples"]:
+            observed |= m
+            na = a if unchanged[0] else replaced[0]
+            nb = b if unchanged[1] else replaced[1]
+            try:
+                before = self.evaluate(old_op, a, b, same)
+                after = self.evaluate(new_op, na, nb, same if all(unchanged) else None)
+                if before != after:
+                    keep |= m
+            except Unknown:
+                keep |= m
+        return keep | (everyone & ~observed)
+
+
+def compare_pairs(a, b, out):
+    """Collect the (old, new) comparisons that differ; raise Unknown on any other difference."""
+    if type(a) is not type(b):
+        raise Unknown
+    if isinstance(a, ast.Compare):
+        if ast.dump(a) != ast.dump(b):
+            out.append((a, b))
+        return
+    if isinstance(a, ast.AST):
+        for field in a._fields:
+            compare_pairs(getattr(a, field, None), getattr(b, field, None), out)
+        return
+    if isinstance(a, list):
+        if len(a) != len(b):
+            raise Unknown
+        for x, y in zip(a, b):
+            compare_pairs(x, y, out)
+        return
+    if a != b:
+        raise Unknown
+
+
+def stmt_header(node):
+    """The part of a statement its own lines hold."""
+    if isinstance(node, (ast.If, ast.While)):
+        return node.test
+    if isinstance(node, (ast.Assign, ast.AnnAssign, ast.AugAssign, ast.Return, ast.Expr, ast.Assert,
+                         ast.Raise, ast.Delete)):
+        return node
+    raise Unknown
+
+
 # --------------------------------------------------------------------------- selection
 
 
@@ -340,6 +705,7 @@ class Selector:
         # every changed span of the current commit: (rel, lo, hi, "function" | "other")
         self.touched = []
         self._class_users_by_file = None
+        self.new_idx = None
 
     def index(self, rel):
         if rel not in self.cache:
@@ -403,19 +769,29 @@ class Selector:
                 cm = self.compare_mask(rel, st, line, blk, span)
                 if cm is None:
                     cm = self.boolop_mask(rel, st, line, blk, span)
-            if cm is None and blk is not None and hi > lo:
-                # a statement over several lines: only the lines whose bytecode changed
-                changed = self.bytecode_lines(rel, st, blk)
-                if changed is not None:
-                    cm = 0
-                    for ln in changed:
-                        cm |= self.line_union(rel, ln, ln)
+            keep = None
+            if cm is None and blk is not None:
+                # tests whose recorded comparison results can change (any operator, literals)
+                keep = self.operand_compare_mask(rel, st, blk)
+            # a statement over several lines: only the lines whose bytecode changed
+            changed = self.bytecode_lines(rel, st, blk) if blk is not None and hi > lo else None
+            if cm is None and changed is not None:
+                cm = 0
+                for ln in changed:
+                    cm |= self.line_union(rel, ln, ln)
             m = self.line_union(rel, lo, hi) if cm is None else cm
+            if keep is not None:
+                m &= keep
             m |= self.first_use_mask(rel, idx, lo, hi)
-            if self.touches_import(rel, lo, hi):
+            # import-time effects: only where a changed instruction ran while modules were
+            # imported (the body of a lambda that an import-time call returns never runs then;
+            # an instruction that ran fired its line's event, so its line is in the map)
+            spans = [(ln, ln) for ln in sorted(changed)] if changed is not None else [(lo, hi)]
+            if any(self.touches_import(rel, a, b) for a, b in spans):
                 func = st["func"]
                 m |= self.broad_for_function(rel, idx, func)
-                m |= self.import_users_mask(rel, lo, hi)
+                for a, b in spans:
+                    m |= self.import_users_mask(rel, a, b)
                 self.touched.append((rel, lo, hi, "other"))
             else:
                 self.touched.append((rel, lo, hi, "function"))
@@ -437,6 +813,9 @@ class Selector:
             if entry is not None:
                 return entry | self.subprocess
             entry = self.module_value_mask(rel, st["node"], blk)
+            if entry is not None:
+                return entry | self.subprocess
+            entry = self.operand_dict_mask(rel, st["node"], line, blk)
             if entry is not None:
                 return entry | self.subprocess
         return self.module_fallback(rel, idx, st["node"])
@@ -722,7 +1101,7 @@ class Selector:
                     return k, v
         return None
 
-    def dict_key_mask(self, rel, node, line, blk):
+    def dict_key_mask(self, rel, node, line, blk, cls=None):
         """A one-line edit to one entry (its key, its value, or both) of a class-level dict
         constant: the tests that looked up the old or the new key in any dict of that name,
         or read such a dict whole from test code (tools/build_dictkeys.py, which also rules
@@ -768,14 +1147,131 @@ class Selector:
         chars = data.get("key_level_chars", {}).get(attr)
         if chars and any(n.startswith("s:") and any(c in n[2:] for c in chars) for n in names):
             return None
+        m = data["full_tests"].get(attr, 0)
+        owners = self.dict_owners(data, attr, rel, cls)
+        if owners is not None:
+            # only the lookups in this class's dict and in the dicts built from it
+            owned = data["keys_owned"][attr]
+            for o in owners:
+                per = owned.get(o, {})
+                for k in names:
+                    m |= per.get(k, 0)
+            return m
         per = data["keys"].get(attr, {})
-        m = 0
-        for tid in data["full_tests"].get(attr, ()):
-            m |= self.test_bit.get(tid, 0)
         for k in names:
-            for tid in per.get(k, ()):
-                m |= self.test_bit.get(tid, 0)
+            m |= per.get(k, 0)
         return m
+
+    @staticmethod
+    def dict_owners(data, attr, rel, cls):
+        """The class-level dicts named `attr` that carry an entry of class `cls` in `rel`: its
+        own dict and every dict whose class body was built from one of those (merges,
+        comprehensions and copies, as dictkeys2_plugin traced them; a dict whose sources
+        couldn't be told counts as built from all). None if this dict isn't known."""
+        derived = data.get("derived", {}).get(attr)
+        if not derived or "keys_owned" not in data or attr not in data["keys_owned"] or not cls:
+            return None
+        module = rel[:-3].replace("/", ".")
+        if module.endswith(".__init__"):
+            module = module[: -len(".__init__")]
+        owner = f"{module}.{cls}"
+        if owner not in derived:
+            return None
+        children = {}
+        unknown = [o for o, srcs in derived.items() if srcs is None]
+        for o, srcs in derived.items():
+            for src in srcs or ():
+                children.setdefault(src, set()).add(o)
+        out = {owner, *unknown}
+        todo = list(out)
+        while todo:
+            cur = todo.pop()
+            for nxt in children.get(cur, ()):
+                if nxt not in out:
+                    out.add(nxt)
+                    todo.append(nxt)
+        return out
+
+    def operand_dict_mask(self, rel, node, line, blk):
+        """A one-line edit inside the value of one entry of a module/class-level dict literal:
+        the tests that read that key, or read the dict in bulk, from the wrapped-literal run
+        (tools/operand_plugin.py). Used where our own per-name key index gives up (a dict
+        another object keeps a reference to, or one copied at import). None if unsure: the
+        key itself touched, a value that isn't plain data, or a dict read at import."""
+        if len(blk["removed"]) != 1 or len(blk["added"]) != 1 or not isinstance(node, (ast.Assign, ast.AnnAssign)) \
+                or not isinstance(node.value, ast.Dict):
+            return None
+        lo, hi = changed_range(blk["removed_text"][0], blk["added_text"][0])
+        here, there = (line, lo), (line, hi)
+        d = node.value
+        for k, v in zip(d.keys, d.values):
+            if not ((v.lineno, v.col_offset) <= here and there <= (v.end_lineno, v.end_col_offset)):
+                continue
+            if k is None or ((k.end_lineno, k.end_col_offset) >= here and (k.lineno, k.col_offset) <= there):
+                return None
+            if v.lineno != line or v.end_lineno != line:
+                return None
+            # the new value: the edited line's slice that replaced the old value
+            new_line = blk["added_text"][0].encode("utf-8", "surrogateescape")
+            old_line = blk["removed_text"][0].encode("utf-8", "surrogateescape")
+            delta = len(new_line) - len(old_line)
+            try:
+                new_value = ast.parse(new_line[v.col_offset:v.end_col_offset + delta].decode("utf-8"),
+                                      mode="eval").body
+            except (SyntaxError, UnicodeDecodeError, ValueError):
+                return None
+            ops = load_dictreads()
+            if ops is None:
+                return None
+            try:
+                m = ops.dict_readers(rel, d, k, v, new_value)
+            except Unknown:
+                return None
+            log(f"dict entry edit in {rel}:{line} narrowed to the tests that read its key (wrapped literal)")
+            return m
+        return None
+
+    def operand_compare_mask(self, rel, st, blk):
+        """For an edit to one function statement that only changes comparisons (an operator
+        swap, a changed literal operand): the tests whose recorded comparison results may
+        change (see Operands). None if not provable."""
+        if not blk["removed"] or not blk["added"] or self.new_idx is None:
+            return None
+        idx = self.cache[rel][1]
+        olds = {id(s): s for s in (idx.stmt_at(ln)[0] for ln in blk["removed"])}
+        news = {id(s): s for s in (self.new_idx.stmt_at(ln)[0] for ln in blk["added"])}
+        if len(olds) != 1 or len(news) != 1:
+            return None
+        (st_old,), (st_new,) = olds.values(), news.values()
+        if st_old is None or st_new is None or st_old is not st:
+            return None
+        if st_old["scope"] != "function" or st_new["scope"] != "function" or st_old["kind"] != "stmt" \
+                or st_new["kind"] != "stmt":
+            return None
+        # (a changed comparison that ran while modules were imported makes keep_for give up)
+        ops = load_operands()
+        if ops is None:
+            return None
+        try:
+            pairs = []
+            compare_pairs(stmt_header(st_old["node"]), stmt_header(st_new["node"]), pairs)
+            if not pairs:
+                return None
+            keep = 0
+            for old, new in pairs:
+                for o, n in ((old.left, new.left), (old.comparators[0], new.comparators[0])):
+                    if ast.dump(o) != ast.dump(n) and not all(isinstance(x, self.OPERAND_PURE) for x in ast.walk(o)):
+                        raise Unknown  # dropping the old operand's evaluation could matter
+                keep |= ops.keep_for(rel, old, new, self.ALL)
+        except Unknown:
+            return None
+        except RecursionError:
+            return None
+        log(f"comparison edit in {rel}:{st_old['own'][0]} narrowed by recorded operands")
+        return keep
+
+    OPERAND_PURE = (ast.Constant, ast.Name, ast.Attribute, ast.Tuple, ast.List, ast.Set, ast.UnaryOp, ast.USub,
+                    ast.Load, ast.expr_context)
 
     @staticmethod
     def plain_data_class(cls_node):
@@ -802,9 +1298,11 @@ class Selector:
             return None
         mask = self.dict_entry_mask(rel, node, line, blk)
         if mask is None:
-            mask = self.dict_key_mask(rel, node, line, blk)
+            mask = self.dict_key_mask(rel, node, line, blk, st.get("cls"))
         if mask is None:
             mask = self.argreq_mask(rel, st, node, line, blk)
+        if mask is None:
+            mask = self.operand_dict_mask(rel, node, line, blk)
         if len(blk["removed"]) != 1 or len(blk["added"]) != 1:
             return mask
         targets = node.targets if isinstance(node, ast.Assign) else [node.target]
@@ -1055,9 +1553,9 @@ class Selector:
     def comment_only(blk, idx, new_idx):
         if not all(is_comment_or_blank(t) for t in blk["removed_text"] + blk["added_text"]):
             return False
-        if any(ln in idx.string_lines for ln in blk["removed"]):
+        if any(idx.in_string(ln) for ln in blk["removed"]):
             return False
-        if any(ln in new_idx.string_lines for ln in blk["added"]):
+        if any(new_idx.in_string(ln) for ln in blk["added"]):
             return False
         anchor = blk["anchor"]
         if (anchor - 1) in idx.continued:
@@ -1357,6 +1855,34 @@ _DICTKEYS = None
 _CMP = None
 _ARGREQ = None
 _IMPORTS = None
+_OPERANDS = None
+_DICTREADS = None
+
+
+def load_operands():
+    """Recorded comparison operands (tools/operand_plugin.py), loaded on first use."""
+    global _OPERANDS
+    if _OPERANDS is None:
+        try:
+            with gzip.open(OPERANDS_DATA, "rb") as fh:
+                _OPERANDS = Operands(pickle.load(fh))
+        except Exception as error:
+            log(f"no operand profile ({error!r}); comparison edits keep every test that ran them")
+            _OPERANDS = False
+    return _OPERANDS or None
+
+
+def load_dictreads():
+    """Per-key reads of wrapped dict literals (tools/operand_plugin.py), loaded on first use."""
+    global _DICTREADS
+    if _DICTREADS is None:
+        try:
+            with gzip.open(DICTREADS_DATA, "rb") as fh:
+                _DICTREADS = Operands(pickle.load(fh))
+        except Exception as error:
+            log(f"no dict-read profile ({error!r}); such edits keep the wider selection")
+            _DICTREADS = False
+    return _DICTREADS or None
 
 
 def load_imports():
@@ -1406,7 +1932,12 @@ def load_dictkeys():
         try:
             with gzip.open(DICTKEYS_DATA, "rb") as fh:
                 data = pickle.load(fh)
+            if data.get("format") != 3:
+                raise ValueError("expected the per-name packing (tools/build_lazy.py)")
             data["tracked_set"] = set(data["tracked"])
+            data["keys"] = Blobs(data["keys"])  # name -> {key: test mask}
+            if "keys_owned" in data:
+                data["keys_owned"] = Blobs(data["keys_owned"])  # name -> {owner: {key: test mask}}
             _DICTKEYS = data
         except Exception as error:
             log(f"no dict-key index ({error!r}); such edits keep the class-wide selection")
@@ -1521,6 +2052,8 @@ def child_tpcds(patched, plan, wfd):
     import signal
     import time
 
+    import gc
+    gc.set_threshold(*CHILD_GC)
     budget = plan.get("budget", float("inf"))
     if budget != float("inf"):
         # a hard stop: a changed plan can make one query run far longer than recorded
@@ -1704,6 +2237,8 @@ def child_run(patched, test_ids, limits, wfd):
     import time
     import unittest
 
+    import gc
+    gc.set_threshold(*CHILD_GC)
     overlay = enter_overlay(patched)
     src = str(SRC)
 
@@ -1809,6 +2344,9 @@ def child_run(patched, test_ids, limits, wfd):
 
 
 PARALLEL = int(os.environ.get("BR_PARALLEL", "2"))
+# young collections in a check child: tests allocate millions of short-lived nodes, and the
+# default threshold collects every 2000 of them (measured: ~5% of a check's CPU)
+CHILD_GC = (20000, 20, 20)
 HEAVY_FILES = {"tests/test_optimizer.py", "tests/test_executor.py"}  # import duckdb, numpy, pandas
 
 
@@ -1990,6 +2528,10 @@ def main():
     if jobs:
         budget = float(os.environ.get("BR_BUDGET", "140")) - (time.monotonic() - started)
         warm(jobs)
+        # every check is a fork of this process: keep the collector in each child away from
+        # the maps and imports already here (walking them would also copy their pages)
+        import gc
+        gc.freeze()
         results = run_checks(jobs, budget)
         for key, _, test_ids, _, _ in jobs:
             commit = key[0] if isinstance(key, tuple) else key
