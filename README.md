@@ -28,7 +28,7 @@ Tests are packed longest-first, trying 1 to 8 workers and keeping the cheapest.
 | --- | --- |
 | `selector.py` | The program the scorer runs (stdlib only) |
 | `blast_map.pkl.gz` | Coverage, file reads, and dialect/expression usage per test |
-| `tpcds.pkl.gz` | Per-query coverage, CPU and pristine outputs of `test_execute_tpcds`, plus its tables (`tools/build_tpcds.py`) |
+| `tpcds.pkl.gz` | Per-query coverage, CPU and pristine outputs of `test_execute_tpcds`, plus its tables (`tools/build_tpcds.py`, then `tools/build_tpcds_fresh.py` so each query's coverage starts from a fresh pool worker, as any query can be the first one a worker runs) |
 | `sqlglot_src.tar.gz` | The pinned commit's Python sources, which patches are applied to |
 | `tools/` | Rebuilds both data files from the pinned commit (`tools/build_map.sh`) |
 | `Makefile`, `score.py`, `requirements.lock` | From the starter kit, unchanged |

@@ -393,7 +393,11 @@ class Selector:
             return self.module_fallback(rel, idx)
         lo, hi = span
         if st["scope"] == "function":
-            cm = self.compare_mask(rel, st, line, blk, span) if blk is not None else None
+            cm = None
+            if blk is not None:
+                cm = self.compare_mask(rel, st, line, blk, span)
+                if cm is None:
+                    cm = self.boolop_mask(rel, st, line, blk, span)
             m = self.line_union(rel, lo, hi) if cm is None else cm
             if self.touches_import(rel, lo, hi):
                 func = st["func"]
@@ -465,12 +469,52 @@ class Selector:
         if data is None:
             return None
         key = (rel, target.lineno, target.col_offset)
-        if key in data["outside"] or data["ops"].get(key, old_op) != old_op:
-            return None
+        if key in data["outside"] or data["ops"].get(key) != old_op:
+            return None  # also when the recorded run didn't rewrite this comparison
         if CMP_ALT.get(old_op) != new_op:
             return None  # only the neighbouring operator was computed; any other swap flips results
         m = data["differs"].get(key, 0)
         # tests the instrumented run couldn't see (fresh interpreters) or that failed there
+        return m | (self.line_union(rel, span[0], span[1]) & (self.subprocess | data["failed"]))
+
+    def boolop_mask(self, rel, st, line, blk, span):
+        """A one-line edit that only swaps `and` for `or` (or back) in a two-operand boolean
+        used as a condition: the tests where the swap changes its truth value, from the
+        recorded run (tools/cmp_plugin.py rewrites only such sites, with a side-effect-free
+        second operand). None for anything else."""
+        if len(blk["removed"]) != 1 or len(blk["added"]) != 1:
+            return None
+        old_line, new_line = blk["removed_text"][0], blk["added_text"][0]
+        lo, hi = changed_range(old_line, new_line)
+        target = None
+        for node in ast.walk(st["node"]):
+            if isinstance(node, ast.BoolOp) and len(node.values) == 2:
+                a, b = node.values
+                if (a.end_lineno, a.end_col_offset) <= (line, lo) and (line, hi) <= (b.lineno, b.col_offset):
+                    target = node
+                    break
+        if target is None:
+            return None
+        new_st, _ = self.new_idx.stmt_at(blk["added"][0])
+        if new_st is None:
+            return None
+        new_node = None
+        for node in ast.walk(new_st["node"]):
+            if isinstance(node, ast.BoolOp) and node.lineno == target.lineno and node.col_offset == target.col_offset:
+                new_node = node
+                break
+        if new_node is None or len(new_node.values) != 2 or type(new_node.op) is type(target.op):
+            return None
+        if any(ast.dump(x) != ast.dump(y) for x, y in zip(new_node.values, target.values)):
+            return None
+        data = load_cmp()
+        if data is None:
+            return None
+        key = (rel, target.lineno, target.col_offset)
+        old_op = "and" if isinstance(target.op, ast.And) else "or"
+        if key in data["outside"] or data["ops"].get(key) != old_op:
+            return None
+        m = data["differs"].get(key, 0)
         return m | (self.line_union(rel, span[0], span[1]) & (self.subprocess | data["failed"]))
 
     # ---- module-level constants

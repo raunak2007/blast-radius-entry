@@ -1,10 +1,11 @@
 """Weak-mutation data for sqlglot's comparisons, from one instrumented run of the suite at
 the pinned commit (tools/cmp_plugin.py). For each single comparison, as test masks in the
 map's test order:
-  ran      tests that executed it
+  ops      every rewritten site (its operator), whether or not a test ran it
   differs  tests where the neighbouring operator (is -> ==, is not -> !=, < -> <=,
-           <= -> <, > -> >=, >= -> >) would have given a different result or raised
-  outside  the comparison also ran outside any test (import, collection): no narrowing
+           <= -> <, > -> >=, >= -> >, and <-> or) would have given a different result
+           or raised
+  outside  that also happened outside any test (import, collection): no narrowing
 Tests that failed in the instrumented run are listed so the selector keeps them.
 
 usage: python build_cmp.py <sqlglot checkout> <blast_map.pkl.gz> <out.pkl.gz>
@@ -67,6 +68,8 @@ files = glob.glob(out_base + ".*") or glob.glob(out_base)
 for f in files:
     d = json.load(open(f))
     sites = [tuple(s) for s in d["sites"]]
+    for rel, line, col, op in sites:  # every rewritten comparison or and/or, run or not
+        ops[(rel, line, col)] = op
     for idx, ctxs in d["ran"].items():
         rel, line, col, op = sites[int(idx)]
         key = (rel, line, col)
@@ -88,7 +91,6 @@ for f in files:
         failed |= mask_of(t)
 with gzip.open(out_path, "wb") as fh:
     pickle.dump({"ran": ran, "differs": differs, "outside": outside, "ops": ops, "failed": failed}, fh)
-narrowable = sum(1 for k in ran if k not in outside)
-same_everywhere = sum(1 for k in ran if k not in outside and not differs.get(k))
-print(f"{len(ran)} comparisons ran in tests, {narrowable} never outside tests, "
-      f"{same_everywhere} whose neighbouring operator never differs; failed tests: {bin(failed).count('1')}")
+bools = sum(1 for op in ops.values() if op in ("and", "or"))
+print(f"{len(ops)} sites rewritten ({bools} and/or), {len(differs)} differ in some test, "
+      f"{len(outside)} differ outside tests; failed tests: {bin(failed).count('1')}")

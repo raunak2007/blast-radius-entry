@@ -22,7 +22,7 @@ pristine, work, selector, map_path, tests_path, n, seed, out_path = sys.argv[1:9
 class_weight = float(sys.argv[9]) if len(sys.argv) > 9 else 0.3
 n, seed = int(n), int(seed)
 rng = random.Random(seed)
-VENV_PY = os.environ.get("BR_PYTHON", sys.executable)  # a Python with requirements.lock installed
+VENV_PY = "/home/claude/rwx/.venv313/bin/python"
 
 tests = json.load(open(tests_path))["tests"]
 by_id = {t["id"]: t for t in tests}
@@ -210,6 +210,28 @@ while len(results) < n and attempts < n * 50:
         sites = [x for x in sites if (x[0], x[1]) in flips]
         if sites:
             want_class = True
+    if os.environ.get("BR_SITES") == "boolop-truth":
+        # only and<->or swaps in two-operand conditions inside functions (to test that narrowing)
+        gaps = []
+        tree = ast.parse(text)
+        parents = {ch: nd0 for nd0 in ast.walk(tree) for ch in ast.iter_child_nodes(nd0)}
+        for bo in ast.walk(tree):
+            if isinstance(bo, ast.BoolOp) and len(bo.values) == 2:
+                p = parents.get(bo)
+                truth = (isinstance(p, (ast.If, ast.While, ast.IfExp, ast.Assert)) and p.test is bo) or \
+                    (isinstance(p, ast.UnaryOp) and isinstance(p.op, ast.Not)) or isinstance(p, ast.comprehension)
+                q, infunc = p, False
+                while q is not None:
+                    if isinstance(q, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+                        infunc = True
+                        break
+                    if isinstance(q, ast.ClassDef):
+                        break
+                    q = parents.get(q)
+                if truth and infunc:
+                    a, b = bo.values
+                    gaps.append(((a.end_lineno, a.end_col_offset), (b.lineno, b.col_offset)))
+        sites = [x for x in sites if x[5] == "boolop" and any(g0 <= (x[0], x[1]) and (x[0], x[2]) <= g1 for g0, g1 in gaps)]
     if os.environ.get("BR_SITES") == "cmp-swaps":
         # only swaps to the neighbouring operator (is -> ==, < -> <=, ...), to test that narrowing
         sites = [x for x in sites if x[5] == "compare" and x[3] in ("is", "<", "<=", ">", ">=")]
