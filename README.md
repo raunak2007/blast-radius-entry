@@ -18,7 +18,9 @@ Every map comes from running sqlglot's own tests at the pinned commit (`eb11aec4
 - **Cheap selections are checked by running them.** When the selected tests cost less to run than to schedule (each worker costs 2 s), they run on the patched sources in a forked child (patched imports, process pools forked and capped at 2 workers) and the ones that pass are dropped. Anything that crashes, times out or can't run faithfully stays selected.
 - **Class-attribute edits are narrowed** to the tests that read the attribute, ran the edited lambda, or built the `exp.X` keyed by the edited dict entry.
 
-- **The 21 s TPC-DS test is replayed instead of run** when every change is ordinary function code in `sqlglot/` that the test's table setup doesn't run. Only the queries whose recorded coverage reaches a changed line are replayed. If the change stays inside `optimize()`, the optimizer output is compared. Otherwise the full execution result is compared. The duckdb transpilation is compared in both cases. Any difference, error or timeout keeps the test, and the replay only happens when its estimated CPU is well under the time it saves.
+- **The 21 s TPC-DS test is replayed instead of run** when every change is ordinary function code in `sqlglot/` that the test's table setup doesn't run. Only the queries whose recorded coverage reaches a changed line are replayed, each checked by what the line can affect for that query. If it only runs in parsing, `optimize()` or the duckdb transpilation, the optimizer output is compared. If it also runs in the debug-log rendering `execute()` does next (whose text is dropped), that rendering must not raise or change the expression. If it runs in planning or execution, the full result is compared. The duckdb transpilation is always compared. Any difference, error or timeout keeps the test, and the replay only happens when its estimated CPU is well under the time it saves.
+
+- **Code that runs while other modules import** (the trie builder every tokenizer class calls, the error formatter a dialect's import-time parse reaches) selects every test that uses those modules or a module whose import imports them (`import_users.pkl.gz`), and the generator's first-use dispatch table selects every test that builds a generator.
 
 Tests are packed longest-first, trying 1 to 8 workers and keeping the cheapest.
 
@@ -28,7 +30,8 @@ Tests are packed longest-first, trying 1 to 8 workers and keeping the cheapest.
 | --- | --- |
 | `selector.py` | The program the scorer runs (stdlib only) |
 | `blast_map.pkl.gz` | Coverage, file reads, and dialect/expression usage per test |
-| `tpcds.pkl.gz` | Per-query coverage, CPU and pristine outputs of `test_execute_tpcds`, plus its tables (`tools/build_tpcds.py`, then `tools/build_tpcds_fresh.py` so each query's coverage starts from a fresh pool worker, as any query can be the first one a worker runs) |
+| `tpcds.pkl.gz` | Per-query coverage, CPU and pristine outputs of `test_execute_tpcds`, plus its tables (`tools/build_tpcds.py`, then `tools/build_tpcds_ctx.py`, which records each query's coverage from a fresh pool worker, split by what checks each part) |
+| `import_users.pkl.gz` | Function-body lines that run while other modules are imported, with the modules that affects (`tools/build_import_users.py`) |
 | `sqlglot_src.tar.gz` | The pinned commit's Python sources, which patches are applied to |
 | `tools/` | Rebuilds both data files from the pinned commit (`tools/build_map.sh`) |
 | `Makefile`, `score.py`, `requirements.lock` | From the starter kit, unchanged |

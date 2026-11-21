@@ -178,6 +178,11 @@ if dict_entries:
                         spans.append(((k.lineno, k.col_offset), (v.end_lineno, v.end_col_offset)))
         return spans
     module_values = True  # reuse the span filter below
+import_cross = {}
+if os.environ.get("BR_SITES") == "import-cross":
+    _ic = pickle.load(gzip.open(os.environ["BR_IMPORTS"]))["cross"]
+    import_cross = {rel: {ln for ln, (everyone, _) in per.items() if not everyone} for rel, per in _ic.items()}
+    files = [f for f in files if import_cross.get(f)]
 results = []
 picked = set()
 attempts = 0
@@ -232,6 +237,13 @@ while len(results) < n and attempts < n * 50:
                     a, b = bo.values
                     gaps.append(((a.end_lineno, a.end_col_offset), (b.lineno, b.col_offset)))
         sites = [x for x in sites if x[5] == "boolop" and any(g0 <= (x[0], x[1]) and (x[0], x[2]) <= g1 for g0, g1 in gaps)]
+    if os.environ.get("BR_SITES") == "import-cross":
+        # only function-body lines that run while other modules are imported (not those that
+        # already select every test), to test that widening
+        cross = import_cross.get(rel, {})
+        sites = [x for x in sites if x[0] in cross]
+        pool = [(x, "function") for x in sites]
+        sites = []
     if os.environ.get("BR_SITES") == "cmp-swaps":
         # only swaps to the neighbouring operator (is -> ==, < -> <=, ...), to test that narrowing
         sites = [x for x in sites if x[5] == "compare" and x[3] in ("is", "<", "<=", ">", ">=")]

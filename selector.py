@@ -37,10 +37,13 @@ GENMEM_DATA = Path(os.environ.get("BR_GENMEM", str(Path(__file__).with_name("gen
 DICTKEYS_DATA = Path(os.environ.get("BR_DICTKEYS", str(Path(__file__).with_name("dictkeys.pkl.gz"))))
 CMP_DATA = Path(os.environ.get("BR_CMP", str(Path(__file__).with_name("cmp.pkl.gz"))))
 ARGREQ_DATA = Path(os.environ.get("BR_ARGREQ", str(Path(__file__).with_name("argreq.pkl.gz"))))
+IMPORTS_DATA = Path(os.environ.get("BR_IMPORTS", str(Path(__file__).with_name("import_users.pkl.gz"))))
 CMP_NAMES = {ast.Is: "is", ast.IsNot: "is not", ast.Eq: "==", ast.NotEq: "!=", ast.Lt: "<", ast.LtE: "<=",
              ast.Gt: ">", ast.GtE: ">=", ast.In: "in", ast.NotIn: "not in"}
 CMP_ALT = {"is": "==", "is not": "!=", "<": "<=", "<=": "<", ">": ">=", ">=": ">"}  # as tools/cmp_plugin.py
 GENMEM_TEST = "tests/test_generator.py::TestGenerator::test_generator_memory"
+# file -> (function that builds a per-process cache on first use, the cache's name)
+FIRST_USE = {"sqlglot/generator.py": ("_build_dispatch", "_DISPATCH_CACHE")}
 TPCDS_TEST = "tests/test_executor.py::TestExecutor::test_execute_tpcds"
 # Plan a TPC-DS replay only if its estimated CPU is at most this share of the time it would
 # save. Full replays run the executor on changed code, where outputs often differ late and
@@ -335,6 +338,7 @@ class Selector:
         self.subprocess = doc.get("subprocess_tests", 0)
         # every changed span of the current commit: (rel, lo, hi, "function" | "other")
         self.touched = []
+        self._class_users_by_file = None
 
     def index(self, rel):
         if rel not in self.cache:
@@ -399,9 +403,11 @@ class Selector:
                 if cm is None:
                     cm = self.boolop_mask(rel, st, line, blk, span)
             m = self.line_union(rel, lo, hi) if cm is None else cm
+            m |= self.first_use_mask(rel, idx, lo, hi)
             if self.touches_import(rel, lo, hi):
                 func = st["func"]
                 m |= self.broad_for_function(rel, idx, func)
+                m |= self.import_users_mask(rel, lo, hi)
                 self.touched.append((rel, lo, hi, "other"))
             else:
                 self.touched.append((rel, lo, hi, "function"))
@@ -791,6 +797,69 @@ class Selector:
                 mask = rm if mask is None else mask & rm
         return mask
 
+    def first_use_mask(self, rel, idx, lo, hi):
+        """Code whose result a process keeps after its first use, such as the generator's
+        per-class dispatch table: coverage credits it to whichever test happened to run
+        first, but every test that reads the kept result depends on it."""
+        spec = FIRST_USE.get(rel)
+        if spec is None:
+            return 0
+        builder, cache = spec
+        key = ("first_use", rel)
+        if key not in self.cache:
+            spans, users = [], set()
+            for node in ast.walk(idx.tree):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == builder:
+                    spans.append((node.lineno, node.end_lineno))
+            for i, text in enumerate(idx.lines, start=1):
+                if cache in text and not text.startswith(cache):  # uses inside functions
+                    users.add(i)
+            spans += [(i, i) for i in users]
+            m = 0
+            for i in users:
+                m |= self.line_union(rel, i, i)
+            self.cache[key] = (spans, m)
+        spans, m = self.cache[key]
+        if any(a <= hi and lo <= b for a, b in spans):
+            return m | self.subprocess
+        return 0
+
+    def file_users(self, f):
+        """Tests that use a module: those that ran its code or used its classes; for a test
+        file, its own tests."""
+        doc = self.doc
+        if f.startswith("tests/"):
+            return doc["test_files"].get(f, 0)
+        if self._class_users_by_file is None:
+            by = {}
+            for (r, _), mask in doc["class_users"].items():
+                by[r] = by.get(r, 0) | mask
+            self._class_users_by_file = by
+        return doc["module_any"].get(f, 0) | self._class_users_by_file.get(f, 0)
+
+    def import_users_mask(self, rel, lo, hi):
+        """A function body that also runs while other modules are imported (the trie builder
+        every tokenizer class calls, the error formatter a dialect's import-time parse
+        reaches) shapes those modules, or stops them importing: every test that uses one of
+        them, or a module whose own import imports one of them (tools/build_import_users.py)."""
+        data = load_imports()
+        if data is None:
+            return self.ALL  # without the data, any import-time body could matter anywhere
+        per = data["cross"].get(rel)
+        if not per:
+            return 0
+        m = 0
+        for ln in range(lo, hi + 1):
+            v = per.get(ln)
+            if v is None:
+                continue
+            everyone, files = v
+            if everyone:
+                return self.ALL
+            for f in files:
+                m |= self.file_users(f)
+        return m | self.subprocess if m else 0
+
     def broad_for_function(self, rel, idx, func):
         """A function whose body also runs at import time: treat like a change where it's defined."""
         for st in idx.stmts:
@@ -939,10 +1008,12 @@ class Selector:
 
         Only for commits whose every change is ordinary function code in sqlglot/ (no class
         or module level, nothing run at import, no data or test files), none of which runs
-        in the test's table setup. "front" (compare the optimizer output) only when no
-        changed line runs anywhere but inside optimize() for the reached queries; else
-        "full" (compare the executor result). Both also compare the duckdb transpilation,
-        which is the expected side of the test's comparison."""
+        in the test's table setup. Each query whose recorded coverage reaches a changed line
+        is checked by what that line can affect there: if only parsing, optimize() or the
+        duckdb transpilation, its optimizer output is compared ("front"); if also the
+        debug-log rendering execute() does next, that rendering is checked too ("log"); if
+        planning or execution (or the digest code), its rows ("full"). The duckdb
+        transpilation, the expected side of the test's comparison, is always compared."""
         if not self.verifiable or not self.patched or not self.touched:
             return None
         if any(kind != "function" or not rel.startswith("sqlglot/") for rel, _, _, kind in self.touched):
@@ -958,24 +1029,41 @@ class Selector:
         spans = [(rel, lo, hi) for rel, lo, hi, _ in self.touched]
         if any(hits(data["setup_sets"], *s) for s in spans):
             return None
-        reached = [q for q in data["queries"] if any(hits(q["opt_sets"], *s) or hits(q["rest_sets"], *s) for s in spans)]
+        # Per query, what the changed lines can affect decides how it's checked: "front"
+        # (parse, optimize, duckdb transpile: the optimizer output digest and the duckdb SQL),
+        # "log" (also the dropped debug-log rendering: it must not raise or alter the
+        # expression), or "full" (planning and execution, or the digest code itself: the rows).
+        digest_hit = any(hits(data["digest_sets"], *s) for s in spans)
+        modes, reached = {}, []
+        for q in data["queries"]:
+            in_exec = any(hits(q["exec_sets"], *s) for s in spans)
+            in_log = any(hits(q["log_sets"], *s) for s in spans)
+            if not (in_exec or in_log or any(hits(q["front_sets"], *s) for s in spans)):
+                continue
+            modes[q["index"]] = "full" if in_exec or digest_hit else ("log" if in_log else "front")
+            reached.append(q)
         if not reached:
             return None  # the test runs this code somewhere the replay doesn't: keep it
-        front = not any(hits(data["digest_sets"], *s) for s in spans) and \
-            not any(hits(q["rest_sets"], *s) for q in reached for s in spans)
-        key = "front_cpu" if front else "cpu"
-        estimate = sum(q[key] for q in reached) + 1.0
+
+        def cost(q):
+            mode = modes[q["index"]]
+            return q["cpu"] if mode == "full" else q["front_cpu"] + (q.get("log_cpu", 0.01) if mode == "log" else 0.0)
+
+        full = sum(1 for m in modes.values() if m == "full")
+        estimate = sum(cost(q) for q in reached) + 1.0
         saving = (pack_cost(chosen, duration) - pack_cost([n for n in chosen if n != tpcds_number], duration)) / 1000
-        if estimate > TPCDS_GATE["front" if front else "full"] * saving:
+        if estimate > TPCDS_GATE["full" if full else "front"] * saving:
             return None
-        reached.sort(key=lambda q: q[key])  # cheapest first: a changed output usually shows early
-        # The child stops and keeps the test once it has used this much CPU. In front mode
-        # it also re-runs to the end the queries whose optimizer output changed, if that
-        # still fits, since a different plan often gives the same rows.
+        reached.sort(key=cost)  # cheapest first: a changed output usually shows early
+        # The child stops and keeps the test once it has used this much CPU. It also re-runs
+        # to the end the front queries whose optimizer output changed, if that still fits,
+        # since a different plan often gives the same rows.
         budget = TPCDS_BUDGET * saving
-        log(f"TPC-DS replay planned: {'front' if front else 'full'}, {len(reached)} queries, "
+        mode = "full" if full == len(reached) else "front"
+        log(f"TPC-DS replay planned: {len(reached)} queries ({full} full, "
+            f"{sum(1 for m in modes.values() if m == 'log')} with the log line), "
             f"est {estimate:.1f}s to save {saving:.1f}s, budget {budget:.1f}s")
-        return {"mode": "front" if front else "full", "queries": [q["index"] for q in reached],
+        return {"mode": mode, "modes": modes, "queries": [q["index"] for q in reached],
                 "estimate": estimate, "budget": budget}
 
     # ---- test_generator_memory: rerun its per-dialect check only for dialects the edit can reach
@@ -1133,6 +1221,21 @@ _GENMEM = None
 _DICTKEYS = None
 _CMP = None
 _ARGREQ = None
+_IMPORTS = None
+
+
+def load_imports():
+    """Function-body lines that run while other modules are imported, with the modules that
+    affects (tools/build_import_users.py)."""
+    global _IMPORTS
+    if _IMPORTS is None:
+        try:
+            with gzip.open(IMPORTS_DATA, "rb") as fh:
+                _IMPORTS = pickle.load(fh)
+        except Exception as error:
+            log(f"no import-time data ({error!r}); function bodies run at import select every test")
+            _IMPORTS = False
+    return _IMPORTS or None
 
 
 def load_argreq():
@@ -1215,9 +1318,25 @@ def load_tpcds():
                 data = pickle.load(fh)
             data["setup_sets"] = {r: set(v) for r, v in data["setup_lines"].items()}
             data["digest_sets"] = {r: set(v) for r, v in data["digest_lines"].items()}
+
+            def union(*parts):
+                out = {}
+                for part in parts:
+                    for r, v in part.items():
+                        out.setdefault(r, set()).update(v)
+                return out
+
             for q in data["queries"]:
-                q["opt_sets"] = {r: set(v) for r, v in q["opt_lines"].items()}
-                q["rest_sets"] = {r: set(v) for r, v in q["rest_lines"].items()}
+                if data.get("contexts", 1) >= 2:  # tools/build_tpcds_ctx.py
+                    q["front_sets"] = union(q["parse_lines"], q["opt_lines"], q["duck_lines"])
+                    q["log_sets"] = union(q["log_lines"])
+                    q["exec_sets"] = union(q["exec_lines"])
+                else:  # everything outside optimize() needs a full run
+                    q["front_sets"] = union(q["opt_lines"])
+                    q["log_sets"] = {}
+                    q["exec_sets"] = union(q["rest_lines"])
+                for k in ("opt_lines", "rest_lines", "parse_lines", "duck_lines", "log_lines", "exec_lines"):
+                    q.pop(k, None)  # the forked checks don't need the lists
             _TPCDS = data
         except Exception as error:
             log(f"no TPC-DS data ({error!r}); the test runs whenever it's selected")
@@ -1254,13 +1373,14 @@ def child_tpcds(patched, plan, wfd):
     test_execute_tpcds runs them (parse, pickle to the worker, execute, pickle back, plus the
     duckdb transpilation) and report the test as failing unless every output is identical.
 
-    Front mode (changed code runs only inside optimize() for these queries): a first pass
-    stops each query right after optimize() and compares a digest of its output. Queries
-    whose optimizer output is unchanged are settled, since nothing after optimize() runs
-    changed code. If some changed, a second pass runs just those to the end, reusing the
-    first pass's optimizer output, and compares their rows, provided that fits the budget.
-    Full mode runs every planned query to the end. Either way the child gives up (and the
-    test stays selected) once its own CPU passes the plan's budget."""
+    "front" and "log" queries (changed code runs before execute()'s planning for them): a
+    first pass stops each right after optimize() and compares a digest of its output; for
+    "log" ones it also renders the output as execute()'s debug log line does, which must
+    not raise or change it. Queries whose optimizer output is unchanged are settled, since
+    nothing after that runs changed code. If some changed, a second pass runs just those
+    to the end, reusing the first pass's optimizer output, and compares their rows,
+    provided that fits the budget. "full" queries run to the end in the first pass. The
+    child gives up (and the test stays selected) once its own CPU passes the budget."""
     import hashlib
     import shutil
     import signal
@@ -1282,6 +1402,9 @@ def child_tpcds(patched, plan, wfd):
     schema, tables = pickle.loads(pickle.dumps((data["schema"], tables)))
     by_index = {q["index"]: q for q in data["queries"]}
     front = plan["mode"] == "front"
+    # per query: "front" (stop after optimize() and compare its digest), "log" (also render
+    # the optimized SQL as execute()'s debug log line does), or "full" (run to the end)
+    modes = plan.get("modes") or {i: "front" if front else "full" for i in plan["queries"]}
     debug = bool(os.environ.get("BR_DEBUG"))
     original_optimize = executor_module.optimize
     current = {}
@@ -1295,9 +1418,20 @@ def child_tpcds(patched, plan, wfd):
         if q["index"] in optimized:  # second pass: carry on from the first pass's output
             return optimized.pop(q["index"])
         result = original_optimize(*args, **kwargs)
+        if modes.get(q["index"]) == "full":
+            return result
         current["digest"] = hashlib.sha256(repr(result.dump()).encode()).hexdigest()
         if current["digest"] != q["opt_digest"]:
-            optimized[q["index"]] = result
+            optimized[q["index"]] = result  # re-run to the end later, from this output
+        elif modes.get(q["index"]) == "log":
+            # Unchanged output, but changed code renders it next: execute() evaluates
+            # expression.sql(pretty=True) for a debug log line, whose text is dropped. That
+            # must neither raise nor alter the expression the plan is then built from.
+            try:
+                result.sql(pretty=True)
+                current["log_ok"] = hashlib.sha256(repr(result.dump()).encode()).hexdigest() == current["digest"]
+            except Exception:
+                current["log_ok"] = False
         raise Stop
 
     def spent():
@@ -1312,12 +1446,12 @@ def child_tpcds(patched, plan, wfd):
         try:
             result = pickle.loads(pickle.dumps(execute(expression, schema=schema, tables=used)))
         except Stop:
-            return None
+            return None if current.get("log_ok", True) else False
         return tuple(result.columns) == q["columns"] and list(result.rows) == q["rows"]
 
     same = True
     early = 0
-    if front:
+    if any(m != "full" for m in modes.values()):
         executor_module.optimize = optimize_hook
     try:
         for i in plan["queries"]:
