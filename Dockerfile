@@ -8,7 +8,8 @@ ENV PYTHONDONTWRITEBYTECODE=1
 # sqlglot_src.tar.gz  the pinned commit's Python sources, which patches are applied to
 # requirements.lock   the labeling environment, so cheap selections can be checked by running them
 # tpcds.pkl.gz        per-query coverage and pristine outputs of test_execute_tpcds, for replaying it
-COPY requirements.lock selector.py blast_map.pkl.gz sqlglot_src.tar.gz tpcds.pkl.gz /app/
+# operands.pkl.gz     per-test comparison operands and dict keys read, for narrowing those edits
+COPY requirements.lock selector.py blast_map.pkl.gz sqlglot_src.tar.gz tpcds.pkl.gz operands.pkl.gz /app/
 
 RUN pip install --no-cache-dir --disable-pip-version-check -q -r /app/requirements.lock
 

@@ -4,3 +4,4 @@
 !sqlglot_src.tar.gz
 !requirements.lock
 !tpcds.pkl.gz
+!operands.pkl.gz
