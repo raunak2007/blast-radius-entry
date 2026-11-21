@@ -709,6 +709,7 @@ class Selector:
         self.new_idx = None
         self.last_differs = None
         self.no_import_widen = False  # set to see the selection an unchanged import-time state allows
+        self.defaults_only = False
         self.import_widened = False
 
     def index(self, rel):
@@ -820,11 +821,16 @@ class Selector:
                 self.import_widened = True
                 at_import = not self.no_import_widen
             narrowed = None
+            self.defaults_only = False
             if blk is not None and not at_import:
                 # only calls that leave a changed default out can see it
                 narrowed = self.default_args_mask(rel, node, blk)
             m = self.line_union(rel, body_lo, body_hi) if narrowed is None else narrowed
             in_decorators = line < st["node"].lineno
+            if self.defaults_only and not at_import and not in_decorators and node.body:
+                # a literal default only reaches the body of a call that left it out: for the
+                # TPC-DS replay this is a change to the body's lines
+                self.touched[-1] = (rel, node.body[0].lineno, body_hi, "function")
             if in_decorators and st["scope"] == "class":
                 m |= self.class_fallback(rel, st["cls"], idx)
             elif in_decorators:
@@ -1359,6 +1365,7 @@ class Selector:
                 changed.append((arg.arg, d_old, d_new))
         if not changed or not all(self.literal_default(o) and self.literal_default(n) for _, o, n in changed):
             return None
+        self.defaults_only = True  # only what the body sees changes: it counts as function code
         data = load_defaults()
         if data is None:
             return None
@@ -3019,7 +3026,6 @@ def main():
 
     # 1. selections, and the commits whose selection an unchanged import-time state would shrink
     snaps, narrow, state_jobs = {}, {}, {}
-    test_modules = tuple((load_imports() or {}).get("test_modules", ()))
     for patch in sorted((DATA / "commits").glob("*.patch")):
         commit = patch.name[: -len(".patch")]
         text = patch.read_bytes().decode("utf-8", "surrogateescape")
@@ -3038,10 +3044,20 @@ def main():
             except Exception as error:
                 log(f"{commit}: no narrower selection ({error})")
                 alt = None
-            if alt is not None and \
-                    pack_cost(snap["chosen"], duration) - pack_cost(alt["chosen"], duration) >= STATE_MIN_GAIN_MS:
+            gain = None
+            if alt is not None:
+                gain = pack_cost(snap["chosen"], duration) - pack_cost(alt["chosen"], duration)
+                tpcds_number = number_of.get(TPCDS_TEST)
+                if tpcds_number in alt["chosen"] and gain < STATE_MIN_GAIN_MS:
+                    # as ordinary function code the commit may also get a TPC-DS replay
+                    selector.patched, selector.verifiable = alt["patched"], alt["verifiable"]
+                    selector.touched, selector.data_files = alt["touched"], alt["data_files"]
+                    if selector.tpcds_plan(alt["chosen"], duration, tpcds_number):
+                        gain += (pack_cost(alt["chosen"], duration)
+                                 - pack_cost([n for n in alt["chosen"] if n != tpcds_number], duration)) // 2
+            if gain is not None and gain >= STATE_MIN_GAIN_MS:
                 narrow[commit] = alt
-                state_jobs[commit] = (snap["patched"], test_modules)
+                state_jobs[commit] = (snap["patched"], tuple((load_imports() or {}).get("test_modules", ())))
     if state_jobs:
         verdict = import_states(state_jobs, max(5.0, STATE_BUDGET_S))
         for commit, same in sorted(verdict.items()):
