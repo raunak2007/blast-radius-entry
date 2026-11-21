@@ -41,6 +41,7 @@ ARGREQ_DATA = Path(os.environ.get("BR_ARGREQ", str(Path(__file__).with_name("arg
 IMPORTS_DATA = Path(os.environ.get("BR_IMPORTS", str(Path(__file__).with_name("import_users.pkl.gz"))))
 OPERANDS_DATA = Path(os.environ.get("BR_OPERANDS", str(Path(__file__).with_name("operands.pkl.gz"))))
 DICTREADS_DATA = Path(os.environ.get("BR_DICTREADS", str(Path(__file__).with_name("dictreads.pkl.gz"))))
+DEFAULTS_DATA = Path(os.environ.get("BR_DEFAULTS", str(Path(__file__).with_name("defaults.pkl.gz"))))
 CMP_NAMES = {ast.Is: "is", ast.IsNot: "is not", ast.Eq: "==", ast.NotEq: "!=", ast.Lt: "<", ast.LtE: "<=",
              ast.Gt: ">", ast.GtE: ">=", ast.In: "in", ast.NotIn: "not in"}
 CMP_ALT = {"is": "==", "is not": "!=", "<": "<=", "<=": "<", ">": ">=", ">=": ">"}  # as tools/cmp_plugin.py
@@ -706,6 +707,7 @@ class Selector:
         self.touched = []
         self._class_users_by_file = None
         self.new_idx = None
+        self.last_differs = None
 
     def index(self, rel):
         if rel not in self.cache:
@@ -765,10 +767,15 @@ class Selector:
         lo, hi = span
         if st["scope"] == "function":
             cm = None
+            self.last_differs = None
             if blk is not None:
                 cm = self.compare_mask(rel, st, line, blk, span)
                 if cm is None:
                     cm = self.boolop_mask(rel, st, line, blk, span)
+            # the weak-mutation run evaluated this site both ways and they never disagreed,
+            # in a test or outside one, so no execution, import-time included, can change
+            # (a disagreement inside a test could have been a lazy import's, so only none counts)
+            same_at_import = cm is not None and self.last_differs == 0
             keep = None
             if cm is None and blk is not None:
                 # tests whose recorded comparison results can change (any operator, literals)
@@ -787,7 +794,7 @@ class Selector:
             # imported (the body of a lambda that an import-time call returns never runs then;
             # an instruction that ran fired its line's event, so its line is in the map)
             spans = [(ln, ln) for ln in sorted(changed)] if changed is not None else [(lo, hi)]
-            if any(self.touches_import(rel, a, b) for a, b in spans):
+            if not same_at_import and any(self.touches_import(rel, a, b) for a, b in spans):
                 func = st["func"]
                 m |= self.broad_for_function(rel, idx, func)
                 for a, b in spans:
@@ -799,12 +806,27 @@ class Selector:
         self.touched.append((rel, lo, hi, "other"))
         if st["kind"] == "def":
             body_lo, body_hi = st["full"]
-            m = self.line_union(rel, body_lo, body_hi)
+            node = st["node"]
+            # whether the body ran while modules were imported; a stub body (`...`, `pass`, a
+            # docstring), such as an overload's, does nothing even when called
+            stub = all(isinstance(b, ast.Pass) or (isinstance(b, ast.Expr) and isinstance(b.value, ast.Constant))
+                       for b in node.body)
+            at_import = bool(node.body) and not stub and self.touches_import(rel, node.body[0].lineno, body_hi)
+            narrowed = None
+            if blk is not None and not at_import:
+                # only calls that leave a changed default out can see it
+                narrowed = self.default_args_mask(rel, node, blk)
+            m = self.line_union(rel, body_lo, body_hi) if narrowed is None else narrowed
             in_decorators = line < st["node"].lineno
             if in_decorators and st["scope"] == "class":
                 m |= self.class_fallback(rel, st["cls"], idx)
             elif in_decorators:
                 m |= self.module_fallback(rel, idx)
+            if at_import:
+                # the function also runs while modules are imported (a default it now takes
+                # differently, a parameter renamed): what those imports built may change
+                m |= self.broad_for_function(rel, idx, node)
+                m |= self.import_users_mask(rel, node.body[0].lineno, body_hi)
             return m
         if st["scope"] == "class":
             return self.class_change(rel, idx, st, line, blk)
@@ -867,6 +889,7 @@ class Selector:
         if CMP_ALT.get(old_op) != new_op:
             return None  # only the neighbouring operator was computed; any other swap flips results
         m = data["differs"].get(key, 0)
+        self.last_differs = m
         # tests the instrumented run couldn't see (fresh interpreters) or that failed there
         return m | (self.line_union(rel, span[0], span[1]) & (self.subprocess | data["failed"]))
 
@@ -908,6 +931,7 @@ class Selector:
         if key in data["outside"] or data["ops"].get(key) != old_op:
             return None
         m = data["differs"].get(key, 0)
+        self.last_differs = m
         return m | (self.line_union(rel, span[0], span[1]) & (self.subprocess | data["failed"]))
 
     # ---- module-level constants
@@ -1272,6 +1296,76 @@ class Selector:
 
     OPERAND_PURE = (ast.Constant, ast.Name, ast.Attribute, ast.Tuple, ast.List, ast.Set, ast.UnaryOp, ast.USub,
                     ast.Load, ast.expr_context)
+
+    LITERAL_TYPES = (bool, int, float, str, bytes, type(None))
+
+    @classmethod
+    def literal_default(cls, node):
+        if isinstance(node, ast.Constant) and type(node.value) in cls.LITERAL_TYPES:
+            return True
+        return isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.USub, ast.UAdd)) \
+            and isinstance(node.operand, ast.Constant) and type(node.operand.value) in (int, float)
+
+    def default_args_mask(self, rel, node, blk):
+        """An edit to a def line that only changes literal default values: the tests in which
+        some call left one of those parameters at its default (tools/defaults_plugin.py).
+        None if unsure: anything else in the signature or the decorators changed, a
+        default that isn't a literal, a function the run didn't see, or a default used
+        outside tests."""
+        if not blk["removed"] or len(blk["removed"]) != len(blk["added"]) or self.new_idx is None:
+            return None
+        head_lo = min([node.lineno] + [d.lineno for d in node.decorator_list])
+        head_hi = node.body[0].lineno - 1 if node.body else node.lineno
+        if any(not (head_lo <= ln <= head_hi) for ln in blk["removed"]):
+            return None
+        new_st, _ = self.new_idx.stmt_at(blk["added"][0])
+        if new_st is None or new_st["kind"] != "def" or type(new_st["node"]) is not type(node):
+            return None
+        new = new_st["node"]
+        new_lo = min([new.lineno] + [d.lineno for d in new.decorator_list])
+        new_hi = new.body[0].lineno - 1 if new.body else new.lineno
+        if any(not (new_lo <= ln <= new_hi) for ln in blk["added"]) or new.name != node.name:
+            return None
+        a, b = node.args, new.args
+        if len(a.defaults) != len(b.defaults) or len(a.kw_defaults) != len(b.kw_defaults):
+            return None
+
+        def shape(fn):
+            x = fn.args
+            args = ast.arguments(posonlyargs=x.posonlyargs, args=x.args, vararg=x.vararg, kwonlyargs=x.kwonlyargs,
+                                 kw_defaults=[None if d is None else ast.Constant(0) for d in x.kw_defaults],
+                                 kwarg=x.kwarg, defaults=[ast.Constant(0) for _ in x.defaults])
+            return (ast.dump(args), [ast.dump(d) for d in fn.decorator_list],
+                    ast.dump(fn.returns) if fn.returns is not None else None, fn.name)
+
+        if shape(node) != shape(new):
+            return None
+        positional = (a.posonlyargs + a.args)[len(a.posonlyargs) + len(a.args) - len(a.defaults):]
+        changed = []
+        for arg, d_old, d_new in zip(positional, a.defaults, b.defaults):
+            if ast.dump(d_old) != ast.dump(d_new):
+                changed.append((arg.arg, d_old, d_new))
+        for arg, d_old, d_new in zip(a.kwonlyargs, a.kw_defaults, b.kw_defaults):
+            if (d_old is None) != (d_new is None):
+                return None
+            if d_old is not None and ast.dump(d_old) != ast.dump(d_new):
+                changed.append((arg.arg, d_old, d_new))
+        if not changed or not all(self.literal_default(o) and self.literal_default(n) for _, o, n in changed):
+            return None
+        data = load_defaults()
+        if data is None:
+            return None
+        entry = (data.get(rel) or {}).get((head_lo, node.name))
+        if entry is None:
+            return None
+        m = 0
+        for name, _, _ in changed:
+            if name not in entry["params"] or name in entry["outside"]:
+                return None
+            m |= entry["used"].get(name, 0)
+        log(f"default edit in {rel}:{node.lineno} narrowed to the calls that left it out")
+        # tests in a fresh interpreter weren't seen by the recording run
+        return m | (self.line_union(rel, node.lineno, node.end_lineno) & self.subprocess)
 
     @staticmethod
     def plain_data_class(cls_node):
@@ -1857,6 +1951,22 @@ _ARGREQ = None
 _IMPORTS = None
 _OPERANDS = None
 _DICTREADS = None
+_DEFAULTS = None
+
+
+def load_defaults():
+    """Per function, the tests in which a call left each defaulted parameter at its default
+    (tools/defaults_plugin.py), packed per source file; loaded on first use."""
+    global _DEFAULTS
+    if _DEFAULTS is None:
+        try:
+            with gzip.open(DEFAULTS_DATA, "rb") as fh:
+                data = pickle.load(fh)
+            _DEFAULTS = Blobs(data["by_file"])
+        except Exception as error:
+            log(f"no default-argument data ({error!r}); default edits keep every caller")
+            _DEFAULTS = False
+    return _DEFAULTS or None
 
 
 def load_operands():

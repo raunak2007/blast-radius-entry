@@ -2,7 +2,7 @@
 
 Picks the sqlglot tests each patch can break, then packs them onto workers.
 
-**Sample set (30 commits):** 97.5 s simulated, 0 misses, about 3.5 s of CPU. The starter scores 1210.5 s.
+**Sample set (30 commits):** 97.5 s simulated, 0 misses, about 3 s of CPU. The starter scores 1210.5 s.
 
 ## How it decides
 
@@ -23,6 +23,8 @@ Every map comes from running sqlglot's own tests at the pinned commit (`eb11aec4
 - **Recorded operands** (`tools/operand_plugin.py`, a second profiled run of the suite at the pinned commit). Every single-operator comparison in `sqlglot/` is compiled to record the operands it sees per test, and every module- or class-level dict literal is wrapped when it is created, so its reads are recorded per key even through a reference another object keeps (the tokenizer holds on to `NUMERIC_ESCAPES`), and reads made while modules import are recorded so those keys are refused. An edit that only swaps a comparison's operator or changes a literal operand is re-evaluated on those operands, and tests whose recorded results can't change are dropped. A one-line edit to one dict entry's plain value, where our own per-name key index gives up, selects the tests that read that key or read the dict in bulk. Both files are packed per source file so a run unpickles only what its commits touch.
 
 - **Import-time effects are judged per instruction.** A statement in a function that also runs at import (a builder called in a class body) only widens the selection to everything importing the module when a changed instruction itself ran at import. The body of a lambda or closure such a builder returns never runs then, so an edit there selects the tests that ran it. Every line a fresh process runs while importing all of sqlglot and its tests is in the map's import-time lines, which is what this relies on.
+
+- **A changed def line** (a default value, say) selects the tests that ran the function, and, when its body also runs while modules are imported, everything an import-time change selects: a default the import-time template parses take differently can stop a module importing at all. Overload stubs (`...` bodies) are exempt.
 
 - **Code that runs while other modules import** (the trie builder every tokenizer class calls, the error formatter a dialect's import-time parse reaches) selects every test that uses those modules, a module whose import imports them, or imports one of them while it runs (`from sqlglot.dialects import X` inside a test) (`import_users.pkl.gz`), and the generator's first-use dispatch table selects every test that builds a generator.
 
