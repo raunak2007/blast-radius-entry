@@ -133,6 +133,16 @@ print(f"{n} function-body lines run during other modules' imports, in {len(users
 
 # ---- who is affected: each importer, and every module whose own import imports it
 
+import sqlglot.dialects as _dialects  # noqa: E402
+import sqlglot.optimizer as _optimizer  # noqa: E402
+
+# packages whose attributes import a submodule on first access (a module __getattr__)
+LAZY = {
+    "sqlglot.dialects": {k: f"sqlglot.dialects.{v}" for k, v in _dialects.MODULE_BY_ATTRIBUTE.items()},
+    "sqlglot.optimizer": {k: v[0] for k, v in _optimizer._LAZY_ATTRS.items()},
+}
+
+
 def static_imports(rel, modname):
     """Modules a file imports while it is imported (module body and class bodies)."""
     tree = ast.parse(open(os.path.join(repo, rel)).read())
@@ -158,6 +168,8 @@ def static_imports(rel, modname):
                 out.update(".".join(parts[:k]) for k in range(1, len(parts) + 1))
                 for a in node.names:
                     out.add(f"{mod}.{a.name}")  # a submodule, if it is one
+                    if a.name in LAZY.get(mod, {}):
+                        out.add(LAZY[mod][a.name])  # a lazily imported attribute
             for field in ("body", "orelse", "finalbody", "handlers"):
                 sub = getattr(node, field, None)
                 if isinstance(sub, list):
@@ -187,6 +199,47 @@ def ancestors(name):
     return seen
 
 
+# tests that import a module themselves while they run: `from sqlglot.dialects import X` or
+# `sqlglot.dialects.X` inside a test function (in a helper or at class level: the whole file)
+lazy_tests = {}
+
+
+def lazy_targets(node):
+    out = set()
+    for sub in ast.walk(node):
+        if isinstance(sub, ast.ImportFrom) and not sub.level and sub.module in LAZY:
+            out.update(LAZY[sub.module][a.name] for a in sub.names if a.name in LAZY[sub.module])
+        elif isinstance(sub, ast.ImportFrom) and not sub.level and sub.module:
+            out.add(sub.module)
+        elif isinstance(sub, ast.Import):
+            out.update(a.name for a in sub.names)
+        elif isinstance(sub, ast.Attribute) and isinstance(sub.value, ast.Attribute):
+            base = ast.unparse(sub.value)
+            if base in LAZY and sub.attr in LAZY[base]:
+                out.add(LAZY[base][sub.attr])
+    return {m for m in out if m in module_file}
+
+
+for dirpath, _, fnames in os.walk(os.path.join(repo, "tests")):
+    for fname in fnames:
+        if not (fname.startswith("test_") and fname.endswith(".py")):
+            continue
+        rel = os.path.relpath(os.path.join(dirpath, fname), repo)
+        tree = ast.parse(open(os.path.join(repo, rel)).read())
+        for top in tree.body:
+            if isinstance(top, ast.ClassDef):
+                for item in top.body:
+                    if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        found = set()
+                        for stmt in item.body:
+                            found |= lazy_targets(stmt)
+                        who = f"{rel}::{top.name}::{item.name}" if item.name.startswith("test") else f"FILE:{rel}"
+                        for m in found:
+                            lazy_tests.setdefault(m, set()).add(who)
+            elif isinstance(top, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                for m in lazy_targets(top):
+                    lazy_tests.setdefault(m, set()).add(f"FILE:{rel}")
+
 everything = {"sqlglot"}  # imported by every test
 cross = {}
 for rel, lines in users.items():
@@ -195,7 +248,8 @@ for rel, lines in users.items():
         for m in mods:
             affected |= ancestors(m)
         files = sorted({module_file[m] for m in affected if m in module_file})
-        cross.setdefault(rel, {})[int(ln)] = {"all": bool(affected & everything), "files": files}
+        tests = sorted({t for m in affected for t in lazy_tests.get(m, ())})
+        cross.setdefault(rel, {})[int(ln)] = {"all": bool(affected & everything), "files": files, "tests": tests}
 json.dump({"users": users, "module_file": module_file, "failed_imports": failed,
            "cross": {rel: {str(k): v for k, v in d.items()} for rel, d in cross.items()}},
           open(out_path, "w"))

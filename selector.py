@@ -50,7 +50,7 @@ TPCDS_TEST = "tests/test_executor.py::TestExecutor::test_execute_tpcds"
 # changed plans can run slower, so they get a stricter gate.
 TPCDS_GATE = {"front": 0.8, "full": 0.5}
 TPCDS_BUDGET = 0.85  # the replay child is stopped (and the test kept) past this share of the saving
-TPCDS_RERUN_SHARE = 0.5  # second front pass only if its estimate fits in half of what's left
+TPCDS_RERUN_SHARE = float(os.environ.get("BR_RERUN_SHARE", "0.5"))  # second front pass only if its estimate fits in this share of what is left
 TPCDS_EARLY_RERUNS = 3  # changed plans run to the end at once, before deferring the rest
 WORKER_MS = 2000
 MAX_WORKERS = 8
@@ -726,7 +726,12 @@ class Selector:
             return None
         attr = targets[0].id
         data = load_dictkeys()
-        if data is None or attr not in data["tracked_set"] or attr in data["unsafe"]:
+        if data is None or attr not in data["tracked_set"]:
+            return None
+        # some names are only unsafe for certain keys: those an import-time parse looks up,
+        # or that something writes at runtime (tools/build_key_level.py)
+        key_level = data.get("key_level", {}).get(attr)
+        if attr in data["unsafe"] and key_level is None:
             return None
         old_line, new_line = blk["removed_text"][0], blk["added_text"][0]
         lo, hi = changed_range(old_line, new_line)
@@ -748,6 +753,8 @@ class Selector:
             if new_names is None:
                 return None
             names = names | new_names
+        if key_level is not None and names & key_level:
+            return None
         per = data["keys"].get(attr, {})
         m = 0
         for tid in data["full_tests"].get(attr, ()):
@@ -853,11 +860,16 @@ class Selector:
             v = per.get(ln)
             if v is None:
                 continue
-            everyone, files = v
+            everyone, files, tests = v if len(v) == 3 else (*v, ())
             if everyone:
                 return self.ALL
             for f in files:
                 m |= self.file_users(f)
+            for tid in tests:  # tests that import one of them while they run
+                if tid.startswith("FILE:"):
+                    m |= self.doc["test_files"].get(tid[5:], 0)
+                else:
+                    m |= self.test_bit.get(tid, 0)
         return m | self.subprocess if m else 0
 
     def broad_for_function(self, rel, idx, func):
@@ -1808,7 +1820,7 @@ def main():
             if plan:
                 tpcds_jobs.append(((commit, "tpcds"), patched, [TPCDS_TEST],
                                    {"__tpcds__": plan, TPCDS_TEST: duration[tpcds_number] / 1000},
-                                   10 + 3 * plan["estimate"]))
+                                   10 + max(3 * plan["estimate"], 1.5 * plan["budget"])))
         if RUN and verifiable and selector is not None and genmem_number in chosen:
             gplan = selector.genmem_plan(chosen, duration, genmem_number)
             if gplan is not None and not gplan["dialects"] and not gplan["import_check"]:

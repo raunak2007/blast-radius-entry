@@ -121,6 +121,11 @@ def failing_tests(junit):
         if not any(k.tag in ("failure", "error") for k in case):
             continue
         cls, name = case.get("classname", ""), case.get("name", "")
+        if not cls and name.startswith("tests"):  # pytest 9: a file that failed to collect
+            path = name.replace(".", "/") + ".py"
+            if path in by_file:
+                fails.update(by_file[path])
+                continue
         if "." in cls:
             mod, klass = cls.rsplit(".", 1)
             tid = f"{mod.replace('.', '/')}.py::{klass}::{name}"
@@ -157,10 +162,12 @@ if module_values:
 
 # BR_SITES=class-dict-entries: only mutate inside one entry (key or value) of a dict assigned
 # to a class attribute that the dict-key index can narrow (to test that narrowing)
-dict_entries = os.environ.get("BR_SITES") == "class-dict-entries"
+dict_entries = os.environ.get("BR_SITES") in ("class-dict-entries", "key-level")
 if dict_entries:
     dk = pickle.load(gzip.open(os.environ["BR_DICTKEYS"]))
     safe_attrs = set(dk["tracked"]) - set(dk["unsafe"])
+    if os.environ.get("BR_SITES") == "key-level":
+        safe_attrs = set(dk.get("key_level", ()))  # names narrowable except for certain keys
 
     def value_spans(text):
         spans = []
