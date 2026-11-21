@@ -18,6 +18,7 @@ Logs go to stderr. stdout holds exactly one JSON line per commit.
 """
 
 import ast
+import difflib
 import gzip
 import heapq
 import json
@@ -402,6 +403,13 @@ class Selector:
                 cm = self.compare_mask(rel, st, line, blk, span)
                 if cm is None:
                     cm = self.boolop_mask(rel, st, line, blk, span)
+            if cm is None and blk is not None and hi > lo:
+                # a statement over several lines: only the lines whose bytecode changed
+                changed = self.bytecode_lines(rel, st, blk)
+                if changed is not None:
+                    cm = 0
+                    for ln in changed:
+                        cm |= self.line_union(rel, ln, ln)
             m = self.line_union(rel, lo, hi) if cm is None else cm
             m |= self.first_use_mask(rel, idx, lo, hi)
             if self.touches_import(rel, lo, hi):
@@ -803,6 +811,116 @@ class Selector:
                     rm |= r
                 mask = rm if mask is None else mask & rm
         return mask
+
+    def bytecode_lines(self, rel, st, blk):
+        """Old-file lines of the instructions an edit changes inside one function, or None.
+
+        Coverage is per line, and a test fires a line's event whenever it runs any
+        instruction compiled to that line. So within a statement spread over several lines
+        (a long condition, a call, a conditional expression), only the tests that ran the
+        lines holding changed instructions can see the edit: a sub-expression that was
+        short-circuited, or a branch not taken, compiled to its own line, never ran. The
+        enclosing function is compiled before and after the edit (on its own, the same
+        way both times) and the instruction streams compared, nested code included; a
+        folded constant lands on the line the compiler gives it, so that line is used.
+        Only for line-for-line edits inside one function."""
+        key = ("bytecode", rel, tuple(blk["removed"]), tuple(blk["added"]))
+        if key not in self.cache:
+            try:
+                self.cache[key] = self._bytecode_lines(rel, st, blk)
+            except Exception as error:  # any surprise: keep the whole statement
+                log(f"bytecode comparison failed in {rel}: {error!r}")
+                self.cache[key] = None
+        return self.cache[key]
+
+    def _bytecode_lines(self, rel, st, blk):
+        if not blk["removed"] or len(blk["removed"]) != len(blk["added"]):
+            return None
+        func = st["func"]
+        if func is None:
+            return None
+        delta = blk["added"][0] - blk["removed"][0]
+        new_st, _ = self.new_idx.stmt_at(blk["added"][0])
+        new_func = new_st["func"] if new_st is not None else None
+        if new_func is None or new_func.name != func.name or new_func.lineno != func.lineno + delta:
+            return None
+        if any(func.lineno > ln or ln > func.end_lineno for ln in blk["removed"]):
+            return None
+        import dis
+        import types
+
+        def code_of(node):
+            try:
+                mod = compile(ast.Module(body=[node], type_ignores=[]), rel, "exec", dont_inherit=True)
+            except (SyntaxError, ValueError, TypeError):
+                return None
+            for c in mod.co_consts:
+                if isinstance(c, types.CodeType) and c.co_name == node.name:
+                    return c
+            return None
+
+        def stream(co):
+            """(key, line, jump target index or None) per instruction, and nested code."""
+            ins_list = list(dis.get_instructions(co))
+            index_of = {ins.offset: i for i, ins in enumerate(ins_list)}
+            out, nested = [], []
+            for ins in ins_list:
+                arg = ins.argval
+                target = None
+                if isinstance(arg, types.CodeType):
+                    nested.append(arg)
+                    shown = "<code>"
+                elif ins.opcode in dis.hasjrel or ins.opcode in dis.hasjabs:
+                    shown = ""
+                    target = index_of.get(arg, -1)  # compared through the alignment below
+                else:
+                    shown = repr(arg)
+                line = ins.positions.lineno if ins.positions is not None else None
+                out.append(((ins.opname, shown), line, target))
+            return out, nested
+
+        old_co, new_co = code_of(func), code_of(new_func)
+        if old_co is None or new_co is None:
+            return None
+        lines = set()
+        todo = [(old_co, new_co)]
+        while todo:
+            a, b = todo.pop()
+            (sa, na), (sb, nb) = stream(a), stream(b)
+            if len(na) != len(nb):
+                return None
+            todo.extend(zip(na, nb))
+            ka, kb = [x[0] for x in sa], [x[0] for x in sb]
+            to_new = {}
+            ops = difflib.SequenceMatcher(None, ka, kb, autojunk=False).get_opcodes()
+            for tag, i1, i2, j1, j2 in ops:
+                if tag == "equal":
+                    for k in range(i2 - i1):
+                        to_new[i1 + k] = j1 + k
+            changed_a, changed_b = set(), set()
+            for tag, i1, i2, j1, j2 in ops:
+                if tag != "equal":
+                    changed_a.update(range(i1, i2))
+                    changed_b.update(range(j1, j2))
+            # an aligned jump whose target moved changes control flow where it stands
+            for i, j in to_new.items():
+                ta, tb = sa[i][2], sb[j][2]
+                if ta is None and tb is None:
+                    continue
+                if ta is None or tb is None or to_new.get(ta) != tb:
+                    changed_a.add(i)
+                    changed_b.add(j)
+            for i in changed_a:
+                if sa[i][1] is None:
+                    return None
+                lines.add(sa[i][1])
+            for j in changed_b:
+                if sb[j][1] is None:
+                    return None
+                lines.add(sb[j][1] - delta)
+        if not lines or any(func.lineno > ln or ln > func.end_lineno for ln in lines):
+            return None
+        return lines
 
     def first_use_mask(self, rel, idx, lo, hi):
         """Code whose result a process keeps after its first use, such as the generator's
@@ -1459,7 +1577,11 @@ def child_tpcds(patched, plan, wfd):
             result = pickle.loads(pickle.dumps(execute(expression, schema=schema, tables=used)))
         except Stop:
             return None if current.get("log_ok", True) else False
-        return tuple(result.columns) == q["columns"] and list(result.rows) == q["rows"]
+        same_rows = tuple(result.columns) == q["columns"] and list(result.rows) == q["rows"]
+        if debug and not same_rows:
+            diffs = [(a, b) for a, b in zip(result.rows, q["rows"]) if a != b][:2]
+            current["rows_debug"] = (len(result.rows), len(q["rows"]), tuple(result.columns) == q["columns"], diffs)
+        return same_rows
 
     same = True
     early = 0
@@ -1495,8 +1617,8 @@ def child_tpcds(patched, plan, wfd):
             for q in todo if same else ():
                 if run(q) is not True or spent() > budget:
                     if debug:
-                        print(f"tpcds child: query {q['index']} differs or over budget, spent={spent():.2f}s",
-                              file=sys.stderr)
+                        print(f"tpcds child: query {q['index']} differs or over budget, spent={spent():.2f}s "
+                              f"rows={current.get('rows_debug')}", file=sys.stderr)
                     same = False
                     break
     finally:

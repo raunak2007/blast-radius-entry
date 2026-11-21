@@ -9,7 +9,7 @@ Picks the sqlglot tests each patch can break, then packs them onto workers.
 Every map comes from running sqlglot's own tests at the pinned commit (`eb11aec4`), which the track rules allow. No patch or answer file is used to build anything.
 
 - **Comment-only hunks** (comments or blank lines outside strings) change nothing Python runs, so they select nothing.
-- **A changed statement inside a function** selects the tests that executed it (per-test line coverage).
+- **A changed statement inside a function** selects the tests that executed it (per-test line coverage). For a statement spread over several lines, the function is compiled before and after the edit and only the lines holding changed instructions count (a jump whose target moved counts where it stands), so a short-circuited condition or an untaken branch on its own line doesn't pull in every test that ran the statement.
 - **A changed class attribute, or a new method** selects the tests that used that class: the dialects it serves (and their subclasses), or the expression type and its subclasses.
 - **A changed fixture or data file** selects the tests that opened it.
 - **A changed test file** selects the edited tests (or their class or file).

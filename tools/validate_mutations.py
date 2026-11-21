@@ -251,6 +251,21 @@ while len(results) < n and attempts < n * 50:
         sites = [x for x in sites if x[0] in cross]
         pool = [(x, "function") for x in sites]
         sites = []
+    if os.environ.get("BR_SITES") == "multiline":
+        # only edits inside a statement that spans several lines, in a function body (to test
+        # the bytecode-line narrowing)
+        sys.path.insert(0, os.path.dirname(os.path.abspath(selector)))
+        import importlib.util as _ilu
+        _spec = _ilu.spec_from_file_location("_sel_for_index", selector)
+        _sel = _ilu.module_from_spec(_spec)
+        _spec.loader.exec_module(_sel)
+        _idx = _sel.SourceIndex(text)
+        keep = []
+        for x in sites:
+            st, span = _idx.stmt_at(x[0])
+            if st is not None and st["scope"] == "function" and span[1] > span[0]:
+                keep.append(x)
+        sites = keep
     if os.environ.get("BR_SITES") == "cmp-swaps":
         # only swaps to the neighbouring operator (is -> ==, < -> <=, ...), to test that narrowing
         sites = [x for x in sites if x[5] == "compare" and x[3] in ("is", "<", "<=", ">", ">=")]
