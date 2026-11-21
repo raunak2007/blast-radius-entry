@@ -1392,8 +1392,9 @@ class Selector:
         if len(targets) != 1 or not isinstance(targets[0], ast.Name) or node.value is None:
             return None
         name = targets[0].id
-        if not name.isupper() or name.startswith("_") or name not in self.doc["attr_read_masks"]:
-            return None  # not a wrapped constant, or some read of it runs at import
+        if not name.isupper() or name.startswith("_"):
+            return None  # not a wrapped constant
+        read_at_import = name not in self.doc["attr_read_masks"]
         new_st, _ = self.new_idx.stmt_at(blk["added"][0])
         if new_st is None or not isinstance(new_st["node"], type(node)) or new_st["cls"] != st["cls"]:
             return None
@@ -1411,6 +1412,16 @@ class Selector:
         entry = (data.get(rel) or {}).get((st["cls"], name))
         if entry is None or entry["outside"]:
             return None
+        if read_at_import:
+            # some read of the name runs at import: only if the import-time state check finds
+            # nothing changed but this binding (what those reads built is in that state)
+            self.import_widened = True
+            if not self.no_import_widen:
+                return None
+            module = rel[:-3].replace("/", ".")
+            if module.endswith(".__init__"):
+                module = module[: -len(".__init__")]
+            self.state_masks.append((module, st["cls"], name))
         log(f"class constant edit in {rel}:{blk['removed'][0]} narrowed to the reads of {st['cls']}.{name}")
         return entry["mask"]
 
@@ -1748,6 +1759,7 @@ class Selector:
         self.patched = {}
         self.verifiable = True
         self.data_files = set()  # changed files we don't overlay: their readers can't be checked
+        self.state_masks = []  # bindings the import-time state check leaves out (the edited ones)
         self.import_widened = False
         self.data_mask = 0
         self.touched = []
@@ -2713,10 +2725,11 @@ def _state_order(keys, strict=False):
 class StateFP:
     PRIMS = (int, float, complex, str, bytes, bool, type(None))
 
-    def __init__(self, expr_type):
+    def __init__(self, expr_type, masks=()):
         self.memo = {}
         self.keep = []  # visited objects stay alive, so their ids stay unique
         self.expr = expr_type
+        self.masks = set(masks)  # (module, class qualname, name): the edited binding itself
 
     @staticmethod
     def classes_sorted(elems):
@@ -2793,6 +2806,9 @@ class StateFP:
             for k, v in list(vars(x).items()):
                 if k not in STATE_SKIP_CLASS_KEYS:
                     out.append(k)
+                    if (x.__module__, x.__qualname__, k) in self.masks:
+                        out.append("masked")
+                        continue
                     self.tok(v, out)
             out.append(")")
             return
@@ -2901,7 +2917,7 @@ class StateFP:
             out.append(r if " at 0x" not in r and "0x" not in r else "opaque")
 
 
-def state_digests(test_modules):
+def state_digests(test_modules, masks=()):
     """Import every sqlglot module, then the given test modules; per module, a digest of its
     import-time state (see StateFP), and the modules that failed to import."""
     import hashlib
@@ -2918,7 +2934,7 @@ def state_digests(test_modules):
         except BaseException as error:  # noqa: BLE001  a failure is part of the state
             failed.append(f"{name}: {type(error).__name__}")
     expr = getattr(sqlglot.exp, "Expr", None) or sqlglot.exp.Expression
-    fp = StateFP(expr)
+    fp = StateFP(expr, masks)
     digests = {}
     for name in sorted(m for m in list(sys.modules) if m == "sqlglot" or m.startswith(("sqlglot.", "tests"))):
         mod = sys.modules.get(name)
@@ -2943,14 +2959,15 @@ def state_main(args):
 
     path, test_modules = args[0], args[1:]
     with open(path, "rb") as fh:
-        patched = pickle.load(fh)
+        job = pickle.load(fh)
+    patched, masks = job["patched"], [tuple(m) for m in job.get("masks", ())]
     site.main()  # the check children see site-packages too (warm() adds them)
     overlay = enter_overlay(patched)
     result = {}
 
     def run():
         try:
-            result["state"] = state_digests(test_modules)
+            result["state"] = state_digests(test_modules, masks)
         except BaseException as error:  # noqa: BLE001
             result["error"] = repr(error)[:200]
 
@@ -2965,9 +2982,9 @@ def state_main(args):
 
 
 def import_states(jobs, budget_s):
-    """jobs: {key: (patched, test modules)}. Runs the fingerprint for each, plus the pristine
-    sources once per set of test modules, two at a time; returns {key: True if every digest
-    matches the pristine one (and no import fails that didn't before), else False}."""
+    """jobs: {key: (patched, test modules, masked bindings)}. Runs the fingerprint for each, plus
+    the pristine sources once per set of test modules and masks, two at a time; returns {key:
+    True if every digest matches the pristine one (and no import fails that didn't before)}."""
     import subprocess
     import tempfile
     import time
@@ -2975,10 +2992,10 @@ def import_states(jobs, budget_s):
     env = dict(os.environ, PYTHONHASHSEED="0", PYTHONDONTWRITEBYTECODE="1")
     env.pop("PYTHONPATH", None)
     runs = {}
-    for key, (patched, mods) in jobs.items():
-        mods = tuple(mods)
-        runs[key] = (patched, mods)
-        runs[("pristine", mods)] = ({}, mods)
+    for key, (patched, mods, masks) in jobs.items():
+        mods, masks = tuple(mods), tuple(sorted(masks))
+        runs[key] = (patched, mods, masks)
+        runs[("pristine", mods, masks)] = ({}, mods, masks)
     tmp = tempfile.mkdtemp(prefix="br-state-")
     pending = list(runs.items())
     running, outputs = {}, {}
@@ -2987,11 +3004,11 @@ def import_states(jobs, budget_s):
     try:
         while pending or running:
             while pending and len(running) < PARALLEL and time.monotonic() < deadline:
-                key, (patched, mods) = pending.pop(0)
+                key, (patched, mods, masks) = pending.pop(0)
                 started += 1
                 path = os.path.join(tmp, f"job{started}.pkl")  # one file per job
                 with open(path, "wb") as fh:
-                    pickle.dump(patched, fh)
+                    pickle.dump({"patched": patched, "masks": list(masks)}, fh)
                 proc = subprocess.Popen([sys.executable, "-S", str(Path(__file__).resolve()), "--state", path, *mods],
                                         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=env, cwd=tmp,
                                         preexec_fn=_state_limits)
@@ -3014,8 +3031,8 @@ def import_states(jobs, budget_s):
         import shutil
         shutil.rmtree(tmp, ignore_errors=True)
     verdict = {}
-    for key, (_, mods) in jobs.items():
-        mine, base = outputs.get(key), outputs.get(("pristine", tuple(mods)))
+    for key, (_, mods, masks) in jobs.items():
+        mine, base = outputs.get(key), outputs.get(("pristine", tuple(mods), tuple(sorted(masks))))
         verdict[key] = bool(mine and base and mine["digests"] == base["digests"] and mine["failed"] == base["failed"])
     return verdict
 
@@ -3074,7 +3091,8 @@ def main():
             chosen = sorted(set(chosen) | set(always))
         return {"chosen": chosen, "patched": dict(selector.patched), "verifiable": selector.verifiable,
                 "unreadable": set(to_numbers(selector.data_mask)), "touched": list(selector.touched),
-                "data_files": set(selector.data_files), "import_widened": selector.import_widened}
+                "data_files": set(selector.data_files), "import_widened": selector.import_widened,
+                "state_masks": list(selector.state_masks)}
 
     # 1. selections, and the commits whose selection an unchanged import-time state would shrink
     snaps, narrow, state_jobs = {}, {}, {}
@@ -3088,7 +3106,7 @@ def main():
         except Exception as error:
             log(f"{commit}: running every test ({error})")
             snap = {"chosen": every, "patched": {}, "verifiable": False, "unreadable": set(), "touched": [],
-                    "data_files": set(), "import_widened": False}
+                    "data_files": set(), "import_widened": False, "state_masks": []}
         snaps[commit] = snap
         if RUN and snap["verifiable"] and snap["import_widened"] and not snap["data_files"] and snap["patched"]:
             try:
@@ -3109,7 +3127,8 @@ def main():
                                  - pack_cost([n for n in alt["chosen"] if n != tpcds_number], duration)) // 2
             if gain is not None and gain >= STATE_MIN_GAIN_MS:
                 narrow[commit] = alt
-                state_jobs[commit] = (snap["patched"], tuple((load_imports() or {}).get("test_modules", ())))
+                state_jobs[commit] = (snap["patched"], tuple((load_imports() or {}).get("test_modules", ())),
+                                      tuple(alt["state_masks"]))
     if state_jobs:
         verdict = import_states(state_jobs, max(5.0, STATE_BUDGET_S))
         for commit, same in sorted(verdict.items()):
