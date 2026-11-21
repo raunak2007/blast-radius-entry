@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Rebuild blast_map.pkl.gz and sqlglot_src.tar.gz from the pinned sqlglot commit.
+# Everything comes from running sqlglot's own tests at that commit; no patch or
+# answer file is read. Run from the repo root, with the kit's sample/tests.json present.
+set -euo pipefail
+SHA=eb11aec4be8cb2122afe713a4816662c3f0fb2fa
+WORK=${WORK:-/tmp/br-map}
+mkdir -p "$WORK"
+[ -d "$WORK/sqlglot" ] || git clone -q https://github.com/tobymao/sqlglot.git "$WORK/sqlglot"
+git -C "$WORK/sqlglot" checkout -q "$SHA"
+
+# the environment the organizers labeled in (kit's requirements.lock), plus coverage tools
+uv venv -q --python 3.13 "$WORK/venv"
+uv pip install -q --python "$WORK/venv/bin/python" -r requirements.lock coverage pytest-cov
+
+# one run: per-test line coverage, files each test opens, dialect/expression usage.
+# usage_plugin runs process-pool tasks inline (pickling them) so their work counts.
+(cd "$WORK/sqlglot" && \
+  PYTHONPATH="$WORK/sqlglot:$PWD/tools" SKIP_INTEGRATION=0 \
+  USAGE_OUT="$WORK/usage.json" TRACE_ROOT="$WORK/sqlglot" TRACE_OUT="$WORK/trace.json" \
+  COVERAGE_FILE="$WORK/coverage.db" \
+  "$WORK/venv/bin/python" -m pytest tests -q -p no:cacheprovider -p usage_plugin -p trace_plugin \
+    -n 2 --cov=sqlglot --cov-context=test --cov-report=)
+
+PYTHONPATH="$WORK/sqlglot" "$WORK/venv/bin/python" tools/build_map.py \
+  "$WORK/sqlglot" "$WORK/coverage.db" "$WORK/trace.json" "$WORK/usage.json" sample/tests.json blast_map.pkl.gz
+
+(cd "$WORK/sqlglot" && find sqlglot tests -name '*.py' -not -path '*/__pycache__/*' | sort | \
+  tar --owner=0 --group=0 --numeric-owner --mtime='2026-11-18 00:00:00' -czf "$OLDPWD/sqlglot_src.tar.gz" -T -)
