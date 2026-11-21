@@ -708,6 +708,8 @@ class Selector:
         self._class_users_by_file = None
         self.new_idx = None
         self.last_differs = None
+        self.no_import_widen = False  # set to see the selection an unchanged import-time state allows
+        self.import_widened = False
 
     def index(self, rel):
         if rel not in self.cache:
@@ -795,6 +797,8 @@ class Selector:
             # an instruction that ran fired its line's event, so its line is in the map)
             spans = [(ln, ln) for ln in sorted(changed)] if changed is not None else [(lo, hi)]
             if not same_at_import and any(self.touches_import(rel, a, b) for a, b in spans):
+                self.import_widened = True
+            if not same_at_import and not self.no_import_widen and any(self.touches_import(rel, a, b) for a, b in spans):
                 func = st["func"]
                 m |= self.broad_for_function(rel, idx, func)
                 for a, b in spans:
@@ -812,6 +816,9 @@ class Selector:
             stub = all(isinstance(b, ast.Pass) or (isinstance(b, ast.Expr) and isinstance(b.value, ast.Constant))
                        for b in node.body)
             at_import = bool(node.body) and not stub and self.touches_import(rel, node.body[0].lineno, body_hi)
+            if at_import:
+                self.import_widened = True
+                at_import = not self.no_import_widen
             narrowed = None
             if blk is not None and not at_import:
                 # only calls that leave a changed default out can see it
@@ -1696,6 +1703,9 @@ class Selector:
         m = 0
         self.patched = {}
         self.verifiable = True
+        self.data_files = set()  # changed files we don't overlay: their readers can't be checked
+        self.import_widened = False
+        self.data_mask = 0
         self.touched = []
         diffs = parse_patch(text)
         if not diffs:
@@ -1710,8 +1720,14 @@ class Selector:
             m |= doc["file_opens"].get(rel, 0)  # tests that read this file's text
             if rel in self.config or os.path.basename(rel) == "conftest.py":
                 raise Fallback(f"config file {rel}")
-            if not rel.endswith(".py") or not rel.startswith(("sqlglot/", "tests/")):
-                self.verifiable = False  # data files and the like: we only overlay Python sources
+            if not rel.endswith(".py"):
+                # data files and the like: we only overlay Python sources, so a check may only
+                # run tests that never open this file (they see exactly the patched sources);
+                # a file read outside tests is a config file and runs everything
+                self.data_files.add(rel)
+                self.data_mask |= doc["file_opens"].get(rel, 0)
+            elif not rel.startswith(("sqlglot/", "tests/")):
+                self.verifiable = False  # Python we don't overlay
             if fd["new_file"]:
                 self.verifiable = False
                 continue  # a new file nothing imports or opens can't change a test
@@ -1741,7 +1757,7 @@ class Selector:
         debug-log rendering execute() does next, that rendering is checked too ("log"); if
         planning or execution (or the digest code), its rows ("full"). The duckdb
         transpilation, the expected side of the test's comparison, is always compared."""
-        if not self.verifiable or not self.patched or not self.touched:
+        if not self.verifiable or self.data_files or not self.patched or not self.touched:
             return None
         if any(kind != "function" or not rel.startswith("sqlglot/") for rel, _, _, kind in self.touched):
             return None
@@ -1803,7 +1819,7 @@ class Selector:
         generator is built can change that dialect's result (tools/build_genmem.py records
         them per dialect, from a fresh interpreter). Only for commits that change nothing but
         sqlglot/ Python files."""
-        if not self.verifiable or not self.patched:
+        if not self.verifiable or self.data_files or not self.patched:
             return None
         rels = set(self.patched) | {rel for rel, _, _, _ in self.touched}
         if not rels or any(not (r.startswith("sqlglot/") and r.endswith(".py")) for r in rels):
@@ -1884,9 +1900,9 @@ def pack_cost(numbers, duration):
     return max(sum(duration[n] for n in w) for w in workers) + WORKER_MS * len(workers)
 
 
-def plan_check(chosen, duration, info):
+def plan_check(chosen, duration, info, excluded=()):
     """The cheapest-first prefix of runnable tests whose check is expected to pay off."""
-    runnable = sorted((n for n in chosen if info[n]["runnable"]), key=lambda n: (duration[n], n))
+    runnable = sorted((n for n in chosen if info[n]["runnable"] and n not in excluded), key=lambda n: (duration[n], n))
     if not runnable:
         return []
     base = pack_cost(chosen, duration)
@@ -2482,6 +2498,25 @@ def warm(jobs):
             pass
 
 
+# A check child may allocate at most this much beyond what it inherited: the run has 4 GB
+# for everything, two checks run at once, and an edit that breaks a plan can make one
+# query's intermediate results explode. Past it, allocations fail and the check fails,
+# which keeps its tests.
+CHILD_MEMORY = int(os.environ.get("BR_CHILD_MEMORY", str(1280 << 20)))
+
+
+def limit_memory():
+    import resource
+
+    try:
+        with open("/proc/self/status") as fh:
+            size = next(int(line.split()[1]) << 10 for line in fh if line.startswith("VmSize:"))
+        cap = size + CHILD_MEMORY
+        resource.setrlimit(resource.RLIMIT_AS, (cap, cap))
+    except Exception:
+        pass
+
+
 def run_checks(jobs, budget_s):
     """jobs: (key, patched, test_ids, recorded seconds by id, limit_s). Returns {key: failed ids or None}."""
     import select
@@ -2506,6 +2541,7 @@ def run_checks(jobs, budget_s):
                     os.dup2(devnull, 1)
                     if not os.environ.get("BR_DEBUG"):
                         os.dup2(devnull, 2)
+                    limit_memory()
                     if "__tpcds__" in limits:
                         child_tpcds(patched, limits["__tpcds__"], w)
                     elif "__genmem__" in limits:
@@ -2553,6 +2589,378 @@ def run_checks(jobs, budget_s):
     return results
 
 
+# --------------------------------------------------------------------------- import-time state
+#
+# A changed function line that also ran while modules were imported (the parser runs while
+# the DuckDB generator parses its SQL templates at import) can change what those imports
+# build, so such an edit is normally widened to everything importing them. Most such edits
+# leave every import-time structure as it was. To tell, a fresh interpreter imports every
+# sqlglot module (and the test modules whose import runs sqlglot code), with and without the
+# patch, and fingerprints all module and class state: values, containers, expression trees,
+# function defaults and closures, objects reachable from them. Code is left out, since what
+# runs later is what line coverage already decides. Equal fingerprints mean the edit only
+# matters where its lines run in tests.
+
+STATE_MIN_GAIN_MS = 3000  # the check costs ~0.8 s of CPU per commit, plus the pristine sources once
+STATE_BUDGET_S = float(os.environ.get("BR_STATE_BUDGET", "40"))
+STATE_WALL_S = 8.0  # a normal run takes under a second; an edit that loops at import doesn't get far
+
+
+def _state_limits():
+    """In the fingerprint process, before exec: a CPU and a memory cap (an edit can make an
+    import-time parse loop or explode)."""
+    import resource
+
+    try:
+        resource.setrlimit(resource.RLIMIT_CPU, (6, 7))
+        resource.setrlimit(resource.RLIMIT_AS, (2 << 30, 2 << 30))
+    except Exception:
+        pass
+STATE_SKIP_CLASS_KEYS = {"__dict__", "__weakref__", "__doc__", "__module__", "__qualname__", "__firstlineno__",
+                         "__static_attributes__", "__annotations__", "__orig_bases__", "__parameters__",
+                         "__annotate_func__", "__annotations_cache__"}
+
+
+def _state_name(k):
+    """A name for a hashable value that doesn't depend on memory addresses, or None."""
+    import enum
+    import types
+
+    t = type(k)
+    if t in (int, float, complex, str, bytes, bool, type(None)):
+        return f"{t.__name__}:{k!r}"
+    if isinstance(k, enum.Enum):
+        return f"enum:{t.__module__}.{t.__qualname__}.{k.name}"
+    if isinstance(k, type):
+        return f"type:{k.__module__}.{k.__qualname__}<" + ",".join(
+            f"{b.__module__}.{b.__qualname__}" for b in k.__mro__[1:4]) + ">"
+    if isinstance(k, (types.FunctionType, types.BuiltinFunctionType)):
+        return f"func:{getattr(k, '__module__', '')}.{getattr(k, '__qualname__', '')}"
+    if isinstance(k, (tuple, frozenset)):
+        names = [_state_name(e) for e in k]
+        if any(n is None for n in names):
+            return None
+        return ("tuple(" + ",".join(names) + ")") if isinstance(k, tuple) else ("fset(" + ",".join(sorted(names)) + ")")
+    return None
+
+
+def _state_order(keys, strict=False):
+    names = [_state_name(k) for k in keys]
+    if None in names or len(set(names)) != len(names):
+        return None if strict else range(len(keys))
+    return sorted(range(len(keys)), key=lambda i: names[i])
+
+
+class StateFP:
+    PRIMS = (int, float, complex, str, bytes, bool, type(None))
+
+    def __init__(self, expr_type):
+        self.memo = {}
+        self.keep = []  # visited objects stay alive, so their ids stay unique
+        self.expr = expr_type
+
+    @staticmethod
+    def classes_sorted(elems):
+        """A sequence made only of classes is usually a set's contents (`tuple({exp.Add, ...})`),
+        whose order follows memory addresses: compare those by name."""
+        if len(elems) > 1 and all(isinstance(e, type) for e in elems):
+            order = _state_order(elems, strict=True)
+            if order is not None:
+                return [elems[j] for j in order]
+        return elems
+
+    @staticmethod
+    def own(cls):
+        mod = getattr(cls, "__module__", "") or ""
+        return mod.startswith(("sqlglot", "tests"))
+
+    def tok(self, x, out):
+        import collections.abc
+        import enum
+        import functools
+        import re
+        import types
+
+        t = type(x)
+        if t in self.PRIMS:
+            out.append(f"{t.__name__}:{x!r}")
+            return
+        if isinstance(x, enum.Enum):
+            out.append(f"enum:{t.__module__}.{t.__qualname__}.{x.name}")
+            return
+        if isinstance(x, type) and not self.own(x):
+            out.append(f"type:{x.__module__}.{x.__qualname__}")
+            return
+        if isinstance(x, types.ModuleType):
+            out.append(f"module:{x.__name__}")
+            return
+        if isinstance(x, (types.BuiltinFunctionType, types.MethodDescriptorType, types.WrapperDescriptorType,
+                          types.MethodWrapperType, types.GetSetDescriptorType, types.MemberDescriptorType)):
+            out.append(f"builtin:{getattr(x, '__qualname__', t.__name__)}")
+            return
+        if isinstance(x, (tuple, frozenset)):
+            # immutable: by value, never by identity (a module compiled from source and one
+            # loaded from bytecode share constant tuples differently)
+            if isinstance(x, frozenset):
+                elems = list(x)
+                order = _state_order(elems, strict=True)
+                out.append(f"{t.__module__}.{t.__qualname__}<")
+                if order is not None:
+                    for j in order:
+                        self.tok(elems[j], out)
+                else:
+                    parts = []
+                    for v in elems:
+                        sub = []
+                        self.tok(v, sub)
+                        parts.append("|".join(sub))
+                    out.append(",".join(sorted(parts)))
+                out.append(">")
+            else:
+                out.append(f"{t.__module__}.{t.__qualname__}[")
+                for v in self.classes_sorted(list(x)):
+                    self.tok(v, out)
+                out.append("]")
+            return
+        i = id(x)
+        if i in self.memo:
+            out.append(f"ref:{self.memo[i]}")
+            return
+        self.memo[i] = len(self.memo)
+        self.keep.append(x)
+        if isinstance(x, type):  # a sqlglot (or test) class: its own attributes, once
+            out.append(f"class:{x.__module__}.{x.__qualname__}(")
+            self.tok(tuple(x.__mro__[1:]), out)
+            for k, v in list(vars(x).items()):
+                if k not in STATE_SKIP_CLASS_KEYS:
+                    out.append(k)
+                    self.tok(v, out)
+            out.append(")")
+            return
+        if isinstance(x, types.FunctionType):
+            out.append(f"func:{x.__module__}.{x.__qualname__}(")
+            code = x.__code__
+            if not code.co_filename.endswith(".py"):  # generated at import (exec): its code is state
+                out.append(repr(code.co_code))
+                self.tok(code.co_consts, out)
+                self.tok(code.co_names, out)
+            self.tok(x.__defaults__, out)
+            self.tok(x.__kwdefaults__, out)
+            for cell in x.__closure__ or ():
+                try:
+                    self.tok(cell.cell_contents, out)
+                except ValueError:
+                    out.append("emptycell")
+            if x.__dict__:
+                self.tok(x.__dict__, out)
+            out.append(")")
+            return
+        if isinstance(x, types.CodeType):
+            out.append(f"code:{x.co_qualname}")
+            return
+        if isinstance(x, types.MethodType):
+            out.append("method(")
+            self.tok(x.__self__, out)
+            self.tok(x.__func__, out)
+            out.append(")")
+            return
+        if isinstance(x, (staticmethod, classmethod)):
+            out.append(f"{t.__name__}(")
+            self.tok(x.__func__, out)
+            out.append(")")
+            return
+        if isinstance(x, property):
+            out.append("property(")
+            for g in (x.fget, x.fset, x.fdel):
+                self.tok(g, out)
+            out.append(")")
+            return
+        if isinstance(x, functools.partial):
+            out.append("partial(")
+            self.tok(x.func, out)
+            self.tok(x.args, out)
+            self.tok(x.keywords, out)
+            out.append(")")
+            return
+        if isinstance(x, re.Pattern):
+            out.append(f"re:{x.pattern!r}:{x.flags}")
+            return
+        if isinstance(x, self.expr):
+            out.append(f"expr:{t.__module__}.{t.__qualname__}(")
+            self.tok(x.args, out)
+            for attr in ("comments", "_type", "_meta"):
+                self.tok(getattr(x, attr, None), out)
+            out.append(")")
+            return
+        if isinstance(x, collections.abc.Mapping):
+            out.append(f"{t.__module__}.{t.__qualname__}{{")
+            items = list(x.items())
+            for k, v in [items[j] for j in _state_order([k for k, _ in items])]:
+                self.tok(k, out)
+                self.tok(v, out)
+            out.append("}")
+        elif isinstance(x, (collections.abc.Set, set, frozenset)):
+            elems = list(x)
+            order = _state_order(elems, strict=True)
+            out.append(f"{t.__module__}.{t.__qualname__}<")
+            if order is not None:
+                for j in order:
+                    self.tok(elems[j], out)
+            else:
+                parts = []
+                for v in elems:
+                    sub = []
+                    self.tok(v, sub)
+                    parts.append("|".join(sub))
+                out.append(",".join(sorted(parts)))
+            out.append(">")
+        elif isinstance(x, (list, tuple, collections.abc.Sequence, collections.deque)) and not isinstance(x, (str, bytes)):
+            out.append(f"{t.__module__}.{t.__qualname__}[")
+            for v in self.classes_sorted(list(x)):
+                self.tok(v, out)
+            out.append("]")
+        else:
+            out.append(f"obj:{t.__module__}.{t.__qualname__}")
+        # whatever else the object holds
+        d = getattr(x, "__dict__", None)
+        slots = [s for c in t.__mro__ for s in (getattr(c, "__slots__", ()) or ()) if isinstance(s, str)]
+        if isinstance(d, dict) or slots:
+            out.append("(")
+            if isinstance(d, dict):
+                self.tok(d, out)
+            for s in slots:
+                if s not in ("__dict__", "__weakref__") and hasattr(x, s):
+                    out.append(s)
+                    try:
+                        self.tok(getattr(x, s), out)
+                    except Exception:
+                        out.append("?")
+            out.append(")")
+        elif not isinstance(x, (collections.abc.Mapping, collections.abc.Set, collections.abc.Sequence, set,
+                                frozenset, list, tuple, collections.deque)):
+            r = repr(x)
+            out.append(r if " at 0x" not in r and "0x" not in r else "opaque")
+
+
+def state_digests(test_modules):
+    """Import every sqlglot module, then the given test modules; per module, a digest of its
+    import-time state (see StateFP), and the modules that failed to import."""
+    import hashlib
+    import importlib
+    import pkgutil
+
+    import sqlglot
+
+    names = sorted(m.name for m in pkgutil.walk_packages(sqlglot.__path__, "sqlglot.") if not m.name.endswith("__main__"))
+    failed = []
+    for name in names + sorted(test_modules):
+        try:
+            importlib.import_module(name)
+        except BaseException as error:  # noqa: BLE001  a failure is part of the state
+            failed.append(f"{name}: {type(error).__name__}")
+    expr = getattr(sqlglot.exp, "Expr", None) or sqlglot.exp.Expression
+    fp = StateFP(expr)
+    digests = {}
+    for name in sorted(m for m in list(sys.modules) if m == "sqlglot" or m.startswith(("sqlglot.", "tests"))):
+        mod = sys.modules.get(name)
+        if mod is None:
+            continue
+        out = []
+        for k, v in sorted(vars(mod).items()):
+            if k.startswith("__") and k.endswith("__"):
+                continue
+            out.append(k)
+            fp.tok(v, out)
+        digests[name] = hashlib.sha256("\x00".join(out).encode("utf-8", "surrogatepass")).hexdigest()
+    return {"digests": digests, "failed": failed}
+
+
+def state_main(args):
+    """`selector.py --state <patched pickle> [test modules]`: print the import-time digests of
+    the pinned sources with that patch (an empty one for the pristine state)."""
+    import shutil
+    import site
+    import threading
+
+    path, test_modules = args[0], args[1:]
+    with open(path, "rb") as fh:
+        patched = pickle.load(fh)
+    site.main()  # the check children see site-packages too (warm() adds them)
+    overlay = enter_overlay(patched)
+    result = {}
+
+    def run():
+        try:
+            result["state"] = state_digests(test_modules)
+        except BaseException as error:  # noqa: BLE001
+            result["error"] = repr(error)[:200]
+
+    sys.setrecursionlimit(200000)
+    threading.stack_size(512 << 20)
+    worker = threading.Thread(target=run)
+    worker.start()
+    worker.join()
+    shutil.rmtree(overlay, ignore_errors=True)
+    sys.stdout.write(json.dumps(result))
+    sys.stdout.flush()
+
+
+def import_states(jobs, budget_s):
+    """jobs: {key: (patched, test modules)}. Runs the fingerprint for each, plus the pristine
+    sources once per set of test modules, two at a time; returns {key: True if every digest
+    matches the pristine one (and no import fails that didn't before), else False}."""
+    import subprocess
+    import tempfile
+    import time
+
+    env = dict(os.environ, PYTHONHASHSEED="0", PYTHONDONTWRITEBYTECODE="1")
+    env.pop("PYTHONPATH", None)
+    runs = {}
+    for key, (patched, mods) in jobs.items():
+        mods = tuple(mods)
+        runs[key] = (patched, mods)
+        runs[("pristine", mods)] = ({}, mods)
+    tmp = tempfile.mkdtemp(prefix="br-state-")
+    pending = list(runs.items())
+    running, outputs = {}, {}
+    deadline = time.monotonic() + budget_s
+    started = 0
+    try:
+        while pending or running:
+            while pending and len(running) < PARALLEL and time.monotonic() < deadline:
+                key, (patched, mods) = pending.pop(0)
+                started += 1
+                path = os.path.join(tmp, f"job{started}.pkl")  # one file per job
+                with open(path, "wb") as fh:
+                    pickle.dump(patched, fh)
+                proc = subprocess.Popen([sys.executable, "-S", str(Path(__file__).resolve()), "--state", path, *mods],
+                                        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=env, cwd=tmp,
+                                        preexec_fn=_state_limits)
+                running[key] = (proc, time.monotonic() + STATE_WALL_S)
+            if not running:
+                break
+            time.sleep(0.02)
+            for key, (proc, until) in list(running.items()):
+                if proc.poll() is None and time.monotonic() < min(until, deadline):
+                    continue
+                if proc.poll() is None:
+                    proc.kill()
+                out = proc.communicate()[0]
+                running.pop(key)
+                try:
+                    outputs[key] = json.loads(out.decode()).get("state")
+                except ValueError:
+                    outputs[key] = None
+    finally:
+        import shutil
+        shutil.rmtree(tmp, ignore_errors=True)
+    verdict = {}
+    for key, (_, mods) in jobs.items():
+        mine, base = outputs.get(key), outputs.get(("pristine", tuple(mods)))
+        verdict[key] = bool(mine and base and mine["digests"] == base["digests"] and mine["failed"] == base["failed"])
+    return verdict
+
+
 def main():
     import time
     started = time.monotonic()
@@ -2585,30 +2993,72 @@ def main():
     except Exception as error:  # never let a map problem cost a commit
         log(f"map unavailable, running every test: {error!r}")
 
+    def to_numbers(mask):
+        out = []
+        while mask:
+            low = mask & -mask
+            num = local_numbers[low.bit_length() - 1]
+            if num is not None:
+                out.append(num)
+            mask ^= low
+        return out
+
+    def run_select(text, widen=True):
+        """The selection for one patch, with what planning its checks needs; None on a fallback."""
+        selector.no_import_widen = not widen
+        try:
+            mask = selector.select(text)
+        finally:
+            selector.no_import_widen = False
+        chosen = to_numbers(mask)
+        if chosen and always:
+            chosen = sorted(set(chosen) | set(always))
+        return {"chosen": chosen, "patched": dict(selector.patched), "verifiable": selector.verifiable,
+                "unreadable": set(to_numbers(selector.data_mask)), "touched": list(selector.touched),
+                "data_files": set(selector.data_files), "import_widened": selector.import_widened}
+
+    # 1. selections, and the commits whose selection an unchanged import-time state would shrink
+    snaps, narrow, state_jobs = {}, {}, {}
+    test_modules = tuple((load_imports() or {}).get("test_modules", ()))
+    for patch in sorted((DATA / "commits").glob("*.patch")):
+        commit = patch.name[: -len(".patch")]
+        text = patch.read_bytes().decode("utf-8", "surrogateescape")
+        try:
+            if selector is None:
+                raise Fallback("no map")
+            snap = run_select(text)
+        except Exception as error:
+            log(f"{commit}: running every test ({error})")
+            snap = {"chosen": every, "patched": {}, "verifiable": False, "unreadable": set(), "touched": [],
+                    "data_files": set(), "import_widened": False}
+        snaps[commit] = snap
+        if RUN and snap["verifiable"] and snap["import_widened"] and not snap["data_files"] and snap["patched"]:
+            try:
+                alt = run_select(text, widen=False)
+            except Exception as error:
+                log(f"{commit}: no narrower selection ({error})")
+                alt = None
+            if alt is not None and \
+                    pack_cost(snap["chosen"], duration) - pack_cost(alt["chosen"], duration) >= STATE_MIN_GAIN_MS:
+                narrow[commit] = alt
+                state_jobs[commit] = (snap["patched"], test_modules)
+    if state_jobs:
+        verdict = import_states(state_jobs, max(5.0, STATE_BUDGET_S))
+        for commit, same in sorted(verdict.items()):
+            log(f"{commit}: import-time state {'unchanged' if same else 'changed or unknown'}")
+            if same:
+                snaps[commit] = narrow[commit]
+
+    # 2. the checks each selection is worth
     answers = {}
     jobs, tpcds_jobs = [], []
     tpcds_number = number_of.get(TPCDS_TEST)
     genmem_number = number_of.get(GENMEM_TEST)
-    for patch in sorted((DATA / "commits").glob("*.patch")):
-        commit = patch.name[: -len(".patch")]
-        patched, verifiable = {}, False
-        try:
-            if selector is None:
-                raise Fallback("no map")
-            mask = selector.select(patch.read_bytes().decode("utf-8", "surrogateescape"))
-            patched, verifiable = dict(selector.patched), selector.verifiable
-            chosen = []
-            while mask:
-                low = mask & -mask
-                num = local_numbers[low.bit_length() - 1]
-                if num is not None:
-                    chosen.append(num)
-                mask ^= low
-            if chosen and always:
-                chosen = sorted(set(chosen) | set(always))
-        except Exception as error:
-            log(f"{commit}: running every test ({error})")
-            chosen = every
+    for commit, snap in snaps.items():
+        chosen, patched, verifiable, unreadable = snap["chosen"], snap["patched"], snap["verifiable"], snap["unreadable"]
+        if selector is not None:
+            selector.patched, selector.verifiable = patched, verifiable
+            selector.touched, selector.data_files = snap["touched"], snap["data_files"]
         answers[commit] = chosen
         if RUN and verifiable and selector is not None and tpcds_number in chosen:
             plan = selector.tpcds_plan(chosen, duration, tpcds_number)
@@ -2626,7 +3076,7 @@ def main():
                                    {"__genmem__": gplan, GENMEM_TEST: duration[genmem_number] / 1000},
                                    10 + 3 * gplan["estimate"]))
         if RUN and verifiable and chosen:
-            check = plan_check(chosen, duration, info)
+            check = plan_check(chosen, duration, info, unreadable)
             if check:
                 expected = sum(duration[n] for n in check) / 1000
                 limit = 10 + 4 * expected
@@ -2658,4 +3108,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 2 and sys.argv[1] == "--state":
+        state_main(sys.argv[2:])
+    else:
+        main()

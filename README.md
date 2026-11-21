@@ -26,6 +26,14 @@ Every map comes from running sqlglot's own tests at the pinned commit (`eb11aec4
 
 - **A changed def line** (a default value, say) selects the tests that ran the function, and, when its body also runs while modules are imported, everything an import-time change selects: a default the import-time template parses take differently can stop a module importing at all. Overload stubs (`...` bodies) are exempt.
 
+- **Import-time state is checked, not assumed changed.** When a changed function line also ran while modules were imported (the parser runs while the DuckDB generator parses its SQL templates), the selection is normally widened to everything importing them. If the narrower selection would save at least 3 s, a fresh interpreter (fixed hash seed, CPU and memory capped) imports every sqlglot module and the six test modules whose import runs sqlglot code, once with the patch and once without, and fingerprints all module and class state: values, containers, expression trees, function defaults and closures, the objects they reach, and which imports fail. Code is left out, since what runs later is what coverage decides; tuples are compared by value and class-only sequences by name, since their identity and order follow memory addresses. Equal fingerprints mean the edit only matters where its lines run in tests, and the commit is planned (TPC-DS replay included) as ordinary function code.
+
+- **A changed default value** selects only the tests in which some call left that parameter out (`tools/defaults_plugin.py`, sys.monitoring on every module- and class-level function with defaults; an explicit argument that is the very same object counts as left out).
+
+- **Checks run on commits that also change a data file** (a fixture next to a code edit), on the tests that never open the changed file; its readers stay selected.
+
+- **Check children may allocate at most 1.25 GB beyond what they inherit**, so an edit that makes one query's intermediate results explode fails its own check instead of exhausting the run's 4 GB.
+
 - **Code that runs while other modules import** (the trie builder every tokenizer class calls, the error formatter a dialect's import-time parse reaches) selects every test that uses those modules, a module whose import imports them, or imports one of them while it runs (`from sqlglot.dialects import X` inside a test) (`import_users.pkl.gz`), and the generator's first-use dispatch table selects every test that builds a generator.
 
 Tests are packed longest-first, trying 1 to 8 workers and keeping the cheapest.
@@ -37,6 +45,7 @@ Tests are packed longest-first, trying 1 to 8 workers and keeping the cheapest.
 | `selector.py` | The program the scorer runs (stdlib only) |
 | `blast_map.pkl.gz` | Coverage, file reads, and dialect/expression usage per test |
 | `tpcds.pkl.gz` | Per-query coverage, CPU and pristine outputs of `test_execute_tpcds`, plus its tables (`tools/build_tpcds.py`, then `tools/build_tpcds_ctx.py`, which records each query's coverage from a fresh pool worker, split by what checks each part) |
+| `defaults.pkl.gz` | Per function and defaulted parameter, the tests in which a call left it at its default (`tools/defaults_plugin.py`, `tools/build_defaults.py`) |
 | `operands.pkl.gz`, `dictreads.pkl.gz` | Per test, the operands each comparison saw and the keys each module/class-level dict literal gave out (`tools/operand_plugin.py`, `tools/build_operands.py`, repacked by `tools/build_lazy.py`) |
 | `import_users.pkl.gz` | Function-body lines that run while other modules are imported, with the modules that affects (`tools/build_import_users.py`) |
 | `sqlglot_src.tar.gz` | The pinned commit's Python sources, which patches are applied to |
