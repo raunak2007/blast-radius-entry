@@ -266,6 +266,15 @@ class SourceIndex:
                     return st["full"]
         return None
 
+    def class_node(self, qual):
+        for st in self.stmts:
+            if st["kind"] == "class":
+                node = st["node"]
+                name = f"{st['cls']}.{node.name}" if st["cls"] and st["scope"] == "class" else node.name
+                if name == qual:
+                    return node
+        return None
+
     def classes(self):
         out = []
         for st in self.stmts:
@@ -273,6 +282,17 @@ class SourceIndex:
                 node = st["node"]
                 out.append(f"{st['cls']}.{node.name}" if st["cls"] and st["scope"] == "class" else node.name)
         return out
+
+
+def changed_range(old, new):
+    """Byte offsets [lo, hi) of the part of `old` that differs from `new`."""
+    p, m = 0, min(len(old), len(new))
+    while p < m and old[p] == new[p]:
+        p += 1
+    s = 0
+    while s < m - p and old[len(old) - 1 - s] == new[len(new) - 1 - s]:
+        s += 1
+    return len(old[:p].encode("utf-8")), len(old[: len(old) - s].encode("utf-8"))
 
 
 def is_comment_or_blank(text):
@@ -346,7 +366,7 @@ class Selector:
             m |= doc["class_users"].get((rel, qual), 0)
         return m | self.subprocess
 
-    def mask_for_old_line(self, rel, idx, line):
+    def mask_for_old_line(self, rel, idx, line, blk=None):
         st, span = idx.stmt_at(line)
         if st is None:
             return self.module_fallback(rel, idx)
@@ -367,8 +387,95 @@ class Selector:
                 m |= self.module_fallback(rel, idx)
             return m
         if st["scope"] == "class":
-            return self.class_fallback(rel, st["cls"], idx)
+            return self.class_change(rel, idx, st, line, blk)
+        if blk is not None and isinstance(st["node"], (ast.Assign, ast.AnnAssign)):
+            entry = self.dict_entry_mask(rel, st["node"], line, blk)
+            if entry is not None:
+                return entry | self.subprocess
         return self.module_fallback(rel, idx, st["node"])
+
+    # ---- class attribute changes
+
+    def class_change(self, rel, idx, st, line, blk):
+        """A class-body statement changed. Dialect classes reach the tests that used the
+        dialect (or a subclass), expression classes the tests that built that type; inside
+        that set we narrow to tests that could observe the edit, when that is provable."""
+        doc = self.doc
+        qual = st["cls"]
+        users = doc["class_users"].get((rel, qual))
+        expr = doc["expr_family_users"].get(qual.split(".")[-1]) if users is None else None
+        span = idx.class_span(qual)
+        own = self.line_union(rel, span[0], span[1]) if span else 0
+        narrowed = self.narrow(rel, idx, st, line, blk) if blk else None
+        if users is not None or expr is not None:
+            base = (users or 0) | (expr or 0) | own
+            m = base if narrowed is None else narrowed & base
+        else:
+            base = own | doc["module_any"].get(rel, 0)
+            m = base if narrowed is None else narrowed
+        return m | self.subprocess
+
+    def dict_entry_mask(self, rel, node, line, blk):
+        """For a one-line edit inside the value of a dict entry: the tests that ran it if
+        the value is a lambda, or the tests that built an X if the key is exp.X.
+        None if the edit isn't provably confined to one such entry."""
+        if len(blk["removed"]) != 1 or len(blk["added"]) != 1:
+            return None
+        lo, hi = changed_range(blk["removed_text"][0], blk["added_text"][0])
+        here = (line, lo)
+        there = (line, hi)
+        for d in ast.walk(node):
+            if not isinstance(d, ast.Dict):
+                continue
+            for k, v in zip(d.keys, d.values):
+                if not ((v.lineno, v.col_offset) <= here and there <= (v.end_lineno, v.end_col_offset)):
+                    continue
+                if k is None:
+                    return None
+                if (k.end_lineno, k.end_col_offset) >= here and (k.lineno, k.col_offset) <= there:
+                    return None  # the key itself is touched
+                if isinstance(v, ast.Lambda):
+                    return self.line_union(rel, v.lineno, v.end_lineno)
+                if isinstance(k, ast.Attribute) and isinstance(k.value, ast.Name) and k.value.id == "exp":
+                    return self.doc["expr_family_users"].get(k.attr, 0)
+                return None
+        return None
+
+    @staticmethod
+    def plain_data_class(cls_node):
+        """Enums, dataclasses and named tuples use class attributes without attribute reads."""
+        if cls_node is None:
+            return True
+        for base in cls_node.bases:
+            text = ast.unparse(base)
+            if text.endswith(("Enum", "Flag", "AutoName", "NamedTuple", "TypedDict")):
+                return True
+        for dec in cls_node.decorator_list:
+            if "dataclass" in ast.unparse(dec):
+                return True
+        return False
+
+    def narrow(self, rel, idx, st, line, blk):
+        """Tests that can observe a one-line edit to a class attribute, or None if unsure:
+        a dict-entry narrowing, intersected with the tests that ran code reading the
+        attribute (names read at import time are never narrowed)."""
+        node = st["node"]
+        if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+            return None
+        if self.plain_data_class(idx.class_node(st["cls"])):
+            return None
+        mask = self.dict_entry_mask(rel, node, line, blk)
+        if len(blk["removed"]) != 1 or len(blk["added"]) != 1:
+            return mask
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+        if targets and all(isinstance(t, ast.Name) for t in targets):
+            reads = [self.doc["attr_read_masks"].get(t.id) for t in targets]
+            if all(r is not None for r in reads):
+                rm = 0
+                for r in reads:
+                    rm |= r
+                mask = rm if mask is None else mask & rm
+        return mask
 
     def broad_for_function(self, rel, idx, func):
         """A function whose body also runs at import time: treat like a change where it's defined."""
@@ -384,6 +491,7 @@ class Selector:
     def python_source(self, rel, fd):
         old_text, idx = self.index(rel)
         new_text, blocks = apply_hunks(old_text, fd["hunks"])
+        self.patched[rel] = new_text
         try:
             new_idx = SourceIndex(new_text)
         except SyntaxError:
@@ -393,7 +501,7 @@ class Selector:
             if self.comment_only(blk, idx, new_idx):
                 continue
             for ln in blk["removed"]:
-                m |= self.mask_for_old_line(rel, idx, ln)
+                m |= self.mask_for_old_line(rel, idx, ln, blk)
             if blk["added"]:
                 m |= self.mask_for_added(rel, idx, new_idx, blk)
         return m
@@ -403,12 +511,15 @@ class Selector:
         rewritten class attribute, method or class changes the class; a new module
         statement changes the module."""
         old_defs = {(st["cls"], st["node"].name) for st in idx.stmts if st["kind"] in ("def", "class")}
+        same_shape = len(blk["removed"]) == len(blk["added"])
         for ln in blk["added"]:
             st, _ = new_idx.stmt_at(ln)
             if st is None or st["scope"] == "function":
                 continue
             if st["kind"] in ("def", "class") and blk["removed"] and (st["cls"], st["node"].name) in old_defs:
                 continue  # an existing header was edited; its removed lines already count
+            if same_shape and st["kind"] == "stmt":
+                continue  # a line-for-line edit of an existing statement: judged in the old file
             if st["scope"] == "class":
                 return self.class_fallback(rel, st["cls"], idx)
             return self.module_fallback(rel, idx, st["node"])
@@ -439,8 +550,10 @@ class Selector:
         try:
             old_text, idx = self.index(rel)
         except (OSError, SyntaxError):
+            self.verifiable = False
             return file_mask
         new_text, blocks = apply_hunks(old_text, fd["hunks"])
+        self.patched[rel] = new_text
         try:
             new_idx = SourceIndex(new_text)
         except SyntaxError:
@@ -469,6 +582,8 @@ class Selector:
     def select(self, text):
         doc = self.doc
         m = 0
+        self.patched = {}
+        self.verifiable = True
         diffs = parse_patch(text)
         if not diffs:
             raise Fallback("no file changes found in the patch")
@@ -482,7 +597,10 @@ class Selector:
             m |= doc["file_opens"].get(rel, 0)  # tests that read this file's text
             if rel in self.config or os.path.basename(rel) == "conftest.py":
                 raise Fallback(f"config file {rel}")
+            if not rel.endswith(".py") or not rel.startswith(("sqlglot/", "tests/")):
+                self.verifiable = False  # data files and the like: we only overlay Python sources
             if fd["new_file"]:
+                self.verifiable = False
                 continue  # a new file nothing imports or opens can't change a test
             if rel.endswith(".py"):
                 if not fd["hunks"]:
@@ -521,11 +639,324 @@ def pack(numbers, duration):
     return [w for w in best[1] if w]
 
 
+# --------------------------------------------------------------------------- runtime check
+#
+# The rules allow running sqlglot's tests while deciding (the CPU time is charged).
+# For a selection that is cheap to run but costly to schedule (every worker costs
+# 2 s), we run those tests on the patched sources in a forked child and drop the
+# ones that pass. Anything we can't run faithfully, or that misbehaves, stays selected.
+
+RUN = os.environ.get("BR_RUN", "1") != "0"
+TIME_FACTOR = float(os.environ.get("BR_TIME_FACTOR", "1.0"))  # our run time / recorded time
+COMMIT_OVERHEAD_MS = 300  # fork, importing the patched sqlglot, plus a safety margin
+# measured: importing a test module and its dialects; the two heavy files also pay for
+# duckdb/pandas and a setUpClass that loads data
+FILE_OVERHEAD_MS = {"tests/test_executor.py": 4000, "tests/test_optimizer.py": 2500}
+DEFAULT_FILE_OVERHEAD_MS = 150
+MAX_TEST_MS = 3000  # longer tests are cheaper to schedule than to run here
+SKIP_FILES = {
+    "tests/test_sqlglotc.py", "tests/test_build.py", "tests/test_docs.py",
+    "tests/test_dialect_imports.py", "tests/test_dialect_entry_points.py",
+    "tests/test_integration_loader.py",
+}
+SKIP_TESTS = set()
+
+
+def pack_cost(numbers, duration):
+    workers = pack(numbers, duration)
+    if not workers:
+        return 0
+    return max(sum(duration[n] for n in w) for w in workers) + WORKER_MS * len(workers)
+
+
+def plan_check(chosen, duration, info):
+    """The cheapest-first prefix of runnable tests whose check is expected to pay off."""
+    runnable = sorted((n for n in chosen if info[n]["runnable"]), key=lambda n: (duration[n], n))
+    if not runnable:
+        return []
+    base = pack_cost(chosen, duration)
+    chosen_set = set(chosen)
+    best_gain, best_k = 0, 0
+    ks = list(range(1, len(runnable) + 1))
+    if len(ks) > 120:
+        ks = sorted({max(1, int(len(runnable) * f / 60)) for f in range(1, 61)})
+    run_ms, files = 0, set()
+    prev = 0
+    for k in ks:
+        for n in runnable[prev:k]:
+            run_ms += duration[n] * TIME_FACTOR
+            files.add(info[n]["file"])
+        prev = k
+        overhead = COMMIT_OVERHEAD_MS + sum(FILE_OVERHEAD_MS.get(f, DEFAULT_FILE_OVERHEAD_MS) for f in files)
+        rest = sorted(chosen_set - set(runnable[:k]))
+        gain = base - pack_cost(rest, duration) - run_ms - overhead
+        if gain > best_gain:
+            best_gain, best_k = gain, k
+    return runnable[:best_k]
+
+
+OVERLAY_HOOK = r"""
+import importlib.abc, importlib.machinery, os, sys
+_root, _src = os.environ.get("BR_OVERLAY"), os.environ.get("BR_SRC_ROOT")
+if _root and _src:
+    _files = os.path.join(_root, "files")
+    _by_path = {}
+    for _d, _, _names in os.walk(_files):
+        for _n in _names:
+            _p = os.path.join(_d, _n)
+            _by_path[os.path.join(_src, os.path.relpath(_p, _files))] = _p
+
+    class _Loader(importlib.machinery.SourceFileLoader):
+        def get_code(self, fullname):
+            with open(_by_path[self.path], "rb") as fh:
+                return compile(fh.read(), self.path, "exec", dont_inherit=True)
+
+    class _Finder(importlib.abc.MetaPathFinder):
+        def find_spec(self, fullname, path, target=None):
+            spec = importlib.machinery.PathFinder.find_spec(fullname, path)
+            if spec is not None and spec.origin in _by_path:
+                spec.loader = _Loader(fullname, spec.origin)
+            return spec
+
+    if not any(type(f).__name__ == "_Finder" for f in sys.meta_path):
+        sys.meta_path.insert(0, _Finder())
+"""
+
+
+def child_run(patched, test_ids, limits, wfd):
+    """Runs in a forked child: import patched sqlglot, run the tests, report failures."""
+    import importlib
+    import shutil
+    import tempfile
+    import time
+    import unittest
+
+    src = str(SRC)
+    overlay = tempfile.mkdtemp(prefix="br-")
+    for rel, text in patched.items():
+        path = os.path.join(overlay, "files", rel)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8", errors="surrogateescape") as fh:
+            fh.write(text)
+    with open(os.path.join(overlay, "sitecustomize.py"), "w") as fh:
+        fh.write(OVERLAY_HOOK)
+    # any Python this child starts (subprocess tests) loads the patched files too
+    os.environ["PYTHONPATH"] = overlay + (os.pathsep + os.environ["PYTHONPATH"] if os.environ.get("PYTHONPATH") else "")
+    os.environ["BR_OVERLAY"] = overlay
+    os.environ["BR_SRC_ROOT"] = src
+    os.environ["SKIP_INTEGRATION"] = "0"
+    exec(compile(OVERLAY_HOOK, "<overlay>", "exec"), {"__name__": "br_overlay"})
+    sys.path.insert(0, src)
+    os.chdir(src)
+
+    # process pools fork instead of spawn, so workers keep the patched modules
+    import multiprocessing
+    import multiprocessing.context
+    real_get_context = multiprocessing.get_context
+
+    def get_context(method=None):
+        return real_get_context("fork" if method in (None, "spawn", "forkserver") else method)
+
+    multiprocessing.get_context = get_context
+    cpus = min(2, os.cpu_count() or 2)
+    os.cpu_count = lambda: cpus
+    if hasattr(os, "process_cpu_count"):
+        os.process_cpu_count = lambda: cpus
+
+    failed = set()
+
+    class Result(unittest.TestResult):
+        def _mark(self, test, err=None):
+            if os.environ.get("BR_DEBUG") and err:
+                import traceback
+                print(test, "".join(traceback.format_exception(*err))[-600:], file=sys.stderr)
+            tid = getattr(test, "test_id", None)
+            if tid is None:
+                case = getattr(test, "test_case", None)
+                tid = getattr(case, "test_id", None)
+            if tid is None:  # class or module setup failed: blame everything we ran
+                failed.update(test_ids)
+            else:
+                failed.add(tid)
+
+        def startTest(self, test):
+            super().startTest(test)
+            self._t0 = time.perf_counter()
+
+        def stopTest(self, test):
+            super().stopTest(test)
+            tid = getattr(test, "test_id", None)
+            # far slower than recorded: it may have timed out where it was labeled
+            if tid is not None and time.perf_counter() - self._t0 > 2 + 5 * limits.get(tid, 0):
+                failed.add(tid)
+
+        def addError(self, test, err):
+            self._mark(test, err)
+
+        def addFailure(self, test, err):
+            self._mark(test, err)
+
+        def addSubTest(self, test, subtest, err):
+            if err is not None:
+                self._mark(test, err)
+
+        def addUnexpectedSuccess(self, test):
+            self._mark(test)
+
+    prof = os.environ.get("BR_PROFILE")
+
+    def mark(what):
+        if prof:
+            os.write(3 if False else 2, f"  [{os.getpid()}] {time.process_time():.2f} {what}\n".encode())
+
+    mark("setup done")
+    groups = {}
+    for tid in test_ids:
+        f, cls, meth = tid.split("::")
+        groups.setdefault(f, {}).setdefault(cls, []).append((meth, tid))
+    for f, classes in groups.items():
+        modname = f[:-3].replace("/", ".")
+        try:
+            mod = importlib.import_module(modname)
+        except BaseException:
+            if os.environ.get("BR_DEBUG"):
+                import traceback
+                traceback.print_exc()
+            failed.update(t for ms in classes.values() for _, t in ms)
+            continue
+        mark(f"imported {modname}")
+        for cls_name, meths in classes.items():
+            cls = getattr(mod, cls_name, None)
+            if cls is None:
+                failed.update(t for _, t in meths)
+                continue
+            cases = []
+            for meth, tid in meths:
+                try:
+                    case = cls(meth)
+                except BaseException:
+                    failed.add(tid)
+                    continue
+                case.test_id = tid
+                cases.append(case)
+            result = Result()
+            try:
+                unittest.TestSuite(cases).run(result)
+            except BaseException:
+                failed.update(t for _, t in meths)
+            mark(f"ran {cls_name} x{len(cases)}")
+    shutil.rmtree(overlay, ignore_errors=True)
+    os.write(wfd, json.dumps(sorted(failed)).encode())
+    os.close(wfd)
+
+
+PARALLEL = int(os.environ.get("BR_PARALLEL", "2"))
+HEAVY_FILES = {"tests/test_optimizer.py", "tests/test_executor.py"}  # import duckdb, numpy, pandas
+
+
+def warm(jobs):
+    """Import, once in the parent, what every check would otherwise import again after forking.
+    None of it depends on sqlglot, so the children still load the patched sources."""
+    import importlib
+    import site
+
+    site.main()
+    names = ("typing collections re itertools logging datetime decimal functools enum json copy "
+             "string inspect gc threading tempfile shutil pathlib multiprocessing multiprocessing.context "
+             "concurrent.futures dataclasses contextlib ast unittest unittest.mock difflib heapq csv "
+             "sqlite3 importlib.metadata importlib.abc importlib.util select signal zoneinfo uuid hashlib "
+             "textwrap pprint operator numbers weakref types").split()
+    if any(t.split("::")[0] in HEAVY_FILES for job in jobs for t in job[2]):
+        names += ["numpy", "pandas", "pandas.testing", "duckdb"]
+    for name in names:
+        try:
+            importlib.import_module(name)
+        except Exception:
+            pass
+
+
+def run_checks(jobs, budget_s):
+    """jobs: (key, patched, test_ids, recorded seconds by id, limit_s). Returns {key: failed ids or None}."""
+    import select
+    import signal
+    import time
+
+    results = {}
+    pending = list(jobs)
+    running = {}
+    deadline = time.monotonic() + budget_s
+    while pending or running:
+        while pending and len(running) < PARALLEL and time.monotonic() < deadline:
+            key, patched, test_ids, limits, limit = pending.pop(0)
+            r, w = os.pipe()
+            sys.stdout.flush()
+            sys.stderr.flush()
+            pid = os.fork()
+            if pid == 0:
+                try:
+                    os.close(r)
+                    devnull = os.open(os.devnull, os.O_WRONLY)
+                    os.dup2(devnull, 1)
+                    if not os.environ.get("BR_DEBUG"):
+                        os.dup2(devnull, 2)
+                    child_run(patched, test_ids, limits, w)
+                    os._exit(0)
+                except BaseException:
+                    os._exit(1)
+            os.close(w)
+            running[pid] = (key, r, time.monotonic() + limit, bytearray())
+        if not running:
+            for key, *_ in pending:
+                results[key] = None
+            break
+        fds = {v[1]: pid for pid, v in running.items()}
+        ready, _, _ = select.select(list(fds), [], [], 0.05)
+        for fd in ready:
+            pid = fds[fd]
+            chunk = os.read(fd, 1 << 16)
+            if chunk:
+                running[pid][3].extend(chunk)
+                continue
+            key, _, _, buf = running.pop(pid)
+            os.close(fd)
+            _, status, ru = os.wait4(pid, 0)
+            log(f"{key}: check used {ru.ru_utime + ru.ru_stime:.2f}s CPU")
+            ok = os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0
+            try:
+                results[key] = set(json.loads(buf.decode())) if ok else None
+            except ValueError:
+                results[key] = None
+        now = time.monotonic()
+        for pid, (key, fd, until, _) in list(running.items()):
+            if now > until or now > deadline:
+                try:
+                    os.kill(pid, signal.SIGKILL)
+                except OSError:
+                    pass
+                os.waitpid(pid, 0)
+                os.close(fd)
+                running.pop(pid)
+                results[key] = None
+                log(f"{key}: check timed out, keeping its tests")
+    return results
+
+
 def main():
+    import time
+    started = time.monotonic()
     tests = json.loads((DATA / "tests.json").read_text("utf-8"))["tests"]
     duration = {t["number"]: math.floor(t["seconds"] * 1000 + 0.5) for t in tests}
     every = sorted(duration)
     number_of = {t["id"]: t["number"] for t in tests}
+    id_of = {t["number"]: t["id"] for t in tests}
+    info = {}
+    for t in tests:
+        parts = t["id"].split("::")
+        info[t["number"]] = {
+            "file": t["file"],
+            "runnable": (len(parts) == 3 and "[" not in t["id"] and t["file"] not in SKIP_FILES
+                         and t["id"] not in SKIP_TESTS and duration[t["number"]] <= MAX_TEST_MS),
+        }
 
     selector = None
     local_numbers, always = [], []
@@ -542,13 +973,16 @@ def main():
     except Exception as error:  # never let a map problem cost a commit
         log(f"map unavailable, running every test: {error!r}")
 
-    out = []
+    answers = {}
+    jobs = []
     for patch in sorted((DATA / "commits").glob("*.patch")):
         commit = patch.name[: -len(".patch")]
+        patched, verifiable = {}, False
         try:
             if selector is None:
                 raise Fallback("no map")
             mask = selector.select(patch.read_bytes().decode("utf-8", "surrogateescape"))
+            patched, verifiable = dict(selector.patched), selector.verifiable
             chosen = []
             while mask:
                 low = mask & -mask
@@ -561,8 +995,30 @@ def main():
         except Exception as error:
             log(f"{commit}: running every test ({error})")
             chosen = every
-        out.append(json.dumps({"commit": commit, "workers": pack(chosen, duration)}, separators=(",", ":")))
+        answers[commit] = chosen
+        if RUN and verifiable and chosen:
+            check = plan_check(chosen, duration, info)
+            if check:
+                expected = sum(duration[n] for n in check) / 1000
+                limit = 10 + 4 * expected
+                jobs.append((commit, patched, [id_of[n] for n in check],
+                             {id_of[n]: duration[n] / 1000 for n in check}, limit))
         log(f"{commit}: {len(chosen)} tests")
+
+    if jobs:
+        budget = float(os.environ.get("BR_BUDGET", "140")) - (time.monotonic() - started)
+        warm(jobs)
+        results = run_checks(jobs, budget)
+        for commit, _, test_ids, _, _ in jobs:
+            failed = results.get(commit)
+            if failed is None:
+                continue
+            passed = {number_of[t] for t in test_ids if t not in failed}
+            log(f"{commit}: ran {len(test_ids)}, {len(test_ids) - len(passed)} failed")
+            answers[commit] = [n for n in answers[commit] if n not in passed]
+
+    out = [json.dumps({"commit": c, "workers": pack(answers[c], duration)}, separators=(",", ":"))
+           for c in answers]
     sys.stdout.write("\n".join(out) + ("\n" if out else ""))
 
 

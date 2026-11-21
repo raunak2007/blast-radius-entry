@@ -216,6 +216,71 @@ for path in glob.glob(os.path.join(repo, "sqlglot", "**", "*.py"), recursive=Tru
                     for alias in node.names:
                         exported[cand].add(alias.name)
 
+# ---- where each attribute name is read, for narrowing class-attribute changes ----
+# A class attribute change only reaches tests that read the attribute. We record every
+# read of every attribute name (obj.NAME, getattr(obj, "NAME")) in sqlglot and in the
+# tests. A name read at import time (class or module scope, or a line import runs) is
+# marked unsafe and never narrowed.
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+from selector import SourceIndex  # noqa: E402
+
+attr_refs = collections.defaultdict(lambda: {"spans": [], "tests": 0, "unsafe": False})
+
+
+def read_names(node):
+    for sub in ast.walk(node):
+        if isinstance(sub, ast.Attribute) and isinstance(sub.ctx, ast.Load):
+            yield sub.attr, sub.lineno
+        elif isinstance(sub, ast.Call) and isinstance(sub.func, ast.Name) and sub.func.id in ("getattr", "hasattr") \
+                and len(sub.args) >= 2 and isinstance(sub.args[1], ast.Constant) and isinstance(sub.args[1].value, str):
+            yield sub.args[1].value, sub.lineno
+
+
+for path in sorted(glob.glob(os.path.join(repo, "sqlglot", "**", "*.py"), recursive=True)):
+    rel = os.path.relpath(path, repo)
+    try:
+        idx = SourceIndex(open(path, "rb").read().decode("utf-8"))
+    except SyntaxError:
+        continue
+    imp = import_lines.get(rel, set())
+    for name, line in read_names(idx.tree):
+        st, span = idx.stmt_at(line)
+        entry = attr_refs[name]
+        if st is None or st["scope"] != "function" or any(l in imp for l in range(span[0], span[1] + 1)):
+            entry["unsafe"] = True
+        else:
+            entry["spans"].append((rel, span[0], span[1]))
+
+for path in sorted(glob.glob(os.path.join(repo, "tests", "**", "*.py"), recursive=True)):
+    rel = os.path.relpath(path, repo)
+    try:
+        idx = SourceIndex(open(path, "rb").read().decode("utf-8"))
+    except SyntaxError:
+        continue
+    for name, line in read_names(idx.tree):
+        st, _ = idx.stmt_at(line)
+        entry = attr_refs[name]
+        if st is not None and st["scope"] == "function" and st["cls"] and st["func"] is not None:
+            m = node_mask(f"{rel}::{st['cls']}::{st['func'].name}") or by_class.get(f"{rel}::{st['cls']}", 0)
+        elif st is not None and st["cls"]:
+            m = by_class.get(f"{rel}::{st['cls']}", 0) or by_file.get(rel, 0)
+        else:
+            m = by_file.get(rel, 0)
+        entry["tests"] |= m
+
+# turn spans into one mask per name
+attr_read_masks = {}
+for name, entry in attr_refs.items():
+    if entry["unsafe"]:
+        continue
+    m = entry["tests"]
+    for rel, lo, hi in entry["spans"]:
+        per = line_mask.get(rel, {})
+        for ln in range(lo, hi + 1):
+            m |= per.get(ln, 0)
+    attr_read_masks[name] = m
+unsafe_attrs = sorted(n for n, e in attr_refs.items() if e["unsafe"])
+
 doc = {
     "tests": ids,
     "masks": masks,
@@ -230,6 +295,7 @@ doc = {
     "test_files": dict(by_file),
     "test_classes": dict(by_class),
     "subprocess_tests": subprocess_tests,
+    "attr_read_masks": attr_read_masks,
 }
 with gzip.open(out_path, "wb", compresslevel=9) as fh:
     pickle.dump(doc, fh, protocol=pickle.HIGHEST_PROTOCOL)
@@ -238,6 +304,7 @@ print(f"tests {len(ids)}, distinct masks {len(masks)}, files with coverage {len(
       f"covered lines {sum(len(v) for v in lines_out.values())}")
 print(f"fixture-like files {len(file_opens)}, config files {sorted(config_files)}")
 print(f"class->dialect keys {len(class_users)}, expression classes {len(expr_family_users)}")
+print(f"attribute names with narrowable reads: {len(attr_read_masks)}, unsafe (read at import): {len(unsafe_attrs)}")
 print(f"tests that start subprocesses: {[ids[i] for i in range(len(ids)) if subprocess_tests >> i & 1]}")
 print(f"unmatched coverage contexts (test files not in tests.json): {dict(unmatched)}")
 print(f"wrote {out_path}: {os.path.getsize(out_path) / 1e6:.2f} MB")
