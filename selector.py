@@ -1527,6 +1527,7 @@ def child_tpcds(patched, plan, wfd):
         signal.signal(signal.SIGPROF, lambda *_: os._exit(3))
         signal.setitimer(signal.ITIMER_PROF, budget)
     overlay = enter_overlay(patched)
+    refresh_modules(patched)
     data = load_tpcds()
     from sqlglot import find_tables, parse_one, transpile
     import sqlglot.executor as executor_module
@@ -1666,6 +1667,7 @@ def child_genmem(patched, plan, wfd):
     signal.signal(signal.SIGPROF, lambda *_: os._exit(3))
     signal.setitimer(signal.ITIMER_PROF, plan["budget"])
     overlay = enter_overlay(patched)
+    refresh_modules(patched)
     import importlib
 
     importlib.import_module("tests.test_generator")  # an import error fails the test (and this child)
@@ -1705,6 +1707,7 @@ def child_run(patched, test_ids, limits, wfd):
     import unittest
 
     overlay = enter_overlay(patched)
+    refresh_modules(patched)
     src = str(SRC)
 
     # process pools fork instead of spawn, so workers keep the patched modules
@@ -1834,6 +1837,218 @@ def warm(jobs):
             pass
 
 
+# Importing sqlglot costs each forked check about 0.15 s of CPU, more with the test modules.
+# The parent imports the pristine sources once and each check drops and imports again only
+# the modules its patch can reach: the patched ones, every module whose import was still
+# running when a patched one started (its import could have run the old code), and every
+# module that refers to a dropped one. Dropped sqlglot modules are imported again at once
+# so registries such as Dialect._classes hold the new classes. If a kept module still holds
+# an old object afterwards, or a non-Python file changed, everything is dropped, which is
+# the same as a fresh import.
+
+ZYGOTE = os.environ.get("BR_ZYGOTE", "1") != "0"
+_IMPORT_ORDER = {}  # module -> (start tick, end tick) of its import in the parent
+_OURS = ("sqlglot", "tests")
+
+
+def preimport(jobs):
+    import importlib
+    import importlib.abc
+    import importlib.machinery
+    import itertools
+
+    if not ZYGOTE:
+        return
+    files = sorted({t.split("::")[0] for job in jobs if "__tpcds__" not in job[3] and "__genmem__" not in job[3] for t in job[2]})
+    tick = itertools.count()
+
+    class Watch(importlib.abc.MetaPathFinder):
+        def find_spec(self, fullname, path, target=None):
+            if fullname.split(".")[0] not in _OURS:
+                return None
+            spec = importlib.machinery.PathFinder.find_spec(fullname, path)
+            loader = getattr(spec, "loader", None)
+            if loader is None or not hasattr(loader, "exec_module"):
+                return spec
+            real = loader.exec_module
+
+            def exec_module(module):
+                start = next(tick)
+                real(module)
+                _IMPORT_ORDER[fullname] = (start, next(tick))
+
+            loader.exec_module = exec_module
+            return spec
+
+    src, cwd = str(SRC), os.getcwd()
+    os.environ["SKIP_INTEGRATION"] = "0"  # as in the checks: tests read it at import
+    sys.path.insert(0, src)
+    os.chdir(src)
+    watch = Watch()
+    sys.meta_path.insert(0, watch)
+    try:
+        names = ["sqlglot"]
+        if any("__genmem__" in job[3] for job in jobs):
+            names += ["tests.test_generator"]
+        if any("__tpcds__" in job[3] for job in jobs):
+            names += ["sqlglot.executor", "sqlglot.optimizer"]
+        names += [f[:-3].replace("/", ".") for f in files]
+        for name in names:
+            try:
+                importlib.import_module(name)
+            except BaseException:
+                pass
+    finally:
+        sys.meta_path.remove(watch)
+        os.chdir(cwd)
+
+
+def _module_refs(name, module):
+    """Names of the modules whose objects this module's globals hold (one level into containers)."""
+    import types
+
+    out = set()
+    is_pkg = hasattr(module, "__path__")
+
+    def add(v):
+        if isinstance(v, types.ModuleType):
+            out.add(v.__name__)
+        elif isinstance(v, type):
+            for b in v.__mro__:
+                out.add(b.__module__)
+        elif isinstance(v, (types.FunctionType, types.BuiltinFunctionType)):
+            out.add(getattr(v, "__module__", None))
+        else:
+            out.add(type(v).__module__)
+
+    for k, v in list(vars(module).items()):
+        if is_pkg and isinstance(v, types.ModuleType) and v.__name__ == f"{name}.{k}":
+            continue  # the binding the import system makes for a submodule
+        add(v)
+        if isinstance(v, dict):
+            for x in list(v.keys()) + list(v.values()):
+                add(x)
+        elif isinstance(v, (list, tuple, set, frozenset)):
+            for x in v:
+                add(x)
+    return out
+
+
+def _holds_any(module, name, ids):
+    """Whether a module's globals, its own classes' attributes, or containers one level
+    inside either, hold an object whose id is in ids."""
+    def hit(v):
+        if id(v) in ids:
+            return True
+        if isinstance(v, dict):
+            return any(id(x) in ids for x in v.values()) or any(id(x) in ids for x in v)
+        if isinstance(v, (list, tuple, set, frozenset)):
+            return any(id(x) in ids for x in v)
+        return False
+
+    for v in list(vars(module).values()):
+        if hit(v):
+            return True
+        if isinstance(v, type) and v.__module__ == name:
+            for a in list(vars(v).values()):
+                if hit(a):
+                    return True
+    # metaclass attributes (Dialect._classes lives on _Dialect)
+    return False
+
+
+def refresh_modules(patched):
+    """In a forked check, after enter_overlay: make the pre-imported modules match the patch."""
+    import importlib
+    import types
+
+    ours = {n: m for n, m in list(sys.modules.items()) if n.split(".")[0] in _OURS}
+    if not ours:
+        return
+    src = os.path.realpath(str(SRC))
+    by_file = {}
+    for n, m in ours.items():
+        f = getattr(m, "__file__", None)
+        if f:
+            by_file[os.path.realpath(f)] = n
+    whole = not _IMPORT_ORDER
+    targets = set()
+    for rel in patched:
+        if not rel.endswith(".py"):
+            whole = True
+            break
+        n = by_file.get(os.path.realpath(os.path.join(src, rel)))
+        if n:
+            targets.add(n)
+
+    def drop_all(why):
+        if os.environ.get("BR_DEBUG"):
+            os.write(2, f"  refresh: dropping everything ({why})\n".encode())
+        for n in [n for n in sys.modules if n.split(".")[0] in _OURS]:
+            del sys.modules[n]
+
+    if whole:
+        drop_all("not Python" if _IMPORT_ORDER else "nothing pre-imported")
+        return
+    if not targets:
+        if os.environ.get("BR_DEBUG"):
+            os.write(2, b"  refresh: patched modules not loaded, kept all\n")
+        return  # the patched modules were never imported here, so nothing holds their old code
+    first = min(_IMPORT_ORDER[n][0] for n in targets if n in _IMPORT_ORDER) if any(
+        n in _IMPORT_ORDER for n in targets) else -1
+    drop = set(targets)
+    for n in ours:
+        o = _IMPORT_ORDER.get(n)
+        if o is None or o[1] > first:
+            drop.add(n)
+    refs = {n: _module_refs(n, m) for n, m in ours.items() if n not in drop}
+    grew = True
+    while grew:
+        grew = False
+        for n, r in refs.items():
+            if n not in drop and r & drop:
+                drop.add(n)
+                grew = True
+    old = {n: sys.modules.pop(n) for n in drop}
+    # A kept package still binds a dropped submodule as an attribute, and `from pkg import sub`
+    # reads that attribute before sys.modules: unbind it, so that import loads the new module.
+    for n, m in old.items():
+        parent, _, leaf = n.rpartition(".")
+        pkg = sys.modules.get(parent)
+        if pkg is not None and vars(pkg).get(leaf) is m:
+            delattr(pkg, leaf)
+    for n in sorted(n for n in drop if n.split(".")[0] == "sqlglot"):
+        if n not in sys.modules:
+            importlib.import_module(n)  # an error here fails the check, which keeps its tests
+    # A package imported again doesn't bind the submodules we kept. Only a missing name is
+    # bound: the package's own code may have rebound it (sqlglot.expressions.array is both a
+    # submodule and, after `from .builders import array`, a function).
+    for n, m in list(sys.modules.items()):
+        if n.split(".")[0] in _OURS and "." in n:
+            parent, _, leaf = n.rpartition(".")
+            pkg = sys.modules.get(parent)
+            if pkg is not None and parent in drop and leaf not in vars(pkg):
+                setattr(pkg, leaf, m)
+    # Old objects of dropped test modules may stay registered (a test's own Dialect subclass in
+    # Dialect._classes, say); the check imports that test module again, which registers it anew.
+    old = {n: m for n, m in old.items() if n.split(".")[0] == "sqlglot"}
+    old_ids = {id(m) for m in old.values()}
+    for n, m in old.items():
+        for v in list(vars(m).values()):
+            if isinstance(v, (type, types.FunctionType)) and getattr(v, "__module__", None) == n:
+                old_ids.add(id(v))
+    # every sqlglot module now loaded, the ones just imported again included
+    kept = [(n, m) for n, m in sys.modules.items() if n.split(".")[0] in _OURS and m not in old.values()]
+    metas = {type(v) for _, m in kept for v in list(vars(m).values())
+             if isinstance(v, type) and type(v) is not type}
+    if any(_holds_any(m, n, old_ids) for n, m in kept) or any(
+            any(id(x) in old_ids for x in (a.values() if isinstance(a, dict) else ()))
+            for meta in metas for a in list(vars(meta).values())):
+        drop_all("a kept module holds an old object")
+    elif os.environ.get("BR_DEBUG"):
+        os.write(2, f"  refresh: {len(targets)} patched, dropped {len(drop)} of {len(ours)}\n".encode())
+
+
 def run_checks(jobs, budget_s):
     """jobs: (key, patched, test_ids, recorded seconds by id, limit_s). Returns {key: failed ids or None}."""
     import select
@@ -1866,6 +2081,9 @@ def run_checks(jobs, budget_s):
                         child_run(patched, test_ids, limits, w)
                     os._exit(0)
                 except BaseException:
+                    if os.environ.get("BR_DEBUG"):
+                        import traceback
+                        traceback.print_exc()
                     os._exit(1)
             os.close(w)
             running[pid] = (key, r, time.monotonic() + limit, bytearray())
@@ -1989,8 +2207,19 @@ def main():
     jobs = tpcds_jobs + jobs
     if jobs:
         budget = float(os.environ.get("BR_BUDGET", "140")) - (time.monotonic() - started)
+        t0 = time.process_time()
         warm(jobs)
+        t1 = time.process_time()
+        preimport(jobs)
+        t2 = time.process_time()
+        # every check is a fork of this process: keep the collector in each child away from
+        # the maps and imports already here (walking them would also copy their pages)
+        if os.environ.get("BR_FREEZE", "1") != "0":
+            import gc
+            gc.freeze()
         results = run_checks(jobs, budget)
+        log(f"parent CPU: static {t0:.2f}s, warm {t1 - t0:.2f}s, preimport {t2 - t1:.2f}s, "
+            f"checks {time.process_time() - t2:.2f}s")
         for key, _, test_ids, _, _ in jobs:
             commit = key[0] if isinstance(key, tuple) else key
             failed = results.get(key)
