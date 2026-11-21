@@ -31,6 +31,8 @@ from pathlib import Path
 DATA = Path(os.environ.get("BR_DATA", "/data"))
 SRC = Path(os.environ.get("BR_SRC", "/opt/sqlglot"))
 MAP = Path(os.environ.get("BR_MAP", str(Path(__file__).with_name("blast_map.pkl.gz"))))
+TPCDS_DATA = Path(os.environ.get("BR_TPCDS", str(Path(__file__).with_name("tpcds.pkl.gz"))))
+TPCDS_TEST = "tests/test_executor.py::TestExecutor::test_execute_tpcds"
 WORKER_MS = 2000
 MAX_WORKERS = 8
 
@@ -315,6 +317,8 @@ class Selector:
         self.test_bit = {tid: 1 << i for i, tid in enumerate(doc["tests"])}
         # tests that start a fresh interpreter: import-time changes reach them unseen
         self.subprocess = doc.get("subprocess_tests", 0)
+        # every changed span of the current commit: (rel, lo, hi, "function" | "other")
+        self.touched = []
 
     def index(self, rel):
         if rel not in self.cache:
@@ -369,6 +373,7 @@ class Selector:
     def mask_for_old_line(self, rel, idx, line, blk=None):
         st, span = idx.stmt_at(line)
         if st is None:
+            self.touched.append((rel, line, line, "other"))
             return self.module_fallback(rel, idx)
         lo, hi = span
         if st["scope"] == "function":
@@ -376,7 +381,11 @@ class Selector:
             if self.touches_import(rel, lo, hi):
                 func = st["func"]
                 m |= self.broad_for_function(rel, idx, func)
+                self.touched.append((rel, lo, hi, "other"))
+            else:
+                self.touched.append((rel, lo, hi, "function"))
             return m
+        self.touched.append((rel, lo, hi, "other"))
         if st["kind"] == "def":
             body_lo, body_hi = st["full"]
             m = self.line_union(rel, body_lo, body_hi)
@@ -520,6 +529,7 @@ class Selector:
                 continue  # an existing header was edited; its removed lines already count
             if same_shape and st["kind"] == "stmt":
                 continue  # a line-for-line edit of an existing statement: judged in the old file
+            self.touched.append((rel, ln, ln, "other"))
             if st["scope"] == "class":
                 return self.class_fallback(rel, st["cls"], idx)
             return self.module_fallback(rel, idx, st["node"])
@@ -584,6 +594,7 @@ class Selector:
         m = 0
         self.patched = {}
         self.verifiable = True
+        self.touched = []
         diffs = parse_patch(text)
         if not diffs:
             raise Fallback("no file changes found in the patch")
@@ -607,11 +618,54 @@ class Selector:
                     raise Fallback(f"no hunks for {rel}")
                 if rel.startswith("sqlglot/"):
                     m |= self.python_source(rel, fd)
-                elif rel.startswith("tests/"):
+                    continue
+                if rel.startswith("tests/"):
                     m |= self.test_source(rel, fd)
                 else:
                     m |= doc["test_files"].get("tests/test_sqlglotc.py", 0) | doc["test_files"].get("tests/test_build.py", 0)
+            self.touched.append((rel, 0, 0, "other"))
         return m
+
+    # ---- the 21 s TPC-DS executor test: replay what the edit can reach instead of running it
+
+    def tpcds_plan(self, chosen, duration, tpcds_number):
+        """A replay plan when it is provably enough and clearly cheaper than the test, else None.
+
+        Only for commits whose every change is ordinary function code in sqlglot/ (no class
+        or module level, nothing run at import, no data or test files), none of which runs
+        in the test's table setup. "front" (compare the optimizer output) only when no
+        changed line runs anywhere but inside optimize() for the reached queries; else
+        "full" (compare the executor result). Both also compare the duckdb transpilation,
+        which is the expected side of the test's comparison."""
+        if not self.verifiable or not self.patched or not self.touched:
+            return None
+        if any(kind != "function" or not rel.startswith("sqlglot/") for rel, _, _, kind in self.touched):
+            return None
+        data = load_tpcds()
+        if data is None:
+            return None
+
+        def hits(sets, rel, lo, hi):
+            lines = sets.get(rel)
+            return bool(lines) and any(ln in lines for ln in range(lo, hi + 1))
+
+        spans = [(rel, lo, hi) for rel, lo, hi, _ in self.touched]
+        if any(hits(data["setup_sets"], *s) for s in spans):
+            return None
+        reached = [q for q in data["queries"] if any(hits(q["opt_sets"], *s) or hits(q["rest_sets"], *s) for s in spans)]
+        if not reached:
+            return None  # the test runs this code somewhere the replay doesn't: keep it
+        front = not any(hits(data["digest_sets"], *s) for s in spans) and \
+            not any(hits(q["rest_sets"], *s) for q in reached for s in spans)
+        key = "front_cpu" if front else "cpu"
+        estimate = sum(q[key] for q in reached) + 1.0
+        saving = (pack_cost(chosen, duration) - pack_cost([n for n in chosen if n != tpcds_number], duration)) / 1000
+        if estimate > (0.8 if front else 0.5) * saving:
+            return None
+        reached.sort(key=lambda q: q[key])  # cheapest first: a changed output usually shows early
+        log(f"TPC-DS replay planned: {'front' if front else 'full'}, {len(reached)} queries, "
+            f"est {estimate:.1f}s to save {saving:.1f}s")
+        return {"mode": "front" if front else "full", "queries": [q["index"] for q in reached], "estimate": estimate}
 
 
 # --------------------------------------------------------------------------- packing
@@ -712,24 +766,45 @@ if _root and _src:
                 return compile(fh.read(), self.path, "exec", dont_inherit=True)
 
     class _Finder(importlib.abc.MetaPathFinder):
+        _br_overlay = True  # marker: virtualenv's own meta path hook is also named _Finder
+
         def find_spec(self, fullname, path, target=None):
             spec = importlib.machinery.PathFinder.find_spec(fullname, path)
             if spec is not None and spec.origin in _by_path:
                 spec.loader = _Loader(fullname, spec.origin)
             return spec
 
-    if not any(type(f).__name__ == "_Finder" for f in sys.meta_path):
+    if not any(getattr(f, "_br_overlay", False) for f in sys.meta_path):
         sys.meta_path.insert(0, _Finder())
 """
 
 
-def child_run(patched, test_ids, limits, wfd):
-    """Runs in a forked child: import patched sqlglot, run the tests, report failures."""
-    import importlib
-    import shutil
+_TPCDS = None
+
+
+def load_tpcds():
+    """Per-query coverage, CPU times and pristine outputs of test_execute_tpcds, recorded at the
+    pinned commit (tools/build_tpcds.py). Loaded once in the parent; forked checks share it."""
+    global _TPCDS
+    if _TPCDS is None:
+        try:
+            with gzip.open(TPCDS_DATA, "rb") as fh:
+                data = pickle.load(fh)
+            data["setup_sets"] = {r: set(v) for r, v in data["setup_lines"].items()}
+            data["digest_sets"] = {r: set(v) for r, v in data["digest_lines"].items()}
+            for q in data["queries"]:
+                q["opt_sets"] = {r: set(v) for r, v in q["opt_lines"].items()}
+                q["rest_sets"] = {r: set(v) for r, v in q["rest_lines"].items()}
+            _TPCDS = data
+        except Exception as error:
+            log(f"no TPC-DS data ({error!r}); the test runs whenever it's selected")
+            _TPCDS = False
+    return _TPCDS or None
+
+
+def enter_overlay(patched):
+    """In a forked child: serve the patched sources to this Python and to any it starts."""
     import tempfile
-    import time
-    import unittest
 
     src = str(SRC)
     overlay = tempfile.mkdtemp(prefix="br-")
@@ -748,6 +823,76 @@ def child_run(patched, test_ids, limits, wfd):
     exec(compile(OVERLAY_HOOK, "<overlay>", "exec"), {"__name__": "br_overlay"})
     sys.path.insert(0, src)
     os.chdir(src)
+    return overlay
+
+
+def child_tpcds(patched, plan, wfd):
+    """In a forked child: replay the planned TPC-DS queries on the patched sources the way
+    test_execute_tpcds runs them (parse, pickle to the worker, execute, pickle back, plus the
+    duckdb transpilation) and report the test as failing unless every output is identical."""
+    import hashlib
+    import shutil
+
+    overlay = enter_overlay(patched)
+    data = load_tpcds()
+    from sqlglot import find_tables, parse_one, transpile
+    import sqlglot.executor as executor_module
+    from sqlglot.executor import execute
+    from sqlglot.executor.table import Table
+
+    tables = {t: Table(columns=c, rows=data["tables"][t]) for t, c in data["schema"].items()}
+    schema, tables = pickle.loads(pickle.dumps((data["schema"], tables)))
+    by_index = {q["index"]: q for q in data["queries"]}
+    front = plan["mode"] == "front"
+    seen = {}
+    original_optimize = executor_module.optimize
+
+    class Stop(BaseException):
+        pass
+
+    def optimize_then_stop(*args, **kwargs):
+        result = original_optimize(*args, **kwargs)
+        seen["digest"] = hashlib.sha256(repr(result.dump()).encode()).hexdigest()
+        raise Stop
+
+    if front:
+        executor_module.optimize = optimize_then_stop
+    same = True
+    for i in plan["queries"]:
+        q = by_index[i]
+        expression = pickle.loads(pickle.dumps(parse_one(q["sql"])))
+        used = {t.name: tables[t.name] for t in find_tables(expression)}
+        if front:
+            seen.clear()
+            try:
+                execute(expression, schema=schema, tables=used)
+            except Stop:
+                pass
+            if seen.get("digest") != q["opt_digest"]:
+                same = False
+                break
+        else:
+            result = pickle.loads(pickle.dumps(execute(expression, schema=schema, tables=used)))
+            if tuple(result.columns) != q["columns"] or list(result.rows) != q["rows"]:
+                same = False
+                break
+        if transpile(q["sql"], write="duckdb")[0] != q["duck_sql"]:
+            same = False
+            break
+    shutil.rmtree(overlay, ignore_errors=True)
+    os.write(wfd, json.dumps([] if same else [TPCDS_TEST]).encode())
+    os.close(wfd)
+
+
+def child_run(patched, test_ids, limits, wfd):
+    """Runs in a forked child: import patched sqlglot, run the tests, report failures."""
+    import importlib
+    import shutil
+    import time
+    import unittest
+
+    overlay = enter_overlay(patched)
+    src = str(SRC)
 
     # process pools fork instead of spawn, so workers keep the patched modules
     import multiprocessing
@@ -866,7 +1011,7 @@ def warm(jobs):
              "concurrent.futures dataclasses contextlib ast unittest unittest.mock difflib heapq csv "
              "sqlite3 importlib.metadata importlib.abc importlib.util select signal zoneinfo uuid hashlib "
              "textwrap pprint operator numbers weakref types").split()
-    if any(t.split("::")[0] in HEAVY_FILES for job in jobs for t in job[2]):
+    if any(t.split("::")[0] in HEAVY_FILES for job in jobs if "__tpcds__" not in job[3] for t in job[2]):
         names += ["numpy", "pandas", "pandas.testing", "duckdb"]
     for name in names:
         try:
@@ -899,7 +1044,10 @@ def run_checks(jobs, budget_s):
                     os.dup2(devnull, 1)
                     if not os.environ.get("BR_DEBUG"):
                         os.dup2(devnull, 2)
-                    child_run(patched, test_ids, limits, w)
+                    if "__tpcds__" in limits:
+                        child_tpcds(patched, limits["__tpcds__"], w)
+                    else:
+                        child_run(patched, test_ids, limits, w)
                     os._exit(0)
                 except BaseException:
                     os._exit(1)
@@ -974,7 +1122,8 @@ def main():
         log(f"map unavailable, running every test: {error!r}")
 
     answers = {}
-    jobs = []
+    jobs, tpcds_jobs = [], []
+    tpcds_number = number_of.get(TPCDS_TEST)
     for patch in sorted((DATA / "commits").glob("*.patch")):
         commit = patch.name[: -len(".patch")]
         patched, verifiable = {}, False
@@ -996,6 +1145,12 @@ def main():
             log(f"{commit}: running every test ({error})")
             chosen = every
         answers[commit] = chosen
+        if RUN and verifiable and selector is not None and tpcds_number in chosen:
+            plan = selector.tpcds_plan(chosen, duration, tpcds_number)
+            if plan:
+                tpcds_jobs.append(((commit, "tpcds"), patched, [TPCDS_TEST],
+                                   {"__tpcds__": plan, TPCDS_TEST: duration[tpcds_number] / 1000},
+                                   10 + 3 * plan["estimate"]))
         if RUN and verifiable and chosen:
             check = plan_check(chosen, duration, info)
             if check:
@@ -1005,12 +1160,14 @@ def main():
                              {id_of[n]: duration[n] / 1000 for n in check}, limit))
         log(f"{commit}: {len(chosen)} tests")
 
+    jobs = tpcds_jobs + jobs
     if jobs:
         budget = float(os.environ.get("BR_BUDGET", "140")) - (time.monotonic() - started)
         warm(jobs)
         results = run_checks(jobs, budget)
-        for commit, _, test_ids, _, _ in jobs:
-            failed = results.get(commit)
+        for key, _, test_ids, _, _ in jobs:
+            commit = key[0] if isinstance(key, tuple) else key
+            failed = results.get(key)
             if failed is None:
                 continue
             passed = {number_of[t] for t in test_ids if t not in failed}

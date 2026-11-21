@@ -2,7 +2,7 @@
 
 Picks the sqlglot tests each patch can break, then packs them onto workers.
 
-**Sample set (30 commits):** 160.4 s simulated, 0 misses, a few seconds of CPU. The starter scores 1210.5 s.
+**Sample set (30 commits):** 143.6 s simulated, 0 misses, a few seconds of CPU. The starter scores 1210.5 s.
 
 ## How it decides
 
@@ -18,6 +18,8 @@ Every map comes from running sqlglot's own tests at the pinned commit (`eb11aec4
 - **Cheap selections are checked by running them.** When the selected tests cost less to run than to schedule (each worker costs 2 s), they run on the patched sources in a forked child (patched imports, process pools forked and capped at 2 workers) and the ones that pass are dropped. Anything that crashes, times out or can't run faithfully stays selected.
 - **Class-attribute edits are narrowed** to the tests that read the attribute, ran the edited lambda, or built the `exp.X` keyed by the edited dict entry.
 
+- **The 21 s TPC-DS test is replayed instead of run** when every change is ordinary function code in `sqlglot/` that the test's table setup doesn't run. Only the queries whose recorded coverage reaches a changed line are replayed. If the change stays inside `optimize()`, the optimizer output is compared. Otherwise the full execution result is compared. The duckdb transpilation is compared in both cases. Any difference, error or timeout keeps the test, and the replay only happens when its estimated CPU is well under the time it saves.
+
 Tests are packed longest-first, trying 1 to 8 workers and keeping the cheapest.
 
 ## Files
@@ -26,6 +28,7 @@ Tests are packed longest-first, trying 1 to 8 workers and keeping the cheapest.
 | --- | --- |
 | `selector.py` | The program the scorer runs (stdlib only) |
 | `blast_map.pkl.gz` | Coverage, file reads, and dialect/expression usage per test |
+| `tpcds.pkl.gz` | Per-query coverage, CPU and pristine outputs of `test_execute_tpcds`, plus its tables (`tools/build_tpcds.py`) |
 | `sqlglot_src.tar.gz` | The pinned commit's Python sources, which patches are applied to |
 | `tools/` | Rebuilds both data files from the pinned commit (`tools/build_map.sh`) |
 | `Makefile`, `score.py`, `requirements.lock` | From the starter kit, unchanged |
