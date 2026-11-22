@@ -452,6 +452,48 @@ ignore = ["E721", "E741"]
 """
 
 
+# setup.cfg at the pinned commit, for the same reason
+PINNED_SETUP_CFG = """[mypy]
+disallow_untyped_calls = False
+no_implicit_optional = True
+
+[mypy-sqlglot.*]
+ignore_errors = False
+
+[mypy-sqlglot.dataframe.*]
+ignore_errors = False
+
+[mypy-tests.*]
+ignore_errors = True
+
+[mypy-tests.dataframe.*]
+ignore_errors = False
+"""
+
+
+def setup_cfg_inert(hunks):
+    """Whether an edit to setup.cfg leaves a pytest run from the checkout as it was. pytest parses
+    the file on every run with iniconfig (the parser in the labeling environment's lock file,
+    used here too) and stops on one it can't parse; of its content it uses the [tool:pytest]
+    section only, and it refuses a [pytest] one. The pinned file has neither; no test opens it."""
+    try:
+        new_text, _ = apply_hunks(PINNED_SETUP_CFG, hunks)
+        new_text.encode("utf-8")  # bytes that aren't UTF-8 arrive as surrogates
+        if not _SITE_LOADED:
+            import site
+
+            site.main()  # the installed packages (the selector itself starts without them)
+            _SITE_LOADED.append(True)
+        import iniconfig
+
+        # as a file opened in text mode hands it over
+        data = new_text.replace("\r\n", "\n").replace("\r", "\n")
+        sections = iniconfig.IniConfig("setup.cfg", data=data).sections
+    except Exception:  # doesn't apply, not UTF-8, doesn't parse, no iniconfig
+        return False
+    return "tool:pytest" not in sections and "pytest" not in sections
+
+
 def pyproject_inert(hunks):
     """Whether an edit to pyproject.toml leaves a pytest run from the checkout as it was (the
     commits were labeled with the checkout on PYTHONPATH and nothing installed from it). pytest
@@ -2392,8 +2434,12 @@ class Selector:
         stem = os.path.basename(rel)[:-3]
         if not stem.startswith("test_"):
             # tests/helpers.py and the like hold no tests of their own: other test modules
-            # import them, so any test may run this code
-            raise Fallback(f"shared test code {rel}")
+            # import them, so any test may run this code. A script that no test module imports
+            # (tests/leakcheck.py, tests/gen_fixtures.py; pytest collects test_*.py only) runs
+            # in no test.
+            if stem == "__init__" or stem.endswith("_test") or self.importers({rel}) - {rel}:
+                raise Fallback(f"shared test code {rel}")
+            return 0
         own = doc["test_files"].get(rel, 0)
         # what a change to the module as a whole reaches: its own tests, and those of the test
         # modules that import it, directly or not (their import runs, or fails with, the edited code)
@@ -2571,6 +2617,8 @@ class Selector:
                 continue
             if rel == "pyproject.toml" and fd["hunks"] and not fd["new_file"] and pyproject_inert(fd["hunks"]):
                 continue  # still TOML, still without settings for pytest
+            if rel == "setup.cfg" and fd["hunks"] and not fd["new_file"] and setup_cfg_inert(fd["hunks"]):
+                continue  # still parses, still without a section for pytest
             if rel == "setup.py" and fd["hunks"] and not fd["new_file"]:
                 # the root setup.py: pytest looks whether it exists, and nothing runs or reads it
                 # when the tests run from the checkout (tests/test_sqlglotc.py runs sqlglotc's)
