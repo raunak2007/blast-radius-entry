@@ -96,6 +96,25 @@ class CommitCandidates:
         return m
 
 
+_TPCDS_ENV = []
+
+
+def _tpcds_env():
+    """maps/tpcds_env.json: per executed TPC-DS case of test_execute_tpcds, the ENV keys
+    it calls and the names its generated code refers to (tools/build_tpcds_env.py)."""
+    if not _TPCDS_ENV:
+        import json
+
+        path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "maps", "tpcds_env.json")
+        try:
+            with open(path) as handle:
+                data = json.load(handle)
+            _TPCDS_ENV.append(data if data.get("version") == 1 else None)
+        except (OSError, ValueError):
+            _TPCDS_ENV.append(None)
+    return _TPCDS_ENV[0]
+
+
 def decode_source(raw: bytes) -> str | None:
     """Decode Python source the way the import system would; None if it cannot."""
     try:
@@ -454,6 +473,57 @@ class CandidateFinder:
             if site.kind == "def-header" and site.scope == "function" and not site.lines:
                 report.import_check = True  # defaults and annotations run at import
             report.site_masks.append(mask)
+        if rel == "sqlglot/executor/env.py" and report.keyrec_sites:
+            try:
+                self._env_entry_narrowing(report)
+            except Exception:  # noqa: BLE001 - only a narrowing: keep the masks
+                pass
+
+    def _env_entry_narrowing(self, report: FileReport):
+        """An edit of entries of sqlglot.executor.env.ENV reaches a TPC-DS case of
+        test_execute_tpcds only if executing that query looks one of the edited keys up:
+        the executor runs generated code with a copy of ENV as its globals, so a query
+        sees an entry only by calling it or naming it in its generated code
+        (maps/tpcds_env.json, recorded per query at the pinned commit). Other cases'
+        pseudo-tests are cleared from the site's mask; if no case and not the code
+        outside the loop is left, the test itself is too."""
+        node = "tests/test_executor.py::TestExecutor::test_execute_tpcds"
+        maps = self.maps
+        info = maps.cases.get(node)
+        env = _tpcds_env()
+        if not info or env is None or node not in maps.index:
+            return
+        indexes = info["fixtures"].get("optimizer/tpc-ds/tpc-ds.sql")
+        if not indexes:
+            return
+        used = {int(k): set(v["called"]) | set(v["names"]) for k, v in env["queries"].items()}
+        noncallable = set(env.get("noncallable", ()))
+        real = 1 << maps.index[node]
+        outside = 1 << info["outside"]
+        changed = False
+        for i, (holder, keys) in report.keyrec_sites.items():
+            if holder != "sqlglot.executor.env\tENV" or not keys:
+                continue
+            if any(d[0] != "str" or d[1] in noncallable for d in keys):
+                continue
+            names = {d[1] for d in keys}
+            mask = report.site_masks[i]
+            if not mask & real:
+                continue
+            keep = mask
+            for k, pi in enumerate(indexes):
+                if keep >> pi & 1 and not (k in used and used[k] & names):
+                    keep &= ~(1 << pi)
+            if not any(keep >> pi & 1 for pi in indexes) and not keep & outside:
+                keep &= ~real
+            if keep != mask:
+                report.site_masks[i] = keep
+                changed = True
+        if changed:
+            imp = 0
+            for j in report.imp_sites:
+                imp |= report.site_masks[j]
+            report.imp = imp
 
     # -- import-time changes ---------------------------------------------------
     def _import_site_mask(self, rel, module, site) -> int:
