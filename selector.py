@@ -2053,9 +2053,10 @@ class Selector:
     def tpcds_plan(self, chosen, duration, tpcds_number):
         """A replay plan when it is provably enough and clearly cheaper than the test, else None.
 
-        Only for commits whose every change is ordinary function code in sqlglot/ (no class
-        or module level, nothing run at import, no data or test files), none of which runs
-        in the test's table setup. Each query whose recorded coverage reaches a changed line
+        Only for commits whose every code change is ordinary function code in sqlglot/, the
+        body of a lambda nothing calls before the tests, or an executor ENV entry (whose
+        queries are those that look its key up), none of which runs in the test's table setup;
+        other parts may be data files the test doesn't open or test files it doesn't import. Each query whose recorded coverage reaches a changed line
         is checked by what that line can affect there: if only parsing, optimize() or the
         duckdb transpilation, its optimizer output is compared ("front"); if also the
         debug-log rendering execute() does next, that rendering is checked too ("log"); if
