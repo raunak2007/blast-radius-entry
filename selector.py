@@ -753,16 +753,28 @@ class Selector:
         self.import_widened = False
         self.fixture_checks = {}
         # set for a second look at a commit that selected everything: an import edit or a lost
-        # name that would select every test is noted in `deferred` instead, to be settled by
-        # the import check (only if that module itself then fails to import)
+        # name that would select every test is noted in `deferred` instead (rel, class or
+        # None, names or None, tests that ran the lost code), to be settled by the import
+        # check (the module itself then fails to import) or by the import-time state check
+        # with those bindings masked (every import still succeeds)
         self.defer_all = False
-        self.deferred = set()
+        self.deferred = []
 
-    def all_or_defer(self, rel):
+    def all_or_defer(self, rel, cls=None, names=None, mask=0):
         if self.defer_all and rel.startswith("sqlglot/") and rel.endswith(".py"):
-            self.deferred.add(rel)
+            self.deferred.append((rel, cls, frozenset(names) if names else None, mask))
             return 0
         return self.ALL
+
+    @staticmethod
+    def import_binds(node):
+        """The names an import statement binds, or None for a star import."""
+        out = set()
+        for a in node.names:
+            if a.name == "*":
+                return None
+            out.add(a.asname or (a.name.split(".")[0] if isinstance(node, ast.Import) else a.name))
+        return out
 
     def index(self, rel):
         if rel not in self.cache:
@@ -800,7 +812,7 @@ class Selector:
         doc = self.doc
         if node is not None:
             if isinstance(node, (ast.Import, ast.ImportFrom)):
-                return self.all_or_defer(rel)
+                return self.all_or_defer(rel, None, self.import_binds(node))
             names = set()
             for sub in ast.walk(node):
                 if isinstance(sub, ast.Name) and isinstance(sub.ctx, ast.Store):
@@ -808,6 +820,9 @@ class Selector:
             if isinstance(node, DEFS + (ast.ClassDef,)):
                 names.add(node.name)
             if names & set(doc["exported"].get(rel, ())):
+                if isinstance(node, DEFS + (ast.ClassDef,)):
+                    body = self.line_union(rel, node.lineno, node.end_lineno or node.lineno)
+                    return self.all_or_defer(rel, None, names, body)
                 return self.all_or_defer(rel)
         m = doc["module_any"].get(rel, 0)
         for qual in idx.classes():
@@ -1801,9 +1816,43 @@ class Selector:
                 return rel
         return None
 
+    @staticmethod
+    def scope_bindings(tree):
+        """{None: names bound at module level, class qualname: names bound in its body}, with
+        statements nested in if/try/with/for blocks (not in functions)."""
+        out = {}
+
+        def walk(body, key, prefix):
+            names = out.setdefault(key, set())
+            for node in body:
+                if isinstance(node, (ast.Import, ast.ImportFrom)):
+                    for a in node.names:
+                        names.add(a.asname or (a.name.split(".")[0] if isinstance(node, ast.Import) else a.name))
+                elif isinstance(node, DEFS):
+                    names.add(node.name)
+                elif isinstance(node, ast.ClassDef):
+                    names.add(node.name)
+                    walk(node.body, prefix + node.name, prefix + node.name + ".")
+                else:
+                    for sub in ast.walk(node):
+                        if isinstance(sub, ast.Name) and isinstance(sub.ctx, ast.Store):
+                            names.add(sub.id)
+                        elif isinstance(sub, (ast.ExceptHandler,)) and sub.name:
+                            names.add(sub.name)
+                    for field in ("body", "orelse", "finalbody", "handlers"):
+                        for child in getattr(node, field, ()) or ():
+                            if isinstance(child, ast.ExceptHandler):
+                                walk(child.body, key, prefix)
+                            elif isinstance(child, (DEFS + (ast.ClassDef, ast.Import, ast.ImportFrom))):
+                                walk([child], key, prefix)
+
+        walk(tree.body, None, "")
+        return out
+
     def import_sites(self):
         """Every import statement under sqlglot/ and tests/: (rel, line, end line, nested,
-        names of the modules it can import)."""
+        names of the modules it can import, names of the modules or module attributes it
+        reads as written)."""
         if getattr(self, "_import_sites", None) is None:
             sites = []
             for sub in ("sqlglot", "tests"):
@@ -1818,10 +1867,11 @@ class Selector:
                     pkg = rel[:-3].replace("/", ".")
                     pkg = pkg[: -len(".__init__")] if pkg.endswith(".__init__") else pkg.rpartition(".")[0]
                     for node in ast.walk(tree):
-                        names = set()
+                        names, exact = set(), set()  # exact: as named (no lower-case, no parents)
                         if isinstance(node, ast.Import):
                             for a in node.names:
                                 names.add(a.name)
+                                exact.add(a.name)
                         elif isinstance(node, ast.ImportFrom):
                             mod = node.module or ""
                             if node.level:
@@ -1829,18 +1879,20 @@ class Selector:
                                 up = parts[: len(parts) - (node.level - 1)] if node.level > 1 else parts
                                 mod = ".".join(up + ([mod] if mod else []))
                             names.add(mod)
+                            exact.add(mod)
                             for a in node.names:
                                 # a submodule, or a class a package's __getattr__ loads lazily
                                 # from its lower-case module (sqlglot.dialects.Athena)
                                 names.add(f"{mod}.{a.name}")
                                 names.add(f"{mod}.{a.name.lower()}")
+                                exact.add(f"{mod}.{a.name}")
                         else:
                             continue
                         full = set()
                         for n in names:  # importing a.b.c imports a and a.b first
                             parts = n.split(".")
                             full.update(".".join(parts[:i]) for i in range(1, len(parts) + 1))
-                        sites.append((rel, node.lineno, node.end_lineno or node.lineno, node.col_offset > 0, full))
+                        sites.append((rel, node.lineno, node.end_lineno or node.lineno, node.col_offset > 0, full, exact))
             self._import_sites = sites
         return self._import_sites
 
@@ -1874,7 +1926,7 @@ class Selector:
         for name in failing:
             m |= self.file_users(self.module_file(name))
         hit = failing | test_mods
-        for rel, lo, hi, nested, names in self.import_sites():
+        for rel, lo, hi, nested, names, _ in self.import_sites():
             if not names & hit:
                 continue
             if rel.startswith("tests/"):
@@ -1911,6 +1963,174 @@ class Selector:
                                             "\n".join(lines[f.lineno - 1: f.end_lineno or f.lineno])))
             self._test_bodies = out
         return self._test_bodies
+
+    def binding_refs_mask(self, rel, cls, name):
+        """Tests that can look up a module or class binding that a patch removes or adds
+        (with every other import-time value unchanged): those that ran a line of `rel` naming
+        it, read an attribute of that name (obj.NAME, getattr(obj, "NAME")), ran an import
+        of it inside a function, or name it in their own body. None if some attribute read
+        of the name runs at import time."""
+        self.name_used_elsewhere(name, rel)  # loads the sources
+        texts = dict(self._all_texts)
+        old_text, _ = self.index(rel)
+        texts[rel] = old_text
+        word = re.compile(r"(?<![\w])" + re.escape(name) + r"(?![\w])")
+        m = self.subprocess
+        for ln, line in enumerate(old_text.split("\n"), start=1):
+            if word.search(line):
+                m |= self.line_union(rel, ln, ln)
+        reads = self.doc["attr_read_masks"].get(name)
+        if reads is None:
+            attr = re.compile(r"\.\s*" + re.escape(name) + r"(?![\w])|attr\([^)]*[\'\"]" + re.escape(name) + r"[\'\"]")
+            hits = [r for r, t in texts.items() if attr.search(t)]
+            if hits:
+                getter = self.property_getter(rel, cls, name)
+                reads = self.attr_reads_fallback(name, {r: texts[r] for r in hits}, getter is not None)
+                if reads is None:
+                    return None  # read at import time somewhere (or only in a way we can't place)
+                if getter is None:
+                    m |= reads
+                else:  # reading it off an instance runs the getter: the tests that ran its lines
+                    m |= self.line_union(rel, getter.lineno, getter.end_lineno or getter.lineno)
+        else:
+            m |= reads
+        module = rel[:-3].replace("/", ".")
+        target = f"{module}.{name}" if cls is None else None
+        for site_rel, lo, hi, nested, _, names in self.import_sites():
+            if target in names or (cls is None and module in names and site_rel.startswith("tests/")):
+                if site_rel.startswith("tests/"):
+                    m |= self.test_module_mask(site_rel)
+                elif nested:
+                    m |= self.line_union(site_rel, lo, hi)
+        for trel, tcls, tname, body in self.test_bodies():
+            if word.search(body):
+                m |= self.test_bit.get(f"{trel}::{tcls}::{tname}", 0)
+        return m
+
+    def property_getter(self, rel, cls, name):
+        """The def of a plain @property `name` of class `cls` in the pinned `rel`, or None."""
+        if cls is None:
+            return None
+        node = self.index(rel)[1].class_node(cls)
+        for sub in getattr(node, "body", ()):
+            if isinstance(sub, DEFS) and sub.name == name:
+                deco = [d.id for d in sub.decorator_list if isinstance(d, ast.Name)]
+                return sub if deco == ["property"] and len(sub.decorator_list) == 1 else None
+        return None
+
+    def attr_reads_fallback(self, name, texts, instance_only=False):
+        """The tests that can read attribute `name` (obj.NAME, getattr/hasattr/setattr(obj,
+        "NAME")) in `texts`, for a name the map leaves out because some read of it sits outside
+        a function: allowed only where each such read is in a lambda nothing calls before the
+        tests (a TRANSFORMS entry; tools/build_import_lambdas.py), whose lines run in a test's
+        coverage only where it is called. Reads in a function run where its lines ran; reads
+        in a test file count for its tests (and its importers'). None if some read can run at
+        import (or the import-time lambda data is missing). instance_only: also None if some
+        read is off what looks like a class (Cls.NAME, getattr(Cls, "NAME")), which gets the
+        property itself without running its getter."""
+        called = load_import_lambdas()
+        if called is None:
+            return None
+        m = 0
+        for rel, text in texts.items():
+            try:
+                idx = SourceIndex(text)
+            except (SyntaxError, ValueError):
+                return None
+            parents = {}
+            for node in ast.walk(idx.tree):
+                for child in ast.iter_child_nodes(node):
+                    parents[child] = node
+            for node in ast.walk(idx.tree):
+                if isinstance(node, ast.Attribute):
+                    hit = node.attr == name
+                elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id.endswith("attr"):
+                    hit = len(node.args) >= 2 and isinstance(node.args[1], ast.Constant) and node.args[1].value == name
+                else:
+                    hit = False
+                if not hit:
+                    continue
+                if instance_only:
+                    recv = node.value if isinstance(node, ast.Attribute) else node.args[0]
+                    leaf = recv.attr if isinstance(recv, ast.Attribute) else getattr(recv, "id", "")
+                    if leaf[:1].isupper() or isinstance(recv, ast.Call) and getattr(recv.func, "id", "") == "type":
+                        return None
+                if rel.startswith("tests/"):
+                    m |= self.test_module_mask(rel)
+                    continue
+                st, span = idx.stmt_at(node.lineno)
+                if st is not None and st["scope"] == "function" and not self.touches_import(rel, span[0], span[1]):
+                    m |= self.line_union(rel, span[0], span[1])
+                    continue
+                lam = parents.get(node)
+                while lam is not None and not isinstance(lam, ast.Lambda):
+                    lam = parents.get(lam)
+                if lam is None:
+                    return None  # read while the module is imported
+                lo, hi = lam.lineno, lam.end_lineno or lam.lineno
+                # (its lines also run where it is created, at import: outside every test)
+                if any(ln in called.get(rel, ()) for ln in range(lo, hi + 1)):
+                    return None  # this lambda (or one sharing its lines) is called before the tests
+                m |= self.line_union(rel, lo, hi)
+        return m
+
+    def lost_at_import(self, rel, cls, module, lost):
+        """Whether a lost name is surely looked up while modules are imported: another sqlglot
+        module imports it at its top level, or the patched module names it outside every
+        function (as a base class, say). Only spares the import-time state check a run
+        whose answer is known; the check stays the proof."""
+        if not lost:
+            return False
+        if cls is None:
+            for site_rel, _, _, nested, _, names in self.import_sites():
+                if not nested and site_rel.startswith("sqlglot/") and any(f"{module}.{n}" in names for n in lost):
+                    return True
+        # a load of the name (or of an attribute of that name) in code that runs at import:
+        # not in a function or lambda, not in a def statement, an import or an annotation
+        # (a word in a string, say a dict key "unit", is no lookup)
+        stack = list(ast.parse(self.patched[rel]).body)
+        while stack:
+            node = stack.pop()
+            if isinstance(node, DEFS + (ast.Lambda, ast.Import, ast.ImportFrom, ast.AnnAssign)):
+                continue
+            if isinstance(node, ast.Name) and node.id in lost and isinstance(node.ctx, ast.Load) \
+                    or isinstance(node, ast.Attribute) and node.attr in lost and isinstance(node.ctx, ast.Load):
+                return True
+            stack.extend(ast.iter_child_nodes(node))
+        return False
+
+    def deferred_mask(self, deferred):
+        """For the items all_or_defer noted: the bindings the state check leaves out, and the
+        tests that can see them change; None unless each deferred name is one the patch
+        removes or adds in its scope (not one bound to something else)."""
+        masks, m = set(), 0
+        trees = {}
+        for rel, cls, names, body in deferred:
+            if not names or rel.endswith("__init__.py") or rel not in self.patched:
+                return None  # (a star import, a dunder, a package: only the import check settles it)
+            if rel not in trees:
+                try:
+                    trees[rel] = (self.scope_bindings(self.index(rel)[1].tree),
+                                  self.scope_bindings(ast.parse(self.patched[rel])))
+                except (SyntaxError, ValueError):
+                    return None
+            old, new = trees[rel]
+            if cls not in old or cls not in new:
+                return None
+            moved = (old[cls] - new[cls]) | (new[cls] - old[cls])
+            if not names <= moved:
+                return None
+            module = rel[:-3].replace("/", ".")
+            if self.lost_at_import(rel, cls, module, old[cls] - new[cls]):
+                return None  # an import would fail: the state check can only say so
+            for name in moved:  # a rename gains a name as it loses one: both are looked up
+                refs = self.binding_refs_mask(rel, cls, name)
+                if refs is None:
+                    return None
+                m |= refs
+                masks.add((module, cls or "", name))  # "": a module-level binding
+            m |= body
+        return sorted(masks), m
 
     def import_users_mask(self, rel, lo, hi):
         """A function body that also runs while other modules are imported (the trie builder
@@ -2049,9 +2269,13 @@ class Selector:
             return 0
         m = 0
         for cls, name in gone:
+            node = old[(cls, name)]["node"]
+            body = self.line_union(rel, node.lineno, node.end_lineno or node.lineno)
+            if isinstance(node, ast.ClassDef):
+                body |= self.class_fallback(rel, f"{cls}.{name}" if cls else name, idx)
             if name.startswith("__") and name.endswith("__") or self.name_used_elsewhere(name, rel):
                 log(f"{rel}: {name} removed or renamed and used elsewhere")
-                if self.all_or_defer(rel):
+                if self.all_or_defer(rel, cls, None if name.startswith("__") else {name}, body):
                     return self.ALL
                 continue
             pat = re.compile(r"(?<![\w])" + re.escape(name) + r"(?![\w])")
@@ -2063,10 +2287,10 @@ class Selector:
                         at_import = True
                         break
             if at_import:
-                if self.all_or_defer(rel):
+                if self.all_or_defer(rel, cls, {name}, body):
                     return self.ALL
                 continue
-            m |= self.module_fallback(rel, idx, old[(cls, name)]["node"])
+            m |= self.module_fallback(rel, idx, node)
         return m
 
     def mask_for_added(self, rel, idx, new_idx, blk):
@@ -2443,7 +2667,7 @@ class Selector:
         self.guard_mask = 0  # the selection to fall back to unless a check child imports the patch
         self.env_keys = set()  # executor ENV keys whose entries changed
         self.import_widened = False
-        self.deferred = set()
+        self.deferred = []
         self.data_mask = 0
         self.touched = []
         self.fixture_checks = {}  # test id -> changed cases it alone is selected for
@@ -4014,6 +4238,9 @@ def run_checks(jobs, budget_s):
 
 STATE_MIN_GAIN_MS = 3000  # the check costs ~0.8 s of CPU per commit, plus the pristine sources once
 STATE_BUDGET_S = float(os.environ.get("BR_STATE_BUDGET", "40"))
+# a binding check fingerprints the pristine sources too (its masks are its own): ~5 s of CPU,
+# billed about twice
+BIND_MIN_GAIN_MS = int(os.environ.get("BR_BIND_MIN_GAIN_MS", "10000"))
 STATE_WALL_S = 8.0  # a normal run takes under a second; an edit that loops at import doesn't get far
 
 
@@ -4145,10 +4372,9 @@ class StateFP:
             self.tok(tuple(x.__mro__[1:]), out)
             for k, v in list(vars(x).items()):
                 if k not in STATE_SKIP_CLASS_KEYS:
-                    out.append(k)
                     if (x.__module__, x.__qualname__, k) in self.masks:
-                        out.append("masked")
-                        continue
+                        continue  # the edited binding: present on one side only, or changed
+                    out.append(k)
                     self.tok(v, out)
             out.append(")")
             return
@@ -4282,7 +4508,7 @@ def state_digests(test_modules, masks=()):
             continue
         out = []
         for k, v in sorted(vars(mod).items()):
-            if k.startswith("__") and k.endswith("__"):
+            if k.startswith("__") and k.endswith("__") or (name, "", k) in fp.masks:
                 continue
             out.append(k)
             fp.tok(v, out)
@@ -4875,9 +5101,13 @@ def main():
                 snaps[commit] = narrow[commit]
 
     # 1a. commits that select every test only for an import edit or a lost name read
-    # elsewhere: if that module then fails to import, its importers are what can fail
-    deferred = {}
-    if IMPORT_CHECK and ZYGOTE and selector is not None:
+    # elsewhere, looked at again with those rules deferred. If that module then fails to
+    # import, its importers are what can fail (`deferred`); if every import still succeeds,
+    # the tests that can look the moved names up, provided the import-time state check with
+    # those bindings masked finds every other value unchanged (`bind_jobs`). The import
+    # check runs first, so the dearer state check only runs on commits whose imports succeed.
+    deferred, bind_jobs = {}, {}
+    if IMPORT_CHECK and selector is not None:
         for commit, snap in snaps.items():
             if len(snap["chosen"]) < len(every) or not snap["patched"]:
                 continue
@@ -4885,26 +5115,47 @@ def main():
             selector.defer_all = True
             try:
                 alt = run_select(text)
-                rels = set(selector.deferred)
+                items = list(selector.deferred)
             except Exception:
-                alt, rels = None, set()
+                alt, items = None, []
             finally:
                 selector.defer_all = False
-            if alt is not None and rels and len(alt["chosen"]) < len(every):
-                deferred[commit] = (alt, rels)
+            if alt is None or not items or len(alt["chosen"]) >= len(every):
+                continue
+            if ZYGOTE:
+                deferred[commit] = (alt, {item[0] for item in items})
+            if RUN and commit not in state_jobs:
+                try:
+                    got = selector.deferred_mask(items)
+                except Exception as error:
+                    log(f"{commit}: no narrower selection ({error})")
+                    got = None
+                if got is None:
+                    continue
+                masks, extra = got
+                chosen = sorted(set(alt["chosen"]) | set(to_numbers(extra)) | set(always))
+                if pack_cost(every, duration) - pack_cost(chosen, duration) < BIND_MIN_GAIN_MS:
+                    continue
+                log(f"{commit}: bindings {masks} moved: {len(chosen)} tests if nothing else changed at import")
+                bind_jobs[commit] = (dict(alt, chosen=chosen),
+                                     (snap["patched"], tuple((load_imports() or {}).get("test_modules", ())),
+                                      tuple(sorted(set(map(tuple, alt["state_masks"])) | set(masks)))))
         IMPORT_DETAIL_FOR.update(deferred)
         IMPORT_TEST_MODULES[:] = sorted(f[:-3].replace("/", ".") for f in selector.doc["test_files"]
                                         if f.endswith(".py") and not f.endswith("__init__.py"))
 
     # 1b. edits that run while modules are imported: does every import still succeed?
+    bind_state = {}
     if IMPORT_CHECK and selector is not None:
         imp_jobs = {c: snap["patched"] for c, snap in snaps.items()
-                    if needs_import_check(selector, snap, every) or c in deferred}
+                    if needs_import_check(selector, snap, every) or c in deferred or c in bind_jobs}
         if imp_jobs:
             verdict = import_breaks_forked(imp_jobs, 30.0) if ZYGOTE else None
             if verdict is None:
                 verdict = import_breaks(imp_jobs, 30.0)
             for commit, broken in verdict.items():
+                if commit in bind_jobs and not broken:
+                    bind_state[commit] = bind_jobs[commit][1]
                 if commit in deferred:
                     alt, rels = deferred[commit]
                     detail = IMPORT_DETAIL.get(commit) if broken else None
@@ -4920,8 +5171,16 @@ def main():
                         log(f"{commit}: {', '.join(sorted(rels))} no longer imports: {len(chosen)} tests")
                         snaps[commit] = dict(alt, chosen=chosen, verifiable=False)
                     continue
+                if commit in bind_jobs:
+                    continue
                 if broken:
                     snaps[commit] = dict(snaps[commit], chosen=every, verifiable=False)
+    if bind_state:
+        verdict = import_states(bind_state, max(5.0, STATE_BUDGET_S))
+        for commit, same in sorted(verdict.items()):
+            log(f"{commit}: import-time state {'unchanged' if same else 'changed or unknown'} with the moved bindings masked")
+            if same:
+                snaps[commit] = bind_jobs[commit][0]
 
     # 2. the checks each selection is worth
     answers = {}
