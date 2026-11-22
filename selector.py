@@ -105,7 +105,7 @@ TPCDS_TEST_MODULES = {"tests/__init__.py", "tests/test_executor.py", "tests/help
 # changed plans can run slower, so they get a stricter gate: on the scorer's machines they
 # take about 1.3x the recorded estimate, and the board bills CPU at about twice that, so a
 # full replay estimated at 10 s that passes costs more than the 21.5 s test it drops.
-TPCDS_GATE = {"front": 0.8, "full": 0.35}
+TPCDS_GATE = {"front": 0.8, "full": 0.65}
 TPCDS_BUDGET = 0.85  # the replay child is stopped (and the test kept) past this share of the saving
 TPCDS_RERUN_SHARE = float(os.environ.get("BR_RERUN_SHARE", "0.5"))  # second front pass only if its estimate fits in this share of what is left
 TPCDS_BINDINGS = os.environ.get("BR_TPCDS_BINDINGS", "1") != "0"  # module/class-level binding edits replayed
