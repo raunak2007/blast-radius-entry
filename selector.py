@@ -4871,9 +4871,7 @@ def state_digests(test_modules, masks=()):
         out = []
         for k, v in sorted(vars(mod).items()):
             if k.startswith("__") and k.endswith("__") or (name, "", k) in fp.masks:
-                continue
-            if (name, "", k) in fp.masks:
-                continue  # a deleted module-level binding (removed_binding_mask)
+                continue  # dunders; an edited or deleted module-level binding
             out.append(k)
             fp.tok(v, out)
         digests[name] = hashlib.sha256("\x00".join(out).encode("utf-8", "surrogatepass")).hexdigest()
@@ -5518,7 +5516,8 @@ def main():
                 log(f"{commit}: bindings {masks} moved: {len(chosen)} tests if nothing else changed at import")
                 bind_jobs[commit] = (dict(alt, chosen=chosen),
                                      (snap["patched"], tuple((load_imports() or {}).get("test_modules", ())),
-                                      tuple(sorted(set(map(tuple, alt["state_masks"])) | set(masks)))))
+                                      tuple(sorted(set(map(tuple, alt["state_masks"])) | set(masks))),
+                                      alt.get("state_needs")))
         IMPORT_DETAIL_FOR.update(deferred)
         IMPORT_TEST_MODULES[:] = sorted(f[:-3].replace("/", ".") for f in selector.doc["test_files"]
                                         if f.endswith(".py") and not f.endswith("__init__.py"))
