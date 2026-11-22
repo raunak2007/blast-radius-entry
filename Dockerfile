@@ -6,6 +6,7 @@ WORKDIR /app
 ENV PYTHONHASHSEED=0
 COPY src/ /app/
 COPY data/map.bin /app/map.bin
+COPY data/config/ /app/config/
 COPY data/sqlglot-src.tar.xz /tmp/sqlglot-src.tar.xz
 
 # The pinned sqlglot sources (sqlglot at eb11aec: its Python files and the TPC-DS fixtures, MIT)

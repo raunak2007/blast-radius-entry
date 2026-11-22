@@ -54,6 +54,8 @@ TOTAL_CHILD_SECONDS = 100.0  # all patched children together, for the whole batc
 STATE_DIFF_MODULES = 250  # fingerprint at most this many modules to measure an import-time edit
 STATE_DIFF_SECONDS = 20.0
 
+CONFIG_DIR = os.environ.get("BLAST_CONFIG", os.path.join(HERE, "config"))
+CONFIG_COPIES = ("pyproject.toml", "setup.cfg")  # pinned copies in CONFIG_DIR
 CONFIG_FILES = {"pyproject.toml", "setup.cfg", "tox.ini", "pytest.ini", "conftest.py", ".coveragerc"}
 CODING_RE = re.compile(r"^[ \t\f]*#.*?coding[:=]")
 SIMPLE_VALUE_RE = re.compile(r"True|False|None|[-+]?\d+")
@@ -1000,6 +1002,10 @@ class Selector:
             return
         base = path.rsplit("/", 1)[-1]
         if base in CONFIG_FILES:
+            if path in CONFIG_COPIES and self.config_inert(path, ch):
+                log(path, "changes nothing pytest reads")
+                self.charge(acc, self.reads.get(path, NO_TESTS))
+                return
             self._mark(acc, "file")
             return
         if path.endswith(".py"):
@@ -1077,6 +1083,39 @@ class Selector:
                 log(path, "changes no query the per-query test runs")
                 return sid_without_pq
         return sid
+
+    def config_inert(self, path, ch):
+        """True for an edit of the top-level pyproject.toml or setup.cfg that pytest cannot see.
+        pyproject.toml: pytest parses it with tomllib (a file that no longer parses stops the
+        whole run) and reads only [tool.pytest*]; the patched file must still parse and keep
+        that table, [build-system], [project] and [tool.setuptools*] exactly as they are.
+        setup.cfg (parsed with iniconfig, which is stricter than configparser): only whole
+        blank or column-0 comment lines may be added or removed. The pinned copies of both
+        files ship in the image (data/config)."""
+        if ch.status != "modify" or not ch.hunked or not ch.blocks or ch.old_path not in (None, path):
+            return False
+        try:
+            with open(os.path.join(CONFIG_DIR, path), encoding="utf-8") as f:
+                old = f.read().split("\n")
+            for b in ch.blocks:
+                if old[b.start - 1 : b.start - 1 + len(b.old)] != b.old:
+                    return False
+            new = _apply(old, ch.blocks, 1, len(old))
+            if path == "setup.cfg":
+                return all(not line.strip() or line[:1] in "#;" for b in ch.blocks for line in b.old + b.new)
+            import tomllib
+
+            before, after = tomllib.loads("\n".join(old)), tomllib.loads("\n".join(new))
+        except Exception as error:  # noqa: BLE001
+            log(path, "could not be compared:", repr(error)[:200])
+            return False
+
+        def kept(doc):
+            tool = doc.get("tool", {})
+            return ({k: v for k, v in doc.items() if k != "tool"},
+                    {k: v for k, v in tool.items() if k.startswith(("pytest", "setuptools"))})
+
+        return kept(before) == kept(after)
 
     def module_level(self, path, info, acc):
         """An edit that runs when the module is imported."""
