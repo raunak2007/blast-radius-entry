@@ -26,16 +26,21 @@ url = f"https://github.com/tobymao/sqlglot/archive/{sha}.tar.gz"
 data = urllib.request.urlopen(url, timeout=120).read()
 with tarfile.open(fileobj=io.BytesIO(data)) as tf:
     prefix = f"sqlglot-{sha}/"
-    members = []
+    members, top = [], []
     for m in tf.getmembers():
         if m.name.startswith(prefix + "tests/"):
             m.name = m.name[len(prefix):]
             members.append(m)
+        elif m.name[len(prefix):] in ("pyproject.toml", "setup.cfg", "setup.py"):
+            m.name = m.name[len(prefix):]
+            top.append(m)
     tf.extractall("/opt/sqlglot", members=members, filter="data")
+    # the top-level config files, apart, so nothing run from /opt/sqlglot picks them up
+    tf.extractall("/opt/sqlglot_root", members=top, filter="data")
 tarfile.open("/app/sqlglot_src.tar.gz").extractall("/opt/sqlglot", filter="data")
 EOF
 RUN rm /app/sqlglot_src.tar.gz \
  && python -m compileall -q -j 0 /usr/local/lib/python3.13 /opt/sqlglot/sqlglot /opt/sqlglot/tests > /dev/null \
- && chmod -R a+rX /opt/sqlglot /app
+ && chmod -R a+rX /opt/sqlglot /opt/sqlglot_root /app
 
 CMD ["python", "-S", "/app/selector.py"]
