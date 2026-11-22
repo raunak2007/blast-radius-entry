@@ -833,9 +833,9 @@ class Selector:
                 # TPC-DS replay this is a change to the body's lines
                 self.touched[-1] = (rel, node.body[0].lineno, body_hi, "function")
             if in_decorators and st["scope"] == "class":
-                m |= self.class_fallback(rel, st["cls"], idx)
+                m |= self.unless_state_same(rel, self.class_fallback(rel, st["cls"], idx), node, blk)
             elif in_decorators:
-                m |= self.module_fallback(rel, idx)
+                m |= self.unless_state_same(rel, self.module_fallback(rel, idx), node, blk)
             if at_import:
                 # the function also runs while modules are imported (a default it now takes
                 # differently, a parameter renamed): what those imports built may change
@@ -854,7 +854,7 @@ class Selector:
             entry = self.operand_dict_mask(rel, st["node"], line, blk)
             if entry is not None:
                 return entry | self.subprocess
-        return self.module_fallback(rel, idx, st["node"])
+        return self.unless_state_same(rel, self.module_fallback(rel, idx, st["node"]), st["node"], blk)
 
     # ---- a comparison operator swapped for another
 
@@ -1017,6 +1017,68 @@ class Selector:
 
     # ---- class attribute changes
 
+    NO_STATE_FILES = {"sqlglot/__main__.py"}  # not imported by the import-time state check
+
+    DEFERRED = (ast.Lambda, ast.FunctionDef, ast.AsyncFunctionDef, ast.GeneratorExp)
+
+    def edit_in_deferred_code(self, node, blk):
+        """Whether an edited span of this statement lies inside code that runs later (a lambda
+        or def body, a generator expression): the state check leaves code out, so for those
+        only coverage can tell. Decorators and bases of a def or class are checked, not its
+        body (its own statements are judged on their own)."""
+        if blk is None:
+            return True
+        parts = [node]
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            parts = list(node.decorator_list) + list(getattr(node, "bases", [])) + \
+                [k.value for k in getattr(node, "keywords", [])]
+            if not isinstance(node, ast.ClassDef):
+                parts += list(node.args.defaults) + [d for d in node.args.kw_defaults if d is not None]
+        spans = []
+        for ln, old_text, new_text in zip(blk["removed"], blk["removed_text"], blk["added_text"]):
+            lo, hi = changed_range(old_text, new_text)
+            spans.append(((ln, lo), (ln, hi)))
+        if len(blk["removed"]) != len(blk["added"]):
+            return True
+        hit = []
+        for part in parts:
+            for sub in ast.walk(part):
+                if isinstance(sub, self.DEFERRED) and sub is not node:
+                    start, end = (sub.lineno, sub.col_offset), (sub.end_lineno, sub.end_col_offset)
+                    if any(a < end and start < b for a, b in spans):
+                        hit.append(sub)
+        return hit or False
+
+    def unless_state_same(self, rel, mask, node=None, blk=None):
+        """A class- or module-level statement only shapes what importing builds. If the import-
+        time state check finds every module and class exactly as before, it changed nothing a
+        test can see: the selection without it is empty. This marks the commit for that check
+        and returns the usual selection, or nothing on the pass that assumes the check passed.
+        Not for an edit inside a lambda or def body there: that is code, which the check
+        leaves out."""
+        if rel in self.NO_STATE_FILES or not rel.startswith("sqlglot/") or node is None:
+            return mask
+        deferred = self.edit_in_deferred_code(node, blk)
+        if deferred is True:
+            return mask
+        if not deferred and not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            # a plain value edit almost always changes what the import builds (that's what it's
+            # for), so the check would rarely pay for itself; decorators and bases often don't
+            return mask
+        self.import_widened = True
+        if not self.no_import_widen:
+            return mask
+        if deferred:
+            # the edit is inside a lambda (or generator) this statement builds: with what the
+            # import built unchanged, it matters only where that code runs, in tests
+            m = 0
+            for sub in deferred:
+                m |= self.line_union(rel, sub.lineno, sub.end_lineno)
+            return m | (self.subprocess & mask)
+        if self.touched and self.touched[-1][0] == rel and self.touched[-1][3] == "other":
+            self.touched.pop()  # nothing changed: no span for the TPC-DS plan either
+        return 0
+
     def class_change(self, rel, idx, st, line, blk):
         """A class-body statement changed. Dialect classes reach the tests that used the
         dialect (or a subclass), expression classes the tests that built that type; inside
@@ -1034,6 +1096,8 @@ class Selector:
         else:
             base = own | doc["module_any"].get(rel, 0)
             m = base if narrowed is None else narrowed
+        if narrowed is None:
+            return self.unless_state_same(rel, m | self.subprocess, st["node"], blk)
         return m | self.subprocess
 
     def dict_entry_mask(self, rel, node, line, blk):
@@ -1664,6 +1728,7 @@ class Selector:
         old_text, idx = self.index(rel)
         new_text, blocks = apply_hunks(old_text, fd["hunks"])
         self.patched[rel] = new_text
+        self.line_blocks[rel] = [(b["anchor"], len(b["removed"]), len(b["added"])) for b in blocks]
         try:
             new_idx = SourceIndex(new_text)
         except SyntaxError:
@@ -1728,6 +1793,7 @@ class Selector:
             return file_mask
         new_text, blocks = apply_hunks(old_text, fd["hunks"])
         self.patched[rel] = new_text
+        self.line_blocks[rel] = [(b["anchor"], len(b["removed"]), len(b["added"])) for b in blocks]
         try:
             new_idx = SourceIndex(new_text)
         except SyntaxError:
@@ -1757,6 +1823,7 @@ class Selector:
         doc = self.doc
         m = 0
         self.patched = {}
+        self.line_blocks = {}  # rel -> [(anchor, removed, added)]: the change blocks, for line numbers
         self.verifiable = True
         self.data_files = set()  # changed files we don't overlay: their readers can't be checked
         self.state_masks = []  # bindings the import-time state check leaves out (the edited ones)
@@ -2725,11 +2792,12 @@ def _state_order(keys, strict=False):
 class StateFP:
     PRIMS = (int, float, complex, str, bytes, bool, type(None))
 
-    def __init__(self, expr_type, masks=()):
+    def __init__(self, expr_type, masks=(), linemap=None):
         self.memo = {}
         self.keep = []  # visited objects stay alive, so their ids stay unique
         self.expr = expr_type
         self.masks = set(masks)  # (module, class qualname, name): the edited binding itself
+        self.linemap = linemap or {}  # path of a patched file -> its change blocks
 
     @staticmethod
     def classes_sorted(elems):
@@ -2813,8 +2881,14 @@ class StateFP:
             out.append(")")
             return
         if isinstance(x, types.FunctionType):
-            out.append(f"func:{x.__module__}.{x.__qualname__}(")
             code = x.__code__
+            # the def's line says which of two same-named defs got bound (`if X: def f()...`),
+            # in the pristine numbering so lines the patch inserts above it don't count
+            line = code.co_firstlineno
+            blocks = self.linemap.get(code.co_filename)
+            if blocks:
+                line = pristine_line(blocks, line)
+            out.append(f"func:{x.__module__}.{x.__qualname__}@{line}(")
             if not code.co_filename.endswith(".py"):  # generated at import (exec): its code is state
                 out.append(repr(code.co_code))
                 self.tok(code.co_consts, out)
@@ -2917,7 +2991,23 @@ class StateFP:
             out.append(r if " at 0x" not in r and "0x" not in r else "opaque")
 
 
-def state_digests(test_modules, masks=()):
+def pristine_line(blocks, n):
+    """Line n of a patched file in the pristine numbering, from the patch's change blocks
+    ((anchor, removed, added) in order); a line replaced one for one keeps its old number (an
+    edited decorator keeps its function's), and one the patch added gets a string."""
+    delta = 0
+    for anchor, removed, added in blocks:
+        start = anchor + delta
+        if n < start:
+            break
+        if n < start + added:
+            k = n - start
+            return anchor + k if k < removed else f"new{n}"
+        delta += added - removed
+    return n - delta
+
+
+def state_digests(test_modules, masks=(), linemap=None):
     """Import every sqlglot module, then the given test modules; per module, a digest of its
     import-time state (see StateFP), and the modules that failed to import."""
     import hashlib
@@ -2934,7 +3024,7 @@ def state_digests(test_modules, masks=()):
         except BaseException as error:  # noqa: BLE001  a failure is part of the state
             failed.append(f"{name}: {type(error).__name__}")
     expr = getattr(sqlglot.exp, "Expr", None) or sqlglot.exp.Expression
-    fp = StateFP(expr, masks)
+    fp = StateFP(expr, masks, linemap)
     digests = {}
     for name in sorted(m for m in list(sys.modules) if m == "sqlglot" or m.startswith(("sqlglot.", "tests"))):
         mod = sys.modules.get(name)
@@ -2967,7 +3057,8 @@ def state_main(args):
 
     def run():
         try:
-            result["state"] = state_digests(test_modules, masks)
+            linemap = {os.path.join(str(SRC), rel): blocks for rel, blocks in job.get("blocks", {}).items()}
+            result["state"] = state_digests(test_modules, masks, linemap)
         except BaseException as error:  # noqa: BLE001
             result["error"] = repr(error)[:200]
 
@@ -2982,7 +3073,7 @@ def state_main(args):
 
 
 def import_states(jobs, budget_s):
-    """jobs: {key: (patched, test modules, masked bindings)}. Runs the fingerprint for each, plus
+    """jobs: {key: (patched, test modules, masked bindings, change blocks)}. Runs the fingerprint for each, plus
     the pristine sources once per set of test modules and masks, two at a time; returns {key:
     True if every digest matches the pristine one (and no import fails that didn't before)}."""
     import subprocess
@@ -2992,10 +3083,10 @@ def import_states(jobs, budget_s):
     env = dict(os.environ, PYTHONHASHSEED="0", PYTHONDONTWRITEBYTECODE="1")
     env.pop("PYTHONPATH", None)
     runs = {}
-    for key, (patched, mods, masks) in jobs.items():
+    for key, (patched, mods, masks, blocks) in jobs.items():
         mods, masks = tuple(mods), tuple(sorted(masks))
-        runs[key] = (patched, mods, masks)
-        runs[("pristine", mods, masks)] = ({}, mods, masks)
+        runs[key] = (patched, mods, masks, blocks)
+        runs[("pristine", mods, masks)] = ({}, mods, masks, {})
     tmp = tempfile.mkdtemp(prefix="br-state-")
     pending = list(runs.items())
     running, outputs = {}, {}
@@ -3004,11 +3095,11 @@ def import_states(jobs, budget_s):
     try:
         while pending or running:
             while pending and len(running) < PARALLEL and time.monotonic() < deadline:
-                key, (patched, mods, masks) = pending.pop(0)
+                key, (patched, mods, masks, blocks) = pending.pop(0)
                 started += 1
                 path = os.path.join(tmp, f"job{started}.pkl")  # one file per job
                 with open(path, "wb") as fh:
-                    pickle.dump({"patched": patched, "masks": list(masks)}, fh)
+                    pickle.dump({"patched": patched, "masks": list(masks), "blocks": blocks}, fh)
                 proc = subprocess.Popen([sys.executable, "-S", str(Path(__file__).resolve()), "--state", path, *mods],
                                         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=env, cwd=tmp,
                                         preexec_fn=_state_limits)
@@ -3031,7 +3122,7 @@ def import_states(jobs, budget_s):
         import shutil
         shutil.rmtree(tmp, ignore_errors=True)
     verdict = {}
-    for key, (_, mods, masks) in jobs.items():
+    for key, (_, mods, masks, _blocks) in jobs.items():
         mine, base = outputs.get(key), outputs.get(("pristine", tuple(mods), tuple(sorted(masks))))
         verdict[key] = bool(mine and base and mine["digests"] == base["digests"] and mine["failed"] == base["failed"])
     return verdict
@@ -3092,7 +3183,7 @@ def main():
         return {"chosen": chosen, "patched": dict(selector.patched), "verifiable": selector.verifiable,
                 "unreadable": set(to_numbers(selector.data_mask)), "touched": list(selector.touched),
                 "data_files": set(selector.data_files), "import_widened": selector.import_widened,
-                "state_masks": list(selector.state_masks)}
+                "state_masks": list(selector.state_masks), "line_blocks": dict(selector.line_blocks)}
 
     # 1. selections, and the commits whose selection an unchanged import-time state would shrink
     snaps, narrow, state_jobs = {}, {}, {}
@@ -3106,7 +3197,7 @@ def main():
         except Exception as error:
             log(f"{commit}: running every test ({error})")
             snap = {"chosen": every, "patched": {}, "verifiable": False, "unreadable": set(), "touched": [],
-                    "data_files": set(), "import_widened": False, "state_masks": []}
+                    "data_files": set(), "import_widened": False, "state_masks": [], "line_blocks": {}}
         snaps[commit] = snap
         if RUN and snap["verifiable"] and snap["import_widened"] and not snap["data_files"] and snap["patched"]:
             try:
@@ -3128,7 +3219,7 @@ def main():
             if gain is not None and gain >= STATE_MIN_GAIN_MS:
                 narrow[commit] = alt
                 state_jobs[commit] = (snap["patched"], tuple((load_imports() or {}).get("test_modules", ())),
-                                      tuple(alt["state_masks"]))
+                                      tuple(alt["state_masks"]), snap["line_blocks"])
     if state_jobs:
         verdict = import_states(state_jobs, max(5.0, STATE_BUDGET_S))
         for commit, same in sorted(verdict.items()):
