@@ -50,6 +50,7 @@ GENMEM_TEST = "tests/test_generator.py::TestGenerator::test_generator_memory"
 # file -> (function that builds a per-process cache on first use, the cache's name)
 FIRST_USE = {"sqlglot/generator.py": ("_build_dispatch", "_DISPATCH_CACHE")}
 TPCDS_TEST = "tests/test_executor.py::TestExecutor::test_execute_tpcds"
+LAZY_LOAD_TEST = "tests/dialects/test_dialect.py::TestDialect::test_lazy_load"
 # Plan a TPC-DS replay only if its estimated CPU is at most this share of the time it would
 # save. Full replays run the executor on changed code, where outputs often differ late and
 # changed plans can run slower, so they get a stricter gate.
@@ -57,6 +58,11 @@ TPCDS_GATE = {"front": 0.8, "full": 0.5}
 TPCDS_BUDGET = 0.85  # the replay child is stopped (and the test kept) past this share of the saving
 TPCDS_RERUN_SHARE = float(os.environ.get("BR_RERUN_SHARE", "0.5"))  # second front pass only if its estimate fits in this share of what is left
 TPCDS_EARLY_RERUNS = 3  # changed plans run to the end at once, before deferring the rest
+# The replay child also stops once its CPU passes this allowance plus this many times the
+# recorded CPU of the work it has started: an edit that makes a plan explode (a cross join
+# where there was a filter) used to burn the whole budget before failing.
+TPCDS_SETUP_S = float(os.environ.get("BR_TPCDS_SETUP", "2.0"))
+TPCDS_PACE = float(os.environ.get("BR_TPCDS_PACE", "4.0"))
 WORKER_MS = 2000
 MAX_WORKERS = 8
 
@@ -703,7 +709,10 @@ class Selector:
         self.cache = {}
         self.test_bit = {tid: 1 << i for i, tid in enumerate(doc["tests"])}
         # tests that start a fresh interpreter: import-time changes reach them unseen
-        self.subprocess = doc.get("subprocess_tests", 0)
+        self.subprocess = self.subprocess_all = doc.get("subprocess_tests", 0)
+        # At the pinned commit that is one test, test_lazy_load, and all its interpreter does
+        # is `import sqlglot`: only the files that import loads (CORE_FILES) can change it.
+        self.subprocess_imports_core_only = self.subprocess_all == self.test_bit.get(LAZY_LOAD_TEST, -1)
         # every changed span of the current commit: (rel, lo, hi, "function" | "other")
         self.touched = []
         self._class_users_by_file = None
@@ -1833,6 +1842,9 @@ class Selector:
         diffs = parse_patch(text)
         if not diffs:
             raise Fallback("no file changes found in the patch")
+        self.subprocess = self.subprocess_all
+        if self.subprocess_imports_core_only and not any(self.reaches_core_import(fd) for fd in diffs):
+            self.subprocess = 0
         for fd in diffs:
             rel = fd["new"] or fd["old"]
             old_rel = fd["old"]
@@ -1866,6 +1878,17 @@ class Selector:
                     m |= doc["test_files"].get("tests/test_sqlglotc.py", 0) | doc["test_files"].get("tests/test_build.py", 0)
             self.touched.append((rel, 0, 0, "other"))
         return m
+
+    @staticmethod
+    def reaches_core_import(fd):
+        """Whether this file's change could alter what a bare `import sqlglot` does: a file that
+        import loads, or anything that isn't plainly another sqlglot module or under tests/."""
+        rel = fd["new"] or fd["old"]
+        if rel is None or fd["binary"] or fd["deleted"] or fd["new_file"] or (fd["old"] and fd["old"] != rel):
+            return True
+        if rel.startswith("tests/"):
+            return False  # the interpreter it starts imports nothing from tests/
+        return rel in CORE_FILES or not (rel.startswith("sqlglot/") and rel.endswith(".py"))
 
     # ---- the 21 s TPC-DS executor test: replay what the edit can reach instead of running it
 
@@ -2023,11 +2046,12 @@ def pack_cost(numbers, duration):
     return max(sum(duration[n] for n in w) for w in workers) + WORKER_MS * len(workers)
 
 
-def plan_check(chosen, duration, info, excluded=()):
-    """The cheapest-first prefix of runnable tests whose check is expected to pay off."""
+def plan_check(chosen, duration, info, excluded=(), want_gain=False):
+    """The cheapest-first prefix of runnable tests whose check is expected to pay off (with
+    want_gain, the ms it is expected to save if they all pass, instead)."""
     runnable = sorted((n for n in chosen if info[n]["runnable"] and n not in excluded), key=lambda n: (duration[n], n))
     if not runnable:
-        return []
+        return 0 if want_gain else []
     base = pack_cost(chosen, duration)
     chosen_set = set(chosen)
     best_gain, best_k = 0, 0
@@ -2046,7 +2070,7 @@ def plan_check(chosen, duration, info, excluded=()):
         gain = base - pack_cost(rest, duration) - run_ms - overhead
         if gain > best_gain:
             best_gain, best_k = gain, k
-    return runnable[:best_k]
+    return best_gain if want_gain else runnable[:best_k]
 
 
 OVERLAY_HOOK = r"""
@@ -2293,6 +2317,10 @@ def enter_overlay(patched):
     os.environ["BR_SRC_ROOT"] = src
     os.environ["SKIP_INTEGRATION"] = "0"
     exec(compile(OVERLAY_HOOK, "<overlay>", "exec"), {"__name__": "br_overlay"})
+    if _PRELOADED and set(patched) & _PRELOADED:
+        # the parent's sqlglot includes a file this patch changes: import all of it again
+        for name in [n for n in sys.modules if n == "sqlglot" or n.startswith("sqlglot.")]:
+            del sys.modules[name]
     sys.path.insert(0, src)
     os.chdir(src)
     return overlay
@@ -2319,9 +2347,9 @@ def child_tpcds(patched, plan, wfd):
     import gc
     gc.set_threshold(*CHILD_GC)
     budget = plan.get("budget", float("inf"))
+    # a hard stop: a changed plan can make one query run far longer than recorded
+    signal.signal(signal.SIGPROF, lambda *_: os._exit(3))
     if budget != float("inf"):
-        # a hard stop: a changed plan can make one query run far longer than recorded
-        signal.signal(signal.SIGPROF, lambda *_: os._exit(3))
         signal.setitimer(signal.ITIMER_PROF, budget)
     overlay = enter_overlay(patched)
     data = load_tpcds()
@@ -2389,6 +2417,20 @@ def child_tpcds(patched, plan, wfd):
     def spent():
         return time.process_time()  # this forked child's own CPU, imports included
 
+    started = [0.0]  # recorded CPU of the work begun so far
+
+    def pace(seconds):
+        """About to start work recorded at this much CPU: re-arm the stop for what that allows."""
+        started[0] += max(seconds, 0.0)
+        left = min(budget, TPCDS_SETUP_S + TPCDS_PACE * started[0]) - spent()
+        if left <= 0:
+            os._exit(3)
+        signal.setitimer(signal.ITIMER_PROF, left)
+
+    def cost(q):
+        mode = modes[q["index"]]
+        return q["cpu"] if mode == "full" else q["front_cpu"] + (q.get("log_cpu", 0.01) if mode == "log" else 0.0)
+
     def run(q):
         """One query the way the test's pool worker runs it; True if its rows are unchanged."""
         current.clear()
@@ -2412,6 +2454,7 @@ def child_tpcds(patched, plan, wfd):
     try:
         for i in plan["queries"]:
             q = by_index[i]
+            pace(cost(q))
             if transpile(q["sql"], write="duckdb")[0] != q["duck_sql"]:
                 same = False  # the expected side of the test's comparison moved
                 break
@@ -2422,6 +2465,7 @@ def child_tpcds(patched, plan, wfd):
                 # the first few changed plans run to the end right away: when the edit breaks
                 # results, this is where it shows, long before the first pass would finish
                 early += 1
+                pace(q["cpu"] - q["front_cpu"])
                 if run(q) is not True:
                     same = False
                     break
@@ -2437,6 +2481,7 @@ def child_tpcds(patched, plan, wfd):
             if rerun > TPCDS_RERUN_SHARE * (budget - spent()):
                 same = False  # too many changed plans to afford, with room for them running slower
             for q in todo if same else ():
+                pace(q["cpu"] - q["front_cpu"])
                 if run(q) is not True or spent() > budget:
                     if debug:
                         print(f"tpcds child: query {q['index']} differs or over budget, spent={spent():.2f}s "
@@ -2608,10 +2653,60 @@ def child_run(patched, test_ids, limits, wfd):
 
 
 PARALLEL = int(os.environ.get("BR_PARALLEL", "2"))
+PRELOAD = os.environ.get("BR_PRELOAD", "1") != "0"
 # young collections in a check child: tests allocate millions of short-lived nodes, and the
 # default threshold collects every 2000 of them (measured: ~5% of a check's CPU)
 CHILD_GC = (20000, 20, 20)
 HEAVY_FILES = {"tests/test_optimizer.py", "tests/test_executor.py"}  # import duckdb, numpy, pandas
+
+
+# What `import sqlglot` loads at the pinned commit. A check whose patch changes none of these
+# reuses the parent's copy (see preload_sqlglot); any other check imports all of sqlglot again.
+CORE_FILES = frozenset((
+    "sqlglot/__init__.py", "sqlglot/_typing.py", "sqlglot/_version.py", "sqlglot/dialects/__init__.py",
+    "sqlglot/dialects/dialect.py", "sqlglot/diff.py", "sqlglot/errors.py", "sqlglot/expressions/__init__.py",
+    "sqlglot/expressions/aggregate.py", "sqlglot/expressions/array.py", "sqlglot/expressions/builders.py",
+    "sqlglot/expressions/constraints.py", "sqlglot/expressions/core.py", "sqlglot/expressions/datatypes.py",
+    "sqlglot/expressions/ddl.py", "sqlglot/expressions/dml.py", "sqlglot/expressions/functions.py",
+    "sqlglot/expressions/json.py", "sqlglot/expressions/math.py", "sqlglot/expressions/properties.py",
+    "sqlglot/expressions/query.py", "sqlglot/expressions/string.py", "sqlglot/expressions/temporal.py",
+    "sqlglot/generator.py", "sqlglot/helper.py", "sqlglot/jsonpath.py", "sqlglot/optimizer/__init__.py",
+    "sqlglot/optimizer/scope.py", "sqlglot/parser.py", "sqlglot/parsers/__init__.py",
+    "sqlglot/parsers/base.py", "sqlglot/schema.py", "sqlglot/time.py", "sqlglot/tokenizer_core.py",
+    "sqlglot/tokens.py", "sqlglot/trie.py", "sqlglot/typing/__init__.py",
+))
+_PRELOADED = frozenset()  # sqlglot files the parent imported before forking the checks
+
+
+def preload_sqlglot():
+    """In the parent, before the checks fork: import sqlglot's core once. A child whose patch
+    leaves every file of it alone keeps this copy, and the modules it then imports (the
+    patched one among them) load through the overlay as before; a child whose patch changes
+    one of them forgets every sqlglot module first (enter_overlay)."""
+    import importlib
+
+    global _PRELOADED
+    src = str(SRC)
+    before = set(sys.modules)
+    added = src not in sys.path
+    if added:
+        sys.path.insert(0, src)
+    try:
+        importlib.import_module("sqlglot")
+    except BaseException:
+        for name in set(sys.modules) - before:
+            if name == "sqlglot" or name.startswith("sqlglot."):
+                sys.modules.pop(name, None)
+        return
+    finally:
+        if added:
+            sys.path.remove(src)
+    loaded = set()
+    for name in set(sys.modules) - before:
+        path = getattr(sys.modules.get(name), "__file__", None) or ""
+        if path.startswith(src + os.sep):
+            loaded.add(os.path.relpath(path, src))
+    _PRELOADED = frozenset(loaded)
 
 
 def warm(jobs):
@@ -2634,6 +2729,8 @@ def warm(jobs):
             importlib.import_module(name)
         except Exception:
             pass
+    if PRELOAD and any(job[1] and not set(job[1]) & CORE_FILES for job in jobs):
+        preload_sqlglot()
 
 
 # A TPC-DS replay child may allocate at most this much beyond what it inherited: the run has
@@ -3207,7 +3304,13 @@ def main():
                 alt = None
             gain = None
             if alt is not None:
-                gain = pack_cost(snap["chosen"], duration) - pack_cost(alt["chosen"], duration)
+                # What each selection should cost once its own run check has dropped what
+                # passes: a wide selection that is cheap to run doesn't need the state check.
+                gain = (pack_cost(snap["chosen"], duration)
+                        - plan_check(snap["chosen"], duration, info, snap["unreadable"], want_gain=True)
+                        - pack_cost(alt["chosen"], duration)
+                        + (plan_check(alt["chosen"], duration, info, alt["unreadable"], want_gain=True)
+                           if alt["verifiable"] else 0))
                 tpcds_number = number_of.get(TPCDS_TEST)
                 if tpcds_number in alt["chosen"] and gain < STATE_MIN_GAIN_MS:
                     # as ordinary function code the commit may also get a TPC-DS replay
