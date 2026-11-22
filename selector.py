@@ -3099,6 +3099,12 @@ class Selector:
                 continue
             if fd["new_file"] and os.path.basename(rel) == "__init__.py":
                 raise Fallback(f"new package {rel}")  # can shadow a module of the same name
+            if os.path.basename(rel) == "conftest.py":
+                raise Fallback(f"{rel}: pytest imports and runs it for every test below it")
+            if fd["new_file"] and rel.endswith(".py") and "/" not in rel and shadows_module(rel[:-3]):
+                # `python -m pytest` puts the repository root first on sys.path: a new enum.py or
+                # typing.py there replaces the standard-library module and every test fails
+                raise Fallback(f"new top-level module {rel} shadows an installed or standard-library module")
             if rel.endswith(".py") and rel.startswith(UNREAD_DIRS):
                 continue  # scripts nothing imports (benchmarks, docs)
             if not rel.endswith(".py"):
@@ -3669,6 +3675,17 @@ PYTEST_CONFIGS = {"pytest.toml", ".pytest.toml", "pytest.ini", ".pytest.ini", "p
 INERT_TOOLS = {"ruff", "mypy", "black", "isort", "pylint", "codespell", "pyright", "uv"}
 # top-level directories of scripts and documents nothing in the suite imports or opens
 UNREAD_DIRS = ("benchmarks/", "docs/", "posts/", "pdoc/", ".github/")
+
+
+def shadows_module(name):
+    """Whether a top-level module of this name would hide a standard-library or installed one."""
+    if name in sys.stdlib_module_names or name in sys.builtin_module_names or name in ("sqlglot", "tests"):
+        return True
+    try:
+        import importlib.util
+        return importlib.util.find_spec(name) is not None
+    except Exception:
+        return True
 IMPORTABLE = (".py", ".pyi", ".pyc", ".so", ".pyd", ".pth")
 
 
