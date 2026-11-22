@@ -68,6 +68,8 @@ POINTS_PATH = os.path.splitext(PLANS_PATH)[0] + "_points.pickle"
 # What test_max_nodes sees on scaled copies of its input at the pinned commit (max_nodes_check.py).
 MAX_NODES_REF = os.environ.get("BLAST_MAX_NODES_REF", os.path.join(HERE, "max_nodes_ref.json"))
 MAX_NODES_TEST = "tests/test_parser.py::TestParser::test_max_nodes"
+ENV_QUERIES = os.environ.get("BLAST_ENV_QUERIES", os.path.join(HERE, "env_queries.json"))
+ENV_KEY_RE = re.compile(r"""^    "(\w+)": """)  # one entry of ENV = {...}, at its indent
 # A selection this small is cheaper to run here than to pay a worker for: dialect tests only
 # (they need nothing beyond sqlglot and the standard library), at most this many, recorded at
 # most this long together.
@@ -1576,6 +1578,28 @@ class Selector:
             self.patched[path] = text
         return text
 
+    _env_map = False
+
+    def env_entry_queries(self, path, old, new):
+        """For an edit of one entry of sqlglot/executor/env.py's ENV table, which the edit keeps
+        under the same key: the TPC-DS queries of the per-query test that look that key up
+        (env_queries.py, computed when the image is built). None when not known."""
+        if path != "sqlglot/executor/env.py" or not self.pq_bit:
+            return None
+        if self._env_map is False:
+            try:
+                with open(ENV_QUERIES) as f:
+                    self._env_map = json.load(f)["keys"]
+            except (OSError, ValueError, KeyError):
+                self._env_map = None
+        if not self._env_map:
+            return None
+        key = ENV_KEY_RE.match(old)
+        if key is None or key.group(1) not in self._env_map or ENV_KEY_RE.match(new) is None \
+                or ENV_KEY_RE.match(new).group(1) != key.group(1):
+            return None
+        return tuple(self._env_map[key.group(1)])
+
     def charge_line(self, acc, info, ln):
         """Charges the tests of a function line, with its queries of the per-query test. A line
         that also ran while sqlglot was imported has them only on condition that what the
@@ -1706,6 +1730,14 @@ class Selector:
                                 steps = entry[0][5]
                             else:
                                 queries, after, steps = None, None, 0
+                            env = self.env_entry_queries(path, b.old[i], b.new[i])
+                            if env is not None and sid >= 0:
+                                # an executor ENV entry: the per-query test meets it only in the
+                                # queries that look its key up, and only while executing them
+                                queries, after, steps = env, None, 0
+                                if not queries and self.sets[sid] & self.pq_bit:
+                                    self.sets.append(self.sets[sid] & ~self.pq_bit)
+                                    sid = len(self.sets) - 1
                         self.charge(acc, sid, queries, after, steps)  # the value changed
                         # whether import-time code can fail depends on the new value, not the old
                         if check or not LITERAL_RE.fullmatch(cols[3]):
