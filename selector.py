@@ -325,11 +325,82 @@ def tests_module_tests(maps, path: str) -> set:
     return out
 
 
+# Top-level files nothing in the scored run reads: no test opens them (maps/index.json "opens"),
+# pytest does not look for its configuration in them, and the suite runs from the source tree.
+_UNREAD_TOP = {"Makefile", "MANIFEST.in", "requirements.txt", "requirements-dev.txt"}
+# [tool.*] tables in pyproject.toml read only by linters, type checkers and uv, never by pytest,
+# setuptools or the tests.
+_INERT_TOOLS = {"ruff", "mypy", "black", "isort", "pylint", "codespell", "pyright", "uv"}
+
+
+def _config_tests(fp):
+    """set() when a top-level config edit cannot change the scored run, else None (keep the rule).
+
+    pyproject.toml: pytest parses it at startup (a parse error stops every test), so the new
+    text must parse and every table outside the inert linter tools must stay equal. setup.py:
+    only comment and blank-line edits (same token stream). Makefile, MANIFEST.in and
+    requirements files at the top level are never read."""
+    path = fp.path
+    if fp.special or fp.old_path != fp.new_path or not fp.hunks:
+        return None
+    if path in _UNREAD_TOP:
+        return set()
+    if path not in ("pyproject.toml", "setup.py"):
+        return None
+    try:
+        old = (SRC / path).read_text("utf-8")
+        new = P.apply(old, fp)
+        new.encode("utf-8")
+    except Exception:
+        return None
+    if path == "pyproject.toml":
+        try:
+            import tomllib
+            a, b = tomllib.loads(old), tomllib.loads(new)
+        except Exception:
+            return None
+
+        def settings(d):
+            tool = d.get("tool", {})
+            if not isinstance(tool, dict):
+                return d
+            return {**d, "tool": {k: v for k, v in tool.items() if k not in _INERT_TOOLS}}
+
+        return set() if settings(a) == settings(b) else None
+    import io
+    import tokenize
+
+    def toks(text):
+        skip = {tokenize.COMMENT, tokenize.NL, tokenize.NEWLINE, tokenize.INDENT, tokenize.DEDENT,
+                tokenize.ENCODING, tokenize.ENDMARKER}
+        return [(t.type, t.string) for t in tokenize.generate_tokens(io.StringIO(text).readline)
+                if t.type not in skip]
+
+    try:
+        ast.parse(new)
+        same = toks(old) == toks(new) and _indent_shape(old) == _indent_shape(new)
+    except Exception:
+        return None
+    return set() if same else None
+
+
+def _indent_shape(text):
+    import io
+    import tokenize
+    return [t.type for t in tokenize.generate_tokens(io.StringIO(text).readline)
+            if t.type in (tokenize.INDENT, tokenize.DEDENT, tokenize.NEWLINE)]
+
+
 def select_file(fp, maps, all_tests: set, semantic_needed: dict, version_norm: bool = True) -> set:
     path = fp.path
     if fp.special or fp.old_path is None or fp.new_path is None or fp.old_path != fp.new_path:
         raise All(f"special/new/deleted/renamed: {path}")
     base = path.rsplit("/", 1)[-1]
+    if "/" not in path:
+        cfg = _config_tests(fp)
+        if cfg is not None:
+            log(f"config edit reads nothing: {path}")
+            return cfg
     if not path.endswith(".py"):
         opened = maps.opened_by(path) if maps else None
         if opened is not None:
