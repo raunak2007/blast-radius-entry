@@ -1,46 +1,25 @@
-# Same base image the organizers labeled every commit in.
+# Scored on linux/amd64 with no network. Same base image the tests were labelled in.
 FROM python:3.13-slim@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90
 
-ENV PYTHONDONTWRITEBYTECODE=1
+WORKDIR /app
+# Fixed so the TPC-DS plan digests computed below match the ones computed while scoring.
+ENV PYTHONHASHSEED=0
+COPY src/ /app/
+COPY data/map.bin /app/map.bin
+COPY data/sqlglot-src.tar.xz /tmp/sqlglot-src.tar.xz
 
-# selector.py         the program the scorer runs
-# blast_map.pkl.gz    per-test coverage, file reads and dialect/expression usage at the pinned commit
-# sqlglot_src.tar.gz  the pinned commit's Python sources, which patches are applied to
-# requirements.lock   the labeling environment, so cheap selections can be checked by running them
-# tpcds.pkl.gz        per-query coverage and pristine outputs of test_execute_tpcds, for replaying it
-# operands.pkl.gz     per test, the operands each comparison saw (tools/operand_plugin.py)
-# dictreads.pkl.gz    per test, the keys each module/class-level dict literal gave out (same run)
-# defaults.pkl.gz     per test, the defaulted parameters some call left at their default
-# attr_owners.pkl.gz  per test, the class constants it read, by the class that holds them
-COPY requirements.lock selector.py blast_map.pkl.gz sqlglot_src.tar.gz tpcds.pkl.gz globals_refs.pkl.gz genmem.pkl.gz dictkeys.pkl.gz cmp.pkl.gz argreq.pkl.gz import_users.pkl.gz operands.pkl.gz dictreads.pkl.gz defaults.pkl.gz attr_owners.pkl.gz import_lambdas.pkl.gz tpcds_env.pkl.gz /app/
+# The pinned sqlglot sources (sqlglot at eb11aec: its Python files and the TPC-DS fixtures, MIT)
+# are committed in data/, so the build needs no network. The selector verifies every file against
+# the map's digests and uses them to check that a patched module still compiles and imports, and
+# to replay single TPC-DS queries. The digests of each TPC-DS query's plan are computed here, in
+# the image that will use them (a missing file only disables comparing plans).
+RUN python -c "import tarfile; tarfile.open('/tmp/sqlglot-src.tar.xz').extractall('/app/sqlglot-src', filter='data')" \
+    && rm /tmp/sqlglot-src.tar.xz \
+    && python -m compileall -q /app/sqlglot-src/sqlglot \
+    && python -S -B /app/import_baseline.py /app/sqlglot-src /app/import_baseline.txt \
+    && python -S -B /app/tpcds_check.py --plans /app/sqlglot-src /app/tpcds_plans.json \
+    && python -S -B /app/max_nodes_check.py --reference /app/sqlglot-src /app/max_nodes_ref.json \
+    && python -m compileall -q /app/blast_select.py \
+    && chmod -R a+rX /app
 
-RUN pip install --no-cache-dir --disable-pip-version-check -q -r /app/requirements.lock
-
-# sqlglot's repository at the pinned commit (for its test fixtures), then the
-# committed sources on top; both are the same commit. Bytecode is compiled here
-# so each runtime check only compiles the files a patch changes.
-RUN python - <<'EOF'
-import io, tarfile, urllib.request
-sha = "eb11aec4be8cb2122afe713a4816662c3f0fb2fa"
-url = f"https://github.com/tobymao/sqlglot/archive/{sha}.tar.gz"
-data = urllib.request.urlopen(url, timeout=120).read()
-with tarfile.open(fileobj=io.BytesIO(data)) as tf:
-    prefix = f"sqlglot-{sha}/"
-    members, top = [], []
-    for m in tf.getmembers():
-        if m.name.startswith(prefix + "tests/"):
-            m.name = m.name[len(prefix):]
-            members.append(m)
-        elif m.name[len(prefix):] in ("pyproject.toml", "setup.cfg", "setup.py"):
-            m.name = m.name[len(prefix):]
-            top.append(m)
-    tf.extractall("/opt/sqlglot", members=members, filter="data")
-    # the top-level config files, apart, so nothing run from /opt/sqlglot picks them up
-    tf.extractall("/opt/sqlglot_root", members=top, filter="data")
-tarfile.open("/app/sqlglot_src.tar.gz").extractall("/opt/sqlglot", filter="data")
-EOF
-RUN rm /app/sqlglot_src.tar.gz \
- && python -m compileall -q -j 0 /usr/local/lib/python3.13 /opt/sqlglot/sqlglot /opt/sqlglot/tests > /dev/null \
- && chmod -R a+rX /opt/sqlglot /opt/sqlglot_root /app
-
-CMD ["python", "-S", "/app/selector.py"]
+CMD ["python", "-S", "-B", "/app/run.py"]
