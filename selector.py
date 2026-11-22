@@ -523,6 +523,67 @@ TPC_QUERY_FILES = {
 }
 
 
+_PARSES = {}
+
+
+def pinned_parses(sqls):
+    """Whether sqlglot at the pinned commit parses each of these statements with parse_one, as the
+    executor tests do before they run anything. A forked child finds out (the selector itself
+    never imports sqlglot); any doubt counts as no."""
+    import select
+    import time
+
+    key = tuple(sqls)
+    if key not in _PARSES:
+        verdict = False
+        try:
+            r, w = os.pipe()
+            sys.stdout.flush()
+            pid = os.fork()
+            if pid == 0:
+                try:
+                    os.close(r)
+                    devnull = os.open(os.devnull, os.O_WRONLY)
+                    os.dup2(devnull, 1)
+                    os.dup2(devnull, 2)
+                    limit_cpu(8)
+                    limit_memory()
+                    overlay = enter_overlay({})  # the pinned sources, set up as for a check
+                    import shutil
+
+                    import sqlglot
+
+                    for sql in sqls:
+                        sqlglot.parse_one(sql)
+                    shutil.rmtree(overlay, ignore_errors=True)
+                    os.write(w, b"ok")
+                    os._exit(0)
+                except BaseException:
+                    os._exit(1)
+            os.close(w)
+            deadline, data = time.monotonic() + 20, b""
+            while len(data) < 2:
+                left = deadline - time.monotonic()
+                if left <= 0 or not select.select([r], [], [], left)[0]:
+                    break
+                chunk = os.read(r, 16)
+                if not chunk:
+                    break
+                data += chunk
+            os.close(r)
+            if data != b"ok":
+                try:
+                    os.kill(pid, 9)
+                except OSError:
+                    pass
+            _, status = os.waitpid(pid, 0)
+            verdict = data == b"ok" and os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0
+        except Exception:
+            verdict = False
+        _PARSES[key] = verdict
+    return _PARSES[key]
+
+
 def fixture_pairs(text):
     """The (meta, input, expected) cases of a fixture text, split exactly as the tests' own
     load_sql_fixture_pairs and _extract_meta (tests/helpers.py) split the file; raises where
@@ -2531,11 +2592,19 @@ class Selector:
             return readers
         changed = [i for i in range(len(old)) if old[i] != new[i]]
         inputs = [i for i in changed if old[i][:2] != new[i][:2]]
+        # The tests that use only the meta lines and the input (test_execute_tpch and
+        # test_execute_tpcds, through TestExecutor._mp_execute) parse every input and then run
+        # just the cases with an "# execute:" line (57 of the 99 TPC-DS ones, no TPC-H one): a
+        # changed input of another case, its meta lines as they were, fails them only by not
+        # parsing, which a child finds out with the pinned sqlglot.
+        run = [i for i in inputs if old[i][0] != new[i][0] or old[i][0].get("execute")]
+        if inputs and not run and not (RUN and pinned_parses([new[i][1] for i in inputs])):
+            run = inputs
         m = 0
-        for name in (spec["cases"] if changed else ()) + (spec["inputs"] if inputs else ()):
+        for name in (spec["cases"] if changed else ()) + (spec["inputs"] if run else ()):
             m |= self.test_bit[name]
-        log(f"{rel}: {len(changed)} cases changed ({len(inputs)} in their input or meta lines): "
-            f"{bin(m).count('1')} of {bin(readers).count('1')} readers")
+        log(f"{rel}: {len(changed)} cases changed ({len(inputs)} in their input or meta lines, "
+            f"{len(run)} of them run or unparsed): {bin(m).count('1')} of {bin(readers).count('1')} readers")
         return m
 
     def select(self, text):
