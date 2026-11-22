@@ -4613,13 +4613,14 @@ def _zygote_imports(jobs, budget_s, wfd):
     # commits with a new failure: which test modules no longer import (any of them, not just
     # those whose import runs sqlglot code). No pinned run: a test module that also fails
     # at the pinned commit only adds its tests.
-    broken = sorted(k for k, v in out["jobs"].items() if v and set(v) - set(base))
+    broken = sorted(k for k, v in out["jobs"].items() if v and set(v) - set(base) and k in IMPORT_DETAIL_FOR)
     if broken and IMPORT_TEST_MODULES and time.monotonic() < deadline:
         out["tests"] = _zygote_test_imports({k: jobs[k] for k in broken}, deadline)
     os.write(wfd, json.dumps(out).encode())
 
 
 IMPORT_TEST_MODULES = []  # every test module, set by main for the import-failure narrowing
+IMPORT_DETAIL_FOR = set()  # the commits that narrowing can use it for
 
 
 def _zygote_test_imports(jobs, deadline):
@@ -4891,6 +4892,7 @@ def main():
                 selector.defer_all = False
             if alt is not None and rels and len(alt["chosen"]) < len(every):
                 deferred[commit] = (alt, rels)
+        IMPORT_DETAIL_FOR.update(deferred)
         IMPORT_TEST_MODULES[:] = sorted(f[:-3].replace("/", ".") for f in selector.doc["test_files"]
                                         if f.endswith(".py") and not f.endswith("__init__.py"))
 
