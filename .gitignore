@@ -1,0 +1,17 @@
+.DS_Store
+.vscode/
+.idea/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+node_modules/
+dist/
+*.tsbuildinfo
+.env*
+!.env.example
+
+# local working state (sqlglot checkout, venv, traces, run output)
+work/
+output.jsonl
+run.log
+maps/*.pickle
