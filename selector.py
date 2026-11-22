@@ -62,7 +62,15 @@ GENMEM_TEST = "tests/test_generator.py::TestGenerator::test_generator_memory"
 # copies) must put 10,000 copies past 1,000,000, and a prefix just long enough to pass
 # 50,000 nodes must raise the test's error at the same point the full statement would.
 MAXNODES_TEST = "tests/test_parser.py::TestParser::test_max_nodes"
-MAXNODES_EST_S = 2.0  # CPU of the child: importing the test module and ~200k tokens, with margin
+MAXNODES_EST_S = 2.0  # CPU budget unit of the child: importing the test module and ~200k tokens, with margin
+# What a check costs and how often it pays, measured on Modal over the 299 synthetic commits
+# (datasets/synth_v1): the child used 1.1-1.85 s CPU (mean 1.5) where it ran the proof, and
+# fitness bills CPU at 2x. It is planned only when the saving, weighed by the chance the test
+# passes, beats that: P(pass) = 11 of 11 eligible verifiable commits (12/13 with add-one) and
+# 3 of 4 where the patch stops some module importing ((3+1)/(4+2)).
+MAXNODES_CPU_S = 1.6
+MAXNODES_P_PASS = 12 / 13
+MAXNODES_P_PASS_BROKEN = 4 / 6
 # file -> (function that builds a per-process cache on first use, the cache's name)
 FIRST_USE = {"sqlglot/generator.py": ("_build_dispatch", "_DISPATCH_CACHE")}
 TPCDS_TEST = "tests/test_executor.py::TestExecutor::test_execute_tpcds"
@@ -2689,17 +2697,19 @@ class Selector:
 
     # ---- test_generator_memory: rerun its per-dialect check only for dialects the edit can reach
 
-    def genmem_plan(self, chosen, duration, genmem_number):
+    def genmem_plan(self, chosen, duration, genmem_number, unreadable=()):
         """Which dialects to recheck, or None to keep the test as is.
 
         The test builds every dialect's generator 1,100 times and checks that the last 1,000
         builds leave under 1 KB behind. Only sqlglot modules that are loaded when a dialect's
         generator is built can change that dialect's result (tools/build_genmem.py records
         them per dialect, from a fresh interpreter). Only for commits that change nothing but
-        sqlglot/ Python files."""
-        if not self.verifiable or self.data_files or not self.patched:
+        sqlglot/ Python files, and data files the test never opens (`unreadable` holds the
+        tests that open one; data files read outside tests already run everything)."""
+        if not self.verifiable or not self.patched or (self.data_files and genmem_number in unreadable):
             return None
         rels = set(self.patched) | {rel for rel, _, _, _ in self.touched}
+        rels -= self.data_files
         if not rels or any(not (r.startswith("sqlglot/") and r.endswith(".py")) for r in rels):
             return None
         data = load_genmem()
@@ -3551,6 +3561,21 @@ def child_genmem(patched, plan, wfd):
     shutil.rmtree(overlay, ignore_errors=True)
     os.write(wfd, json.dumps([] if ok else [GENMEM_TEST]).encode())
     os.close(wfd)
+
+
+def maxnodes_eligible(snap, number):
+    """Whether child_maxnodes can stand in for test_max_nodes on this commit: the patch's Python
+    is all overlaid (sqlglot/ and tests/ sources, but not the test's own module), any other
+    file it changes is one test_max_nodes never opens, and either the selection is verifiable
+    or the only doubt is a module that stops importing (the child imports the test module as
+    pytest would, and an import error keeps the test)."""
+    patched = snap["patched"]
+    if not patched or not (snap["verifiable"] or snap.get("import_broken")):
+        return False
+    if number in snap["unreadable"]:
+        return False
+    return all(r.endswith(".py") and r.startswith(("sqlglot/", "tests/")) and r != "tests/test_parser.py"
+               for r in patched)
 
 
 def child_maxnodes(patched, plan, wfd):
@@ -4980,10 +5005,12 @@ def main():
                                                  for r in files):
                         chosen = sorted(set(alt["chosen"]) | set(to_numbers(extra)) | set(always))
                         log(f"{commit}: {', '.join(sorted(rels))} no longer imports: {len(chosen)} tests")
-                        snaps[commit] = dict(alt, chosen=chosen, verifiable=False)
+                        snaps[commit] = dict(alt, chosen=chosen, verifiable=False,
+                                             import_broken=bool(alt["verifiable"]))
                     continue
                 if broken:
-                    snaps[commit] = dict(snaps[commit], chosen=every, verifiable=False)
+                    snaps[commit] = dict(snaps[commit], chosen=every, verifiable=False,
+                                         import_broken=bool(snaps[commit]["verifiable"]))
 
     # 2. the checks each selection is worth
     answers = {}
@@ -5023,16 +5050,18 @@ def main():
                                    {"__fixture__": fplan, **{t: duration[number_of[t]] / 1000 for t in fplan["tests"]}},
                                    10 + 1.5 * fplan["budget"]))
         maxnodes_number = number_of.get(MAXNODES_TEST)
-        if RUN and verifiable and selector is not None and maxnodes_number in chosen and patched \
-                and not snap["data_files"] and all(r.startswith("sqlglot/") and r.endswith(".py") for r in patched):
+        hoped = chosen  # the selection the genmem check is priced against
+        if RUN and selector is not None and maxnodes_number in chosen and maxnodes_eligible(snap, maxnodes_number):
             saving = (pack_cost(chosen, duration) - pack_cost([n for n in chosen if n != maxnodes_number], duration)) / 1000
-            if 2 * MAXNODES_EST_S < saving:  # its CPU at about the board's price
-                log(f"max_nodes check planned to save {saving:.1f}s")
+            p_pass = MAXNODES_P_PASS if verifiable else MAXNODES_P_PASS_BROKEN
+            if p_pass * saving > 2 * MAXNODES_CPU_S:  # expected saving against its CPU at the board's price
+                log(f"max_nodes check planned to save {saving:.1f}s (p {p_pass:.2f})")
+                hoped = [n for n in chosen if n != maxnodes_number]
                 tpcds_jobs.append(((commit, "maxnodes"), patched, [MAXNODES_TEST],
                                    {"__maxnodes__": {"budget": 4 * MAXNODES_EST_S},
                                     MAXNODES_TEST: duration[maxnodes_number] / 1000}, 10 + 4 * MAXNODES_EST_S))
         if RUN and verifiable and selector is not None and genmem_number in chosen:
-            gplan = selector.genmem_plan(chosen, duration, genmem_number)
+            gplan = selector.genmem_plan(hoped, duration, genmem_number, snap["unreadable"])
             if gplan is not None and not gplan["dialects"] and not gplan["import_check"]:
                 chosen = [n for n in chosen if n != genmem_number]  # no dialect loads what changed
                 answers[commit] = chosen
