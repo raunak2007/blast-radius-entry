@@ -38,6 +38,9 @@ PROBE_MIN_TESTS = int(os.environ.get("BR_PROBE_MIN_TESTS", "3"))
 CASE_RESTRICT = os.environ.get("BR_CASE_RESTRICT", "1") == "1"
 # Verify TPC-DS execution by comparing optimize() outputs (selector/stage.py).
 STAGE = os.environ.get("BR_STAGE", "1") == "1"
+# What one CPU second of verification costs in the score, in simulated seconds: the
+# scorer bills container CPU at about twice what our measurements (maps, Modal) show.
+CPU_PRICE = float(os.environ.get("BR_CPU_PRICE", "2.0"))
 STAGE_MISMATCH = 0.4  # rough chance a reached case's optimize() output differs
 
 # Probability that one candidate test fails, by reason (measured on the kit
@@ -589,7 +592,7 @@ def plan_commit(cid, changes, found, maps, map_to_number, seconds_of, unknown_nu
         for n in longest[:6]:
             extra = (packed(base | {n}) - c0) if base else 2.0 + seconds_of[n]
             after += q_of.get(n, 0.3) * max(0.0, extra)
-        return cpu + after, cpu
+        return CPU_PRICE * cpu + after, cpu
 
     options = [("blind", possible, set())]
     if cheap:
@@ -652,10 +655,10 @@ def plan_commit(cid, changes, found, maps, map_to_number, seconds_of, unknown_nu
         cost, cpu = expected(blind, verify)
         if name == "probe":
             live = max(probe_live_prior(item) for items in probe_items.values() for item in items)
-            cost = cpu + live * (packed(expensive) + p_any * 0.5) + (1 - live) * p_any * 2.5
+            cost = CPU_PRICE * cpu + live * (packed(expensive) + p_any * 0.5) + (1 - live) * p_any * 2.5
         elif name == "probe-lite":
             live = max(probe_live_prior(item) for items in probe_items.values() for item in items)
-            cost = cpu + live * packed(possible)
+            cost = CPU_PRICE * cpu + live * packed(possible)
         if cpu <= MAX_VERIFY_CPU:
             scored.append((cost, name, blind, verify, cpu))
     scored.sort(key=lambda x: x[0])
@@ -838,7 +841,7 @@ def verify_plans(plans: list[Plan], root: str, tmp: str, deadline: float, log, i
             if expensive_left:
                 continue  # expensive tests go in anyway; the rest rides along cheaply
             rest_ms = {n: int(seconds_of[n] * 1000 + 0.5) for n in plan.lite_rest}
-            if plan.lite_rest_cpu >= pack(sorted(plan.lite_rest), rest_ms)[1] / 1000.0:
+            if CPU_PRICE * plan.lite_rest_cpu >= pack(sorted(plan.lite_rest), rest_ms)[1] / 1000.0:
                 continue  # verifying the rest would cost more than including it
         rest = sorted(plan.lite_rest)
         ids = [id_of[n] for n in rest]
