@@ -1642,7 +1642,10 @@ class Selector:
                 if k in (RUNTIME, MIXED) and pairs and len(b.old) == 1 and ln in info["weak"]:
                     hit = self.weak_match(info["weak"][ln], b.old[0], b.new[0])
                     if hit is not None:
-                        self.charge(acc, hit[0], hit[1], self.back_of(info, ln, hit[1]), info.get("stg", {}).get(ln, 0))
+                        # without line coverage (a one-line lambda, see below) the map cannot say
+                        # which queries reach the line only after planning: assume all of them
+                        back = self.back_of(info, ln, hit[1]) if ln in sets else None
+                        self.charge(acc, hit[0], hit[1], back, info.get("stg", {}).get(ln, 0))
                         continue
                 qsets = info.get("qsets", {})
                 if k == RUNTIME:
@@ -1655,7 +1658,11 @@ class Selector:
                     cols = changed_columns(b.old[i], b.new[i])
                 if k == MIXED and cols is not None:
                     a, z = cols[0], max(cols[1], cols[0] + 1)
-                    if any(c0 <= a and z <= c1 for c0, c1 in info["cols"].get(ln, ())):
+                    # A one-line lambda in an import-time table never reports a LINE event
+                    # (sys.monitoring only reports a line when execution moves onto it), so the
+                    # profile has no callers for it. Such an edit is charged like a change of the
+                    # value it sits in (the readers of that entry or attribute, below).
+                    if ln in sets and any(c0 <= a and z <= c1 for c0, c1 in info["cols"].get(ln, ())):
                         self.charge_line(acc, info, ln)
                         if ln in info["checks"]:
                             self.import_check.add(path)
