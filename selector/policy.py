@@ -332,10 +332,12 @@ def case_full_costs(maps, node):
     return outside + warm, {k: max(0.0, m - warm) for k, m in enumerate(marginal)}
 
 
-STATE_CHECK_CPU = float(os.environ.get("BR_STATE_CHECK_CPU", "0.65"))  # local CPU s of one comparison (0.60-0.70 measured)
+# CPU s of one comparison on the scoring-like container (Modal amd64, 2 CPUs): 2.3-3.0 s
+# between consecutive comparisons in the logs (0.60-0.70 s on the original local machine).
+STATE_CHECK_CPU = float(os.environ.get("BR_STATE_CHECK_CPU", "2.5"))
 # Scorer CPU per local CPU second for this work: practice M13 -> M17 cost +9.4 s of
 # scorer CPU for about +5 s of local comparison CPU per 40 official-style commits.
-STATE_CPU_SCALE = float(os.environ.get("BR_STATE_CPU_SCALE", "1.9"))
+STATE_CPU_SCALE = float(os.environ.get("BR_STATE_CPU_SCALE", "2.0"))
 
 
 def _optimistic_masks(found, maps, finder) -> dict:
@@ -500,6 +502,7 @@ def plan_commit(cid, changes, found, maps, map_to_number, seconds_of, unknown_nu
         _prepare_checks(plan, changes, found, maps, numbers, flagged_only=True)
         if plan.import_check:
             plan.note += " | import check"
+        _drop_redundant_import_check(plan)
         return plan
 
     reason_of = {}
@@ -668,6 +671,7 @@ def plan_commit(cid, changes, found, maps, map_to_number, seconds_of, unknown_nu
         _prepare_checks(plan, changes, found, maps, numbers, flagged_only=True)
         if plan.import_check:
             plan.note += " | import check"
+        _drop_redundant_import_check(plan)
         return plan
     plan.verify = sorted(verify)
     plan.verify_cpu_estimate = cpu
@@ -693,6 +697,19 @@ def plan_commit(cid, changes, found, maps, map_to_number, seconds_of, unknown_nu
     # Files for the overlay and modules whose import we double-check.
     _prepare_checks(plan, changes, found, maps, numbers, flagged_only=False)
     return plan
+
+
+def _drop_redundant_import_check(plan):
+    """A commit decided without verification still forks a child to import the changed
+    modules (an import failure means every importer fails). When the selection already
+    holds every importer of each checked module, the answer is the same either way:
+    skip the child."""
+    if not plan.import_check or plan.verify:
+        return
+    if all(set(plan.import_fallback.get(m, ())) <= plan.include for m in plan.check_modules):
+        plan.import_check = False
+        plan.check_modules = []
+        plan.note += " | import check skipped (importers already selected)"
 
 
 def _prepare_checks(plan, changes, found, maps, numbers, flagged_only):
