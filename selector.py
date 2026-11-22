@@ -66,6 +66,7 @@ def load_maps(tests: list[dict]) -> Maps:
         enums=frozenset(_load("enums.json") or ()),
         import_lines=_load("import_lines.json") or {},
         import_groups=_load("import_groups.json.gz") or {},
+        collect_imports=_load("collect_imports.json") or {},
     )
 
 
@@ -184,14 +185,43 @@ def _select(analyzer: Analyzer, patch_text: str, everything: set[int], modules: 
     state = conservative is ALL or worth_refining is None or worth_refining(conservative & everything)
     crashed, changed = checker.check(analyzer.import_time, state=state)
     if crashed:
-        log("  import-time crash detected: selecting every test")
-        return set(everything)
+        return _crash_selection(analyzer, per_file, everything, modules, checker)
     refined = analyzer.refine(changed)
     others = _union(got for path, got in per_file if path not in analyzer.refine_info)
     if refined is not None and others is not ALL:
         log(f"  import-time state changed: {sorted(changed)[:6]}")
         return (refined | others) & everything
     return set(everything) if conservative is ALL else conservative & everything
+
+
+def _crash_selection(analyzer: Analyzer, per_file, everything: set[int], modules: list[str],
+                     checker: ImportChecker) -> set[int]:
+    """An import-time crash: the tests that load a module that now fails to import, plus the
+    selections of patched files that still import (their edits stay visible)."""
+    names = [m for m in modules if not m.startswith("tests")]
+    failed = checker.failing_modules(analyzer.import_time, names)
+    if failed:
+        # test modules importing a patched or failing module at collection may now fail too
+        # (from m import a_name_the_patch_removed): try importing them as well
+        paths = set(analyzer.import_time) | {p for p in map(analyzer._module_path, failed) if p}
+        test_mods = sorted({_module_name(f) for p in paths for f in analyzer.maps.collect_imports.get(p, ())})
+        failed = checker.failing_modules(analyzer.import_time, names + test_mods)
+    crash = analyzer.crash_tests(failed) if failed else ALL
+    if crash is ALL:
+        log("  import-time crash detected: selecting every test")
+        return set(everything)
+    gone = {path for path in analyzer.import_time if _module_name(path) in failed}
+    others = _union(got for path, got in per_file if path not in gone)
+    if others is ALL:
+        log("  import-time crash, other files unbounded: selecting every test")
+        return set(everything)
+    log(f"  import-time crash in {failed[:6]}: {len(crash)} tests load them")
+    return (crash | others) & everything
+
+
+def _module_name(path: str) -> str:
+    name = path[:-3].replace("/", ".")
+    return name[: -len(".__init__")] if name.endswith(".__init__") else name
 
 
 def _union(parts) -> set[int] | None:

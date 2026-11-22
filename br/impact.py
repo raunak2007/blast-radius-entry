@@ -40,6 +40,7 @@ DOC_SUFFIXES = (".md", ".rst", ".txt", ".png", ".svg", ".html")
 FAMILY_DIRS = ("dialects", "parsers", "generators", "typing")
 FAMILY_SKIP = ("__init__", "dialect", "base")
 PACKAGE_WALKERS = {"sqlglot/typing/": "tests/test_typing.py"}
+RUNTIME_IMPORTERS = ("tests/test_dialect_imports.py",)  # test files importing sqlglot modules inside tests
 WHOLE_FILE = (0, 10**9)
 
 
@@ -51,6 +52,7 @@ class Maps:
     classes: dict[str, list[int]] = field(default_factory=dict)
     enums: frozenset[str] = frozenset()
     import_lines: dict[str, list[int]] = field(default_factory=dict)
+    collect_imports: dict[str, list[str]] = field(default_factory=dict)  # module path -> test files importing it
     import_groups: dict = field(default_factory=dict)  # {"lines": {file: {line: [gid]}}, "groups": {gid: tests|"ALL"}}
 
 
@@ -264,6 +266,105 @@ class Analyzer:
                 return None
             tests |= part
         return tests
+
+    def crash_tests(self, failed: list[str]) -> set[int] | None:
+        """Tests that can notice modules failing to import (None: unknown, select all).
+
+        A module that raises while importing is never usable, so only tests that load it
+        see the patch: those whose test file imports it at collection, those that ran any
+        of its code or constructed one of its classes (lazily loaded dialects included),
+        and those that walk every dialect (Dialect.classes, sqlglot.dialects.__getattr__)."""
+        tests: set[int] = set()
+        walkers = False
+        for name in failed:
+            path = self._module_path(name)
+            if path is None:
+                return ALL
+            if path.startswith("tests/"):
+                if path not in self.maps.tests_by_file and not path.endswith("__init__.py"):
+                    return ALL  # a helper module of the tests (tests.helpers, ...)
+                tests |= self.maps.tests_by_file.get(path, set())
+                continue
+            module = self._module(path)
+            if module is ALL:
+                return ALL
+            tests |= module
+            prefix = path + "::"
+            for key, users in self.maps.classes.items():
+                if key.startswith(prefix):
+                    tests.update(users)
+            for test_file in self.maps.collect_imports.get(path, ()):
+                tests |= self.maps.tests_by_file.get(test_file, set())
+            walkers = walkers or path.split("/")[1] in FAMILY_DIRS
+        if walkers:
+            tests |= self._range("sqlglot/dialects/dialect.py", *self._classes_property())
+            tests |= self._range("sqlglot/dialects/__init__.py", *WHOLE_FILE)
+        names = {n for n in failed if not n.startswith("tests")}
+        # imports inside function bodies run whenever the function does
+        for site_path, start, end in self._runtime_imports():
+            if names & self._runtime_imports()[(site_path, start, end)]:
+                tests |= self._range(site_path, start, end)
+        for name in names:
+            parts = name.split(".")
+            for depth in range(1, len(parts)):  # a package's lazy __getattr__ imports submodules
+                package = self._module_path(".".join(parts[:depth]))
+                if package and package.endswith("__init__.py"):
+                    for node in self.readers.tree(package).body:
+                        if isinstance(node, NAMED_FUNCS) and node.name == "__getattr__":
+                            tests |= self._range(package, _start(node), node.end_lineno)
+            path = self._module_path(name) or ""
+            for prefix, test_file in PACKAGE_WALKERS.items():
+                if path.startswith(prefix):
+                    tests |= self.maps.tests_by_file.get(test_file, set())
+        for test_file in RUNTIME_IMPORTERS:
+            tests |= self.maps.tests_by_file.get(test_file, set())
+        return tests
+
+    def _runtime_imports(self) -> dict[tuple[str, int, int], set[str]]:
+        """(path, start, end) of every import statement inside a function in sqlglot/, with
+        the module names it can load."""
+        if getattr(self, "_rt_imports", None) is None:
+            out: dict[tuple[str, int, int], set[str]] = {}
+            for path in self.readers._all_texts():
+                if not path.startswith("sqlglot/"):
+                    continue
+                package = _module_name(path) if path.endswith("__init__.py") else _module_name(path).rpartition(".")[0]
+
+                def visit(node: ast.AST, in_func: bool) -> None:
+                    for child in ast.iter_child_nodes(node):
+                        if in_func and isinstance(child, (ast.Import, ast.ImportFrom)):
+                            mods: set[str] = set()
+                            if isinstance(child, ast.Import):
+                                for alias in child.names:
+                                    parts = alias.name.split(".")
+                                    mods |= {".".join(parts[:i]) for i in range(1, len(parts) + 1)}
+                            else:
+                                base = child.module or ""
+                                if child.level:
+                                    pkg = package.split(".")
+                                    pkg = pkg[: len(pkg) - child.level + 1]
+                                    base = ".".join(pkg + ([base] if base else []))
+                                parts = base.split(".")
+                                mods |= {".".join(parts[:i]) for i in range(1, len(parts) + 1)}
+                                mods |= {f"{base}.{alias.name}" for alias in child.names}
+                            out[(path, child.lineno, child.end_lineno)] = mods
+                        visit(child, in_func or isinstance(child, FUNC_TYPES))
+
+                try:
+                    visit(self.readers.tree(path), False)
+                except SyntaxError:
+                    continue
+            self._rt_imports = out
+        return self._rt_imports
+
+    def _classes_property(self) -> tuple[int, int]:
+        """Lines of Dialect.classes and Dialect._try_load (they load every dialect module)."""
+        tree = self.readers.tree("sqlglot/dialects/dialect.py")
+        lines = [(_start(n), n.end_lineno) for n in ast.walk(tree)
+                 if isinstance(n, NAMED_FUNCS) and n.name in ("classes", "_try_load")]
+        if not lines:
+            return WHOLE_FILE
+        return min(a for a, _ in lines), max(b for _, b in lines)
 
     def _key_tests(self, key: str) -> set[int] | None:
         module, _, qual = key.partition("::")
