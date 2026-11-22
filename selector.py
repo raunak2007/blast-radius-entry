@@ -2245,6 +2245,8 @@ class Selector:
         """Every import statement under sqlglot/ and tests/: (rel, line, end line, nested,
         names of the modules it can import, names of the modules or module attributes it
         reads as written)."""
+        if getattr(self, "_import_sites", None) is None and not getattr(self, "_no_static", False):
+            self._import_sites = (load_static() or {}).get("import_sites")
         if getattr(self, "_import_sites", None) is None:
             sites = []
             for sub in ("sqlglot", "tests"):
@@ -2338,6 +2340,8 @@ class Selector:
 
     def test_bodies(self):
         """(test file, class, method, source) of every method of a test class."""
+        if getattr(self, "_test_bodies", None) is None and not getattr(self, "_no_static", False):
+            self._test_bodies = (load_static() or {}).get("test_bodies")
         if getattr(self, "_test_bodies", None) is None:
             out = []
             for rel in sorted(self.doc["test_files"]):
@@ -3490,6 +3494,19 @@ def pack_cost(numbers, duration):
     return max(sum(duration[n] for n in w) for w in workers) + WORKER_MS * len(workers)
 
 
+# What a second of check CPU costs, in simulated seconds: the board bills CPU at about twice
+# what it measures here, and a check whose tests fail saves nothing at all.
+CHECK_CPU_PRICE = float(os.environ.get("BR_CHECK_PRICE", "2.0"))
+
+
+def pack_floor(total, top):
+    """A lower bound on pack_cost of tests of these total and longest durations: some worker
+    carries at least the longest test and the average load."""
+    if total <= 0:
+        return 0
+    return min(max(top, math.ceil(total / k)) + WORKER_MS * k for k in range(1, MAX_WORKERS + 1))
+
+
 def plan_check(chosen, duration, info, excluded=()):
     """The cheapest-first prefix of runnable tests whose check is expected to pay off."""
     runnable = sorted((n for n in chosen if info[n]["runnable"] and n not in excluded), key=lambda n: (duration[n], n))
@@ -3503,14 +3520,34 @@ def plan_check(chosen, duration, info, excluded=()):
         ks = sorted({max(1, int(len(runnable) * f / 60)) for f in range(1, 61)})
     run_ms, files = 0, set()
     prev = 0
+    # bounds on pack_cost(rest), to skip the k whose gain can't beat the best one so far
+    total = sum(duration[n] for n in chosen_set)
+    prefix = [0]
+    for n in runnable:
+        prefix.append(prefix[-1] + duration[n])
+    in_run = {n: i for i, n in enumerate(runnable)}
+    by_length = sorted(chosen_set, key=lambda n: -duration[n])
+
+    def kept_ms(k):
+        return prefix[k]
+
+    def top_rest(k):
+        for n in by_length:  # the longest test not among the first k checked
+            if in_run.get(n, k) >= k:
+                return duration[n]
+        return 0
+
     for k in ks:
         for n in runnable[prev:k]:
             run_ms += duration[n] * TIME_FACTOR
             files.add(info[n]["file"])
         prev = k
         overhead = COMMIT_OVERHEAD_MS + sum(FILE_OVERHEAD_MS.get(f, DEFAULT_FILE_OVERHEAD_MS) for f in files)
+        spent = CHECK_CPU_PRICE * (run_ms + overhead)
+        if base - pack_floor(total - kept_ms(k), top_rest(k)) - spent <= best_gain:
+            continue  # not even the floor of what packing the rest costs would make this k pay
         rest = sorted(chosen_set - set(runnable[:k]))
-        gain = base - pack_cost(rest, duration) - run_ms - overhead
+        gain = base - pack_cost(rest, duration) - spent
         if gain > best_gain:
             best_gain, best_k = gain, k
     return runnable[:best_k]
@@ -3563,6 +3600,46 @@ _ATTR_OWNERS = None
 
 _IMPORT_LAMBDAS = None
 _TPCDS_ENV = None
+_STATIC = None
+# What Selector.import_sites() and test_bodies() derive from the pinned sources alone (every
+# import statement under sqlglot/ and tests/, every test method's source), worked out once
+# when the image is built (`selector.py --static <out>`) rather than parsed again per run.
+STATIC_DATA = Path(os.environ.get("BR_STATIC", str(Path(__file__).with_name("static_src.pkl"))))
+
+
+def load_static():
+    global _STATIC
+    if _STATIC is None:
+        try:
+            with open(STATIC_DATA, "rb") as fh:
+                data = pickle.load(fh)
+            if data.get("src") != str(SRC):
+                raise ValueError(f"built for {data.get('src')}")
+            _STATIC = data
+        except Exception as error:
+            log(f"no precomputed source index ({error!r}); parsing the sources when needed")
+            _STATIC = False
+    return _STATIC or None
+
+
+def static_main(args):
+    """`selector.py --static <out>`: write what load_static() reads, from the pinned sources."""
+    with gzip.open(MAP, "rb") as fh:
+        doc = pickle.load(fh)
+    selector = Selector(doc, 0)
+    selector._no_static = True
+    data = {"src": str(SRC), "import_sites": selector.import_sites(), "test_bodies": selector.test_bodies()}
+    with open(args[0], "wb") as fh:
+        pickle.dump(data, fh, protocol=pickle.HIGHEST_PROTOCOL)
+    tpcds = load_tpcds()
+    if tpcds is not None and len(args) > 2:
+        rows = tpcds.pop("tables")
+        tpcds["tables"] = None
+        tpcds["ready_from"] = os.path.getsize(TPCDS_DATA)
+        with open(args[1], "wb") as fh:
+            pickle.dump(tpcds, fh, protocol=pickle.HIGHEST_PROTOCOL)
+        with open(args[2], "wb") as fh:
+            pickle.dump(rows, fh, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 def load_tpcds_env():
@@ -3758,11 +3835,35 @@ def load_globals():
     return _GLOBALS or None
 
 
+# load_tpcds()'s result, split when the image is built (`selector.py --static`): the plan part
+# (what tpcds_plan reads, already in the form it reads it), and apart from it the recorded
+# tables' rows, which only a replay or a fixture check reads (tpcds_tables()).
+TPCDS_READY = Path(os.environ.get("BR_TPCDS_READY", str(Path(__file__).with_name("tpcds_ready.pkl"))))
+TPCDS_ROWS = Path(os.environ.get("BR_TPCDS_ROWS", str(Path(__file__).with_name("tpcds_rows.pkl"))))
+
+
+def tpcds_tables(data):
+    """The recorded rows of every TPC-DS table, loaded on first use when they're kept apart."""
+    if data.get("tables") is None:
+        with open(TPCDS_ROWS, "rb") as fh:
+            data["tables"] = pickle.load(fh)
+    return data["tables"]
+
+
 def load_tpcds():
     """Per-query coverage, CPU times and pristine outputs of test_execute_tpcds, recorded at the
     pinned commit (tools/build_tpcds.py). Loaded once in the parent; forked checks share it."""
     global _TPCDS
     if _TPCDS is None:
+        try:
+            with open(TPCDS_READY, "rb") as fh:
+                data = pickle.load(fh)
+            if data.get("ready_from") != os.path.getsize(TPCDS_DATA) or not TPCDS_ROWS.is_file():
+                raise ValueError("stale")
+            _TPCDS = data
+            return _TPCDS
+        except Exception:
+            pass
         try:
             with gzip.open(TPCDS_DATA, "rb") as fh:
                 data = pickle.load(fh)
@@ -3863,8 +3964,22 @@ def child_tpcds(patched, plan, wfd):
 
         if budget != float("inf"):
             signal.signal(signal.SIGPROF, give_up)
-    tables = {t: Table(columns=c, rows=data["tables"][t]) for t, c in data["schema"].items()}
-    schema, tables = pickle.loads(pickle.dumps((data["schema"], tables)))
+    schema = pickle.loads(pickle.dumps(data["schema"]))
+    raw_tables, copies = {}, {}
+
+    def built_tables():
+        if not raw_tables:
+            rows = tpcds_tables(data)
+            raw_tables.update((t, Table(columns=c, rows=rows[t])) for t, c in data["schema"].items())
+        return raw_tables
+
+    def worker_tables():
+        """The tables as the test's pool worker gets them (pickled there), made only once a
+        query runs past optimize(): until then nothing changed reads them (a change to the
+        pickling, find_tables or ensure_tables makes every query "full")."""
+        if not copies:
+            copies.update(pickle.loads(pickle.dumps(built_tables())))
+        return copies
     by_index = {q["index"]: q for q in data["queries"]}
     front = plan["mode"] == "front"
     # per query: "front" (stop after optimize() and compare its digest), "log" (also render
@@ -3927,6 +4042,9 @@ def child_tpcds(patched, plan, wfd):
         current.clear()
         current["q"] = q
         expression = pickle.loads(pickle.dumps(parse_one(q["sql"])))
+        stops = modes.get(q["index"]) != "full" and q["index"] not in optimized and \
+            executor_module.optimize is optimize_hook
+        tables = built_tables() if stops else worker_tables()
         used = {t.name: tables[t.name] for t in find_tables(expression)}
         try:
             result = pickle.loads(pickle.dumps(execute(expression, schema=schema, tables=used)))
@@ -4083,7 +4201,7 @@ def child_fixture(patched, plan, wfd):
             from sqlglot.executor.table import Table
 
             data = load_tpcds()
-            st["tables"][name] = pickle.loads(pickle.dumps(Table(columns=data["schema"][name], rows=data["tables"][name])))
+            st["tables"][name] = pickle.loads(pickle.dumps(Table(columns=data["schema"][name], rows=tpcds_tables(data)[name])))
         return st["tables"][name]
 
     def duck():
@@ -4825,6 +4943,12 @@ def _state_order(keys, strict=False):
     return sorted(range(len(keys)), key=lambda i: names[i])
 
 
+import collections.abc  # noqa: E402  the modules StateFP.tok uses
+import enum  # noqa: E402
+import functools  # noqa: E402
+import types  # noqa: E402
+
+
 class StateFP:
     PRIMS = (int, float, complex, str, bytes, bool, type(None))
 
@@ -4850,12 +4974,8 @@ class StateFP:
         return mod.startswith(("sqlglot", "tests"))
 
     def tok(self, x, out):
-        import collections.abc
-        import enum
-        import functools
-        import re
-        import types
-
+        # (collections.abc, enum, functools, re, types: imported at module level, since this
+        # runs a few hundred thousand times per fingerprint)
         t = type(x)
         if t in self.PRIMS:
             out.append(f"{t.__name__}:{x!r}")
@@ -5112,7 +5232,9 @@ def import_states(jobs, budget_s):
                 path = os.path.join(tmp, f"job{started}.pkl")  # one file per job
                 with open(path, "wb") as fh:
                     pickle.dump({"patched": patched, "masks": list(masks)}, fh)
-                proc = subprocess.Popen([sys.executable, "-S", str(Path(__file__).resolve()), "--state", path, *mods],
+                if PHASES:
+                    log(f"state run {key!r} masks {len(masks)}")
+                proc = subprocess.Popen([sys.executable, "-S", *self_command(), "--state", path, *mods],
                                         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=env, cwd=tmp,
                                         preexec_fn=_state_limits)
                 running[key] = (proc, time.monotonic() + STATE_WALL_S)
@@ -5250,7 +5372,7 @@ def import_breaks(jobs, budget_s):
                 path = os.path.join(tmp, f"{len(outputs)}_{started}.pkl")
                 with open(path, "wb") as fh:
                     pickle.dump({"patched": patched}, fh)
-                proc = subprocess.Popen([sys.executable, "-S", str(Path(__file__).resolve()), "--imports", path, *mods],
+                proc = subprocess.Popen([sys.executable, "-S", *self_command(), "--imports", path, *mods],
                                         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=env, cwd=tmp,
                                         preexec_fn=_state_limits)
                 running[key] = (proc, time.monotonic() + IMPORT_WALL_S)
@@ -5333,6 +5455,10 @@ def _zygote_imports(jobs, budget_s, wfd):
     watch = _record_import_order()
     base = import_failures(mods)
     sys.meta_path.remove(watch)
+    if PHASES:
+        import resource
+        u = resource.getrusage(resource.RUSAGE_SELF)
+        log(f"import zygote base {u.ru_utime + u.ru_stime:.3f}s mods {len(mods)}")
     out = {"base": base, "jobs": {}}
     deadline = time.monotonic() + budget_s
     pending, running = sorted(jobs.items()), {}
@@ -5371,7 +5497,9 @@ def _zygote_imports(jobs, budget_s, wfd):
                 continue
             key, _, _, buf = running.pop(pid)
             os.close(fd)
-            _, status = os.waitpid(pid, 0)
+            _, status, ru = os.wait4(pid, 0)
+            if PHASES:
+                log(f"import job {key} {ru.ru_utime + ru.ru_stime:.3f}s")
             try:
                 out["jobs"][key] = json.loads(buf.decode()) if os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0 else None
             except ValueError:
@@ -5415,6 +5543,10 @@ def _zygote_test_imports(jobs, deadline):
             importlib.import_module(name)
         except BaseException:  # noqa: BLE001
             pass
+    if PHASES:
+        import resource
+        u = resource.getrusage(resource.RUSAGE_SELF)
+        log(f"import zygote after third-party {u.ru_utime + u.ru_stime:.3f}s")
     res = {}
     pending, running = sorted(jobs.items()), {}
     while pending or running:
@@ -5456,7 +5588,9 @@ def _zygote_test_imports(jobs, deadline):
                 continue
             key, _, _, buf = running.pop(pid)
             os.close(fd)
-            _, status = os.waitpid(pid, 0)
+            _, status, ru = os.wait4(pid, 0)
+            if PHASES:
+                log(f"import test-module job {key} {ru.ru_utime + ru.ru_stime:.3f}s")
             try:
                 res[key] = json.loads(buf.decode()) if os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0 else None
             except ValueError:
@@ -5538,19 +5672,53 @@ IMPORT_DETAIL = {}  # commit -> what fails to import with its patch (and every f
 
 def needs_import_check(selector, snap, every):
     """A selection short of every test for a commit that edits sqlglot code at module or class
-    level, or a function line that runs while modules are imported."""
+    level, or a function line that runs while modules are imported. Not for an edit confined
+    to the bodies of lambdas nothing calls before the tests (Selector.lambda_body_mask: the
+    statement builds the same objects at import, and tools/build_import_lambdas.py saw no
+    such lambda called while every sqlglot and test module imported and every dialect was
+    instantiated, which is all the check does), once the patched file compiles."""
     if len(snap["chosen"]) >= len(every) or not snap["patched"]:
         return False
     for rel, lo, hi, kind in snap["touched"]:
         if rel.startswith("sqlglot/") and rel.endswith(".py") and rel in snap["patched"]:
+            if kind == "lambda" and compiles(rel, snap["patched"][rel]):
+                continue
             if kind != "function" or selector.touches_import(rel, lo, hi):
                 return True
     return False
 
 
+_COMPILES = {}
+
+
+def compiles(rel, text):
+    """Whether the text compiles as a module (ast.parse alone misses the compiler's own
+    errors, such as `await` outside an async function)."""
+    key = (rel, text)
+    if key not in _COMPILES:
+        try:
+            compile(text, str(SRC / rel), "exec", dont_inherit=True)
+            _COMPILES[key] = True
+        except Exception:  # noqa: BLE001  SyntaxError, ValueError (null bytes), RecursionError
+            _COMPILES[key] = False
+    return _COMPILES[key]
+
+
+def phase(name):
+    """Logs this process's CPU so far and its reaped children's (BR_PHASES=1)."""
+    if PHASES:
+        import resource
+        me, ch = resource.getrusage(resource.RUSAGE_SELF), resource.getrusage(resource.RUSAGE_CHILDREN)
+        log(f"PHASE {name} self {me.ru_utime + me.ru_stime:.3f} children {ch.ru_utime + ch.ru_stime:.3f}")
+
+
+PHASES = bool(os.environ.get("BR_PHASES"))
+
+
 def main():
     import time
     started = time.monotonic()
+    phase("start")
     tests = json.loads((DATA / "tests.json").read_text("utf-8"))["tests"]
     duration = {t["number"]: math.floor(t["seconds"] * 1000 + 0.5) for t in tests}
     every = sorted(duration)
@@ -5579,6 +5747,7 @@ def main():
             log(f"{len(unknown)} tests are not in the map; they run on every commit with a selection")
     except Exception as error:  # never let a map problem cost a commit
         log(f"map unavailable, running every test: {error!r}")
+    phase("map")
 
     def to_numbers(mask):
         out = []
@@ -5610,6 +5779,7 @@ def main():
                 "guard": to_numbers(selector.guard_mask) if selector.guard_mask else None}
 
     # 1. selections, and the commits whose selection an unchanged import-time state would shrink
+    phase("defs")
     snaps, narrow, state_jobs = {}, {}, {}
     for patch in sorted((DATA / "commits").glob("*.patch")):
         commit = patch.name[: -len(".patch")]
@@ -5643,10 +5813,13 @@ def main():
                     if selector.tpcds_plan(alt["chosen"], duration, tpcds_number):
                         gain += (pack_cost(alt["chosen"], duration)
                                  - pack_cost([n for n in alt["chosen"] if n != tpcds_number], duration)) // 2
+            if PHASES:
+                log(f"{commit}: state gain {gain} ms masks {len(alt['state_masks']) if alt else None}")
             if gain is not None and gain >= STATE_MIN_GAIN_MS:
                 narrow[commit] = alt
                 state_jobs[commit] = (snap["patched"], tuple((load_imports() or {}).get("test_modules", ())),
                                       tuple(alt["state_masks"]), alt.get("state_needs"))
+    phase("select")
     if state_jobs:
         verdict = import_states(state_jobs, max(5.0, STATE_BUDGET_S))
         for commit, same in sorted(verdict.items()):
@@ -5654,6 +5827,7 @@ def main():
             if same:
                 snaps[commit] = narrow[commit]
 
+    phase("state")
     # 1a. commits that select every test only for an import edit or a lost name read
     # elsewhere, looked at again with those rules deferred. If that module then fails to
     # import, its importers are what can fail (`deferred`); if every import still succeeds,
@@ -5699,6 +5873,7 @@ def main():
         IMPORT_TEST_MODULES[:] = sorted(f[:-3].replace("/", ".") for f in selector.doc["test_files"]
                                         if f.endswith(".py") and not f.endswith("__init__.py"))
 
+    phase("defer")
     # 1b. edits that run while modules are imported: does every import still succeed?
     bind_state = {}
     if IMPORT_CHECK and selector is not None:
@@ -5715,7 +5890,9 @@ def main():
                     alt, rels = deferred[commit]
                     detail = IMPORT_DETAIL.get(commit) if broken else None
                     mods = {e.rpartition(": ")[0] for e in detail or ()}
+                    phase("before-failure-mask")
                     extra = selector.import_failure_mask(detail) if detail else None
+                    phase("failure-mask")
                     # only when every file the commit changes is a module that no longer imports:
                     # nothing of theirs runs, and what the rest of the map recorded still holds
                     files = set(alt["patched"]) | rels
@@ -5739,6 +5916,7 @@ def main():
             if same:
                 snaps[commit] = bind_jobs[commit][0]
 
+    phase("imports")
     # 2. the checks each selection is worth
     answers = {}
     jobs, tpcds_jobs = [], []
@@ -5802,20 +5980,32 @@ def main():
             if check:
                 expected = sum(duration[n] for n in check) / 1000
                 limit = 10 + 4 * expected
+                if PHASES:
+                    files = {info[n]["file"] for n in check}
+                    full = pack_cost(chosen, duration) - pack_cost(sorted(set(chosen) - set(check)), duration)
+                    log(f"{commit}: test check plan n={len(check)} of {len(chosen)} run_ms={expected * 1000:.0f} "
+                        f"files={len(files)} heavy={sorted(files & HEAVY_FILES)} max_saving_ms={full}")
                 jobs.append((commit, patched, [id_of[n] for n in check],
                              {id_of[n]: duration[n] / 1000 for n in check}, limit))
         log(f"{commit}: {len(chosen)} tests")
 
+    phase("plan")
     jobs = tpcds_jobs + jobs
     if jobs:
         budget = float(os.environ.get("BR_BUDGET", "140")) - (time.monotonic() - started)
+        if any(("__tpcds__" in job[3] and not job[3]["__tpcds__"].get("keep")) or "__fixture__" in job[3]
+               for job in jobs) and load_tpcds() is not None:
+            tpcds_tables(load_tpcds())  # once here, so the checks share it
         warm(jobs)
+        phase("warm")
         preimport(jobs)
+        phase("preimport")
         # every check is a fork of this process: keep the collector in each child away from
         # the maps and imports already here (walking them would also copy their pages)
         import gc
         gc.freeze()
         results = run_checks(jobs, budget)
+        phase("checks")
         for commit in list(guards):
             if results.get((commit, "tpcds")) is None:  # the patched sources didn't import, or no verdict
                 answers[commit] = guards.pop(commit)
@@ -5831,12 +6021,28 @@ def main():
     out = [json.dumps({"commit": c, "workers": pack(answers[c], duration)}, separators=(",", ":"))
            for c in answers]
     sys.stdout.write("\n".join(out) + ("\n" if out else ""))
+    phase("end")
+
+
+def self_command():
+    """The arguments that start this program in a new Python: imported as a module when it is
+    one (its bytecode compiled when the image was built), else run as the script."""
+    path = Path(__file__).resolve()
+    if __name__ == "__main__":
+        return [str(path)]
+    return ["-c", f"import sys; sys.path.insert(0, {str(path.parent)!r}); import {path.stem}; {path.stem}.cli(sys.argv[1:])"]
+
+
+def cli(argv):
+    if len(argv) > 1 and argv[0] == "--state":
+        state_main(argv[1:])
+    elif len(argv) > 1 and argv[0] == "--imports":
+        imports_main(argv[1:])
+    elif len(argv) > 1 and argv[0] == "--static":
+        static_main(argv[1:])
+    else:
+        main()
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 2 and sys.argv[1] == "--state":
-        state_main(sys.argv[2:])
-    elif len(sys.argv) > 2 and sys.argv[1] == "--imports":
-        imports_main(sys.argv[2:])
-    else:
-        main()
+    cli(sys.argv[1:])
