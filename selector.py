@@ -1931,6 +1931,27 @@ class Selector:
                 m |= self.test_bit.get(f"{trel}::{tcls}::{tname}", 0)
         return m
 
+    def lost_at_import(self, rel, cls, module, lost):
+        """Whether a lost name is surely looked up while modules are imported: another sqlglot
+        module imports it at its top level, or the patched module names it outside every
+        function (as a base class, say). Only spares the import-time state check a run
+        whose answer is known; the check stays the proof."""
+        if not lost:
+            return False
+        if cls is None:
+            for site_rel, _, _, nested, names in self.import_sites():
+                if not nested and site_rel.startswith("sqlglot/") and any(f"{module}.{n}" in names for n in lost):
+                    return True
+        new_idx = SourceIndex(self.patched[rel])
+        word = re.compile(r"(?<![\w])(?:" + "|".join(map(re.escape, sorted(lost))) + r")(?![\w])")
+        for ln, line in enumerate(new_idx.lines, start=1):
+            if word.search(line) and not new_idx.in_string(ln) and not line.lstrip().startswith("#"):
+                st, _ = new_idx.stmt_at(ln)
+                if st is not None and st["scope"] != "function" and st["kind"] != "def" \
+                        and not isinstance(st["node"], (ast.Import, ast.ImportFrom, ast.AnnAssign)):
+                    return True
+        return False
+
     def deferred_mask(self, deferred):
         """For the items all_or_defer noted: the bindings the state check leaves out, and the
         tests that can see them change; None unless each deferred name is one the patch
@@ -1953,6 +1974,8 @@ class Selector:
             if not names <= moved:
                 return None
             module = rel[:-3].replace("/", ".")
+            if self.lost_at_import(rel, cls, module, old[cls] - new[cls]):
+                return None  # an import would fail: the state check can only say so
             for name in moved:  # a rename gains a name as it loses one: both are looked up
                 refs = self.binding_refs_mask(rel, cls, name)
                 if refs is None:
