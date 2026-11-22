@@ -3580,6 +3580,7 @@ def limit_memory():
 
 ZYGOTE = os.environ.get("BR_ZYGOTE", "1") != "0"
 _IMPORT_ORDER = {}  # module -> (start tick, end tick) of its import in the parent
+_TICK = None  # one clock for every import recorded here and in the import-check zygote forked from here
 _OURS = ("sqlglot", "tests")
 
 
@@ -3594,7 +3595,10 @@ def preimport(jobs):
     files = sorted({t.split("::")[0] for job in jobs
                     if "__tpcds__" not in job[3] and "__genmem__" not in job[3] and "__fixture__" not in job[3]
                     for t in job[2]})
-    tick = itertools.count()
+    global _TICK
+    if _TICK is None:
+        _TICK = itertools.count()
+    tick = _TICK
 
     class Watch(importlib.abc.MetaPathFinder):
         def find_spec(self, fullname, path, target=None):
@@ -4376,7 +4380,10 @@ def _record_import_order():
     import importlib.machinery
     import itertools
 
-    tick = itertools.count()
+    global _TICK
+    if _TICK is None:
+        _TICK = itertools.count()
+    tick = _TICK
 
     class Watch(importlib.abc.MetaPathFinder):
         def find_spec(self, fullname, path, target=None):
@@ -4641,16 +4648,24 @@ def main():
             if same:
                 snaps[commit] = narrow[commit]
 
-    # 1b. edits that run while modules are imported: does every import still succeed?
+    # 1b. edits that run while modules are imported: does every import still succeed? (run
+    # below, once this process has imported the pinned sources for the checks, so the
+    # import-check zygote forked from it doesn't import them again)
+    imp_jobs = {}
     if IMPORT_CHECK and selector is not None:
         imp_jobs = {c: snap["patched"] for c, snap in snaps.items() if needs_import_check(selector, snap, every)}
+
+    def import_check():
+        broken = set()
         if imp_jobs:
             verdict = import_breaks_forked(imp_jobs, 30.0) if ZYGOTE else None
             if verdict is None:
                 verdict = import_breaks(imp_jobs, 30.0)
-            for commit, broken in verdict.items():
-                if broken:
-                    snaps[commit] = dict(snaps[commit], chosen=every, verifiable=False)
+            broken = {c for c, b in verdict.items() if b}
+            for commit in broken:  # every test, and nothing to check
+                answers[commit] = every
+                guards.pop(commit, None)
+        return broken
 
     # 2. the checks each selection is worth
     answers = {}
@@ -4708,10 +4723,15 @@ def main():
         log(f"{commit}: {len(chosen)} tests")
 
     jobs = tpcds_jobs + jobs
+    if not jobs:
+        import_check()
     if jobs:
         budget = float(os.environ.get("BR_BUDGET", "140")) - (time.monotonic() - started)
         warm(jobs)
         preimport(jobs)
+        broken = import_check()
+        jobs = [job for job in jobs if (job[0][0] if isinstance(job[0], tuple) else job[0]) not in broken]
+        budget = float(os.environ.get("BR_BUDGET", "140")) - (time.monotonic() - started)
         # every check is a fork of this process: keep the collector in each child away from
         # the maps and imports already here (walking them would also copy their pages)
         import gc
