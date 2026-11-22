@@ -216,17 +216,14 @@ def _crash_selection(analyzer: Analyzer, per_file, everything: set[int], modules
     selections of patched files that still import (their edits stay visible)."""
     names = [m for m in modules if not m.startswith("tests")]
     failed = checker.failing_modules(analyzer.import_time, names)
-    if failed:
-        # test modules importing a patched or failing module at collection may now fail too
-        # (from m import a_name_the_patch_removed): try importing them as well
-        paths = set(analyzer.import_time) | {p for p in map(analyzer._module_path, failed) if p}
-        test_mods = sorted({_module_name(f) for p in paths for f in analyzer.maps.collect_imports.get(p, ())})
-        failed = checker.failing_modules(analyzer.import_time, names + test_mods)
-    crash = analyzer.crash_tests(failed) if failed else ALL
+    gone = {path for path in analyzer.import_time if _module_name(path) in (failed or ())}
+    # Only when every patched module with import-time edits itself fails to import is the
+    # crash the patch's whole effect; a patched module that still imports can change state
+    # its importers read in ways no coverage shows (a lazy __getattr__ table, say).
+    crash = analyzer.crash_tests(failed) if failed and gone == set(analyzer.import_time) else ALL
     if crash is ALL:
         log("  import-time crash detected: selecting every test")
         return set(everything)
-    gone = {path for path in analyzer.import_time if _module_name(path) in failed}
     others = _union(got for path, got in per_file if path not in gone)
     if others is ALL:
         log("  import-time crash, other files unbounded: selecting every test")
