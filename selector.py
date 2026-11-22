@@ -1890,6 +1890,15 @@ class Selector:
             return False  # the interpreter it starts imports nothing from tests/
         return rel in CORE_FILES or not (rel.startswith("sqlglot/") and rel.endswith(".py"))
 
+    def bare_ok(self):
+        """Whether a check of this commit may skip the setUpClass of BARE_CLASSES: every change
+        is ordinary function code in sqlglot/ (so nothing an import builds changed), and none
+        of it is in a file that setUpClass runs code from."""
+        return bool(self.verifiable and not self.data_files and self.patched and self.touched
+                    and all(rel.startswith("sqlglot/") for rel in self.patched)
+                    and all(kind == "function" and rel.startswith("sqlglot/") and rel not in BARE_SETUP_FILES
+                            for rel, _, _, kind in self.touched))
+
     # ---- the 21 s TPC-DS executor test: replay what the edit can reach instead of running it
 
     def tpcds_plan(self, chosen, duration, tpcds_number):
@@ -2026,10 +2035,35 @@ def pack(numbers, duration):
 RUN = os.environ.get("BR_RUN", "1") != "0"
 TIME_FACTOR = float(os.environ.get("BR_TIME_FACTOR", "1.0"))  # our run time / recorded time
 COMMIT_OVERHEAD_MS = 300  # fork, importing the patched sqlglot, plus a safety margin
-# measured: importing a test module and its dialects; the two heavy files also pay for
-# duckdb/pandas and a setUpClass that loads data
-FILE_OVERHEAD_MS = {"tests/test_executor.py": 4000, "tests/test_optimizer.py": 2500}
+# measured: importing a test module and its dialects. TestExecutor's setUpClass loads the
+# TPC-H and TPC-DS tables (1.1 s) unless the check may skip it (BARE_CLASSES).
+FILE_OVERHEAD_MS = {"tests/test_executor.py": 4000}
 DEFAULT_FILE_OVERHEAD_MS = 150
+BARE_FILE_OVERHEAD_MS = 300
+# A class whose setUpClass a check may skip, and the only sqlglot files that setUpClass runs
+# code from (traced at the pinned commit): when a commit changes nothing but ordinary function
+# code in other sqlglot files, setUpClass does exactly what it did before, so it can't fail,
+# and a test that never touches what it builds runs the same without it.
+BARE_CLASSES = {"tests/test_executor.py": "TestExecutor"}
+BARE_SETUP_FILES = {"sqlglot/executor/table.py"}
+# test_optimizer's heavy tests. Most run fixtures through a process pool, so a check costs
+# more CPU than their recorded wall time, and they are the tests an edit most often breaks:
+# a check that finds a failure has only cost CPU. Each is charged 3.7 times its measured check
+# CPU, the margin the fixed overheads above give a small check of ordinary tests (ms beyond
+# wall; with their true cost the sample lost 1.2 s: one check paid off, two found failures).
+# The file's other tests cost what they take, like any other test.
+EXTRA_CPU_MS = {
+    "tests/test_optimizer.py::TestOptimizer::" + name: ms for name, ms in (
+        ("test_tpcds", 13300), ("test_qualify_columns", 5750), ("test_simplify", 3900),
+        ("test_merge_subqueries", 3800), ("test_optimize_in_nulls", 3800), ("test_annotate_funcs", 3250),
+        ("test_optimize", 2850), ("test_scope", 2400), ("test_optimize_correlated_all", 2000),
+        ("test_unnest_subqueries", 1450), ("test_tpch", 1250), ("test_optimize_scalar_subquery_predicates", 1100),
+        ("test_canonicalize_internal_names", 1050), ("test_pushdown_predicates", 1050),
+        ("test_qualify_semi_anti_join_alias_shadowing_column", 1050),
+        ("test_qualify_struct_star_long_cte_chain", 1000), ("test_simplify_string_comparisons", 750))
+}
+
+
 MAX_TEST_MS = 3000  # longer tests are cheaper to schedule than to run here
 SKIP_FILES = {
     "tests/test_sqlglotc.py", "tests/test_build.py", "tests/test_docs.py",
@@ -2039,6 +2073,72 @@ SKIP_FILES = {
 SKIP_TESTS = set()
 
 
+_FIXTURE_TESTS = {}
+
+
+def fixture_tests(rel, cls_name):
+    """The class's test methods that, directly or through anything they call by name, touch
+    an attribute its setUpClass sets (read from the pinned test file); None if that can't be
+    told, e.g. when the module has fixtures of its own."""
+    key = (rel, cls_name)
+    if key in _FIXTURE_TESTS:
+        return _FIXTURE_TESTS[key]
+    out = None
+    try:
+        tree = ast.parse((SRC / rel).read_text("utf-8", errors="surrogateescape"))
+        functions = {n.name: n for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+        cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == cls_name)
+        methods = {n.name: n for n in cls.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+        setup = methods.get("setUpClass")
+        made, opaque = set(), "setUpModule" in functions or "tearDownModule" in functions
+        for node in ast.walk(setup) if setup is not None else ():
+            if isinstance(node, ast.Attribute) and isinstance(node.ctx, ast.Store):
+                made.add(node.attr)
+            elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in ("setattr", "vars"):
+                opaque = True
+        if not opaque:
+            uses = {}  # per function or method: the attribute names and the bare names it mentions
+            for name, fn in {**functions, **methods}.items():
+                attrs, names = set(), set()
+                for node in ast.walk(fn):
+                    if isinstance(node, ast.Attribute):
+                        attrs.add(node.attr)
+                    elif isinstance(node, ast.Name):
+                        names.add(node.id)
+                uses[name] = (attrs, names)
+
+            def needs(name, seen):
+                if name in seen:
+                    return False
+                seen.add(name)
+                attrs, names = uses[name]
+                if made & attrs or "__dict__" in attrs or {"getattr", "vars"} & names:
+                    return True
+                return any(needs(other, seen) for other in (attrs & set(methods)) | (names & set(functions)))
+
+            always = [m for m in ("setUp", "tearDown") if m in methods]
+            out = {name for name in methods if name.startswith("test")
+                   and (needs(name, set()) or any(needs(m, set()) for m in always))}
+    except Exception:
+        out = None
+    _FIXTURE_TESTS[key] = out
+    return out
+
+
+def bare_classes(test_ids):
+    """Of BARE_CLASSES, the (file, class) pairs whose tests in this check all run the same
+    without setUpClass."""
+    out = set()
+    for rel, cls_name in BARE_CLASSES.items():
+        mine = [t.split("::")[2] for t in test_ids if t.startswith(f"{rel}::{cls_name}::")]
+        if not mine:
+            continue
+        need = fixture_tests(rel, cls_name)
+        if need is not None and not need & set(mine):
+            out.add((rel, cls_name))
+    return out
+
+
 def pack_cost(numbers, duration):
     workers = pack(numbers, duration)
     if not workers:
@@ -2046,12 +2146,19 @@ def pack_cost(numbers, duration):
     return max(sum(duration[n] for n in w) for w in workers) + WORKER_MS * len(workers)
 
 
-def plan_check(chosen, duration, info, excluded=(), want_gain=False):
+def plan_check(chosen, duration, info, excluded=(), want_gain=False, bare=False):
     """The cheapest-first prefix of runnable tests whose check is expected to pay off (with
-    want_gain, the ms it is expected to save if they all pass, instead)."""
+    want_gain, the ms it is expected to save if they all pass, instead). bare: the check may
+    skip the setUpClass of BARE_CLASSES."""
     runnable = sorted((n for n in chosen if info[n]["runnable"] and n not in excluded), key=lambda n: (duration[n], n))
     if not runnable:
         return 0 if want_gain else []
+
+    def file_ms(f):
+        if bare and f in BARE_CLASSES:
+            return BARE_FILE_OVERHEAD_MS
+        return FILE_OVERHEAD_MS.get(f, DEFAULT_FILE_OVERHEAD_MS)
+
     base = pack_cost(chosen, duration)
     chosen_set = set(chosen)
     best_gain, best_k = 0, 0
@@ -2062,10 +2169,10 @@ def plan_check(chosen, duration, info, excluded=(), want_gain=False):
     prev = 0
     for k in ks:
         for n in runnable[prev:k]:
-            run_ms += duration[n] * TIME_FACTOR
+            run_ms += (duration[n] + info[n].get("extra", 0)) * TIME_FACTOR
             files.add(info[n]["file"])
         prev = k
-        overhead = COMMIT_OVERHEAD_MS + sum(FILE_OVERHEAD_MS.get(f, DEFAULT_FILE_OVERHEAD_MS) for f in files)
+        overhead = COMMIT_OVERHEAD_MS + sum(file_ms(f) for f in files)
         rest = sorted(chosen_set - set(runnable[:k]))
         gain = base - pack_cost(rest, duration) - run_ms - overhead
         if gain > best_gain:
@@ -2643,7 +2750,13 @@ def child_run(patched, test_ids, limits, wfd):
                 cases.append(case)
             result = Result()
             try:
-                unittest.TestSuite(cases).run(result)
+                if (f, cls_name) in limits.get("__bare__", ()):
+                    # none of these tests reads what setUpClass builds, and the patch can't
+                    # change how it runs (see bare_classes): skip it and tearDownClass
+                    for case in cases:
+                        case.run(result)
+                else:
+                    unittest.TestSuite(cases).run(result)
             except BaseException:
                 failed.update(t for _, t in meths)
             mark(f"ran {cls_name} x{len(cases)}")
@@ -3240,6 +3353,7 @@ def main():
             "file": t["file"],
             "runnable": (len(parts) == 3 and "[" not in t["id"] and t["file"] not in SKIP_FILES
                          and t["id"] not in SKIP_TESTS and duration[t["number"]] <= MAX_TEST_MS),
+            "extra": EXTRA_CPU_MS.get(t["id"], 0),
         }
 
     selector = None
@@ -3357,12 +3471,15 @@ def main():
                                    {"__genmem__": gplan, GENMEM_TEST: duration[genmem_number] / 1000},
                                    10 + 3 * gplan["estimate"]))
         if RUN and verifiable and chosen:
-            check = plan_check(chosen, duration, info, unreadable)
+            bare = selector is not None and selector.bare_ok()
+            check = plan_check(chosen, duration, info, unreadable, bare=bare)
             if check:
                 expected = sum(duration[n] for n in check) / 1000
                 limit = 10 + 4 * expected
-                jobs.append((commit, patched, [id_of[n] for n in check],
-                             {id_of[n]: duration[n] / 1000 for n in check}, limit))
+                limits = {id_of[n]: duration[n] / 1000 for n in check}
+                if bare:
+                    limits["__bare__"] = bare_classes(list(limits))
+                jobs.append((commit, patched, [id_of[n] for n in check], limits, limit))
         log(f"{commit}: {len(chosen)} tests")
 
     jobs = tpcds_jobs + jobs
