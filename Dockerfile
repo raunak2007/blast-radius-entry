@@ -39,8 +39,13 @@ with tarfile.open(fileobj=io.BytesIO(data)) as tf:
     tf.extractall("/opt/sqlglot_root", members=top, filter="data")
 tarfile.open("/app/sqlglot_src.tar.gz").extractall("/opt/sqlglot", filter="data")
 EOF
+# static_src.pkl: every import statement and test method source of the pinned sources,
+# which the import-failure narrowing would otherwise parse again in every run. selector.py
+# is compiled too and imported as a module, so no run compiles it again.
 RUN rm /app/sqlglot_src.tar.gz \
  && python -m compileall -q -j 0 /usr/local/lib/python3.13 /opt/sqlglot/sqlglot /opt/sqlglot/tests > /dev/null \
+ && python -S /app/selector.py --static /app/static_src.pkl \
+ && python -m compileall -q /app/selector.py \
  && chmod -R a+rX /opt/sqlglot /opt/sqlglot_root /app
 
-CMD ["python", "-S", "/app/selector.py"]
+CMD ["python", "-S", "-c", "import sys; sys.path.insert(0, '/app'); import selector; selector.cli(sys.argv[1:])"]
