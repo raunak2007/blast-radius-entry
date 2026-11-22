@@ -108,6 +108,7 @@ TPCDS_TEST_MODULES = {"tests/__init__.py", "tests/test_executor.py", "tests/help
 TPCDS_GATE = {"front": 0.8, "full": 0.35}
 TPCDS_BUDGET = 0.85  # the replay child is stopped (and the test kept) past this share of the saving
 TPCDS_RERUN_SHARE = float(os.environ.get("BR_RERUN_SHARE", "0.5"))  # second front pass only if its estimate fits in this share of what is left
+TPCDS_BINDINGS = os.environ.get("BR_TPCDS_BINDINGS", "1") != "0"  # module/class-level binding edits replayed
 TPCDS_EARLY_RERUNS = 3  # changed plans run to the end at once, before deferring the rest
 WORKER_MS = 2000
 MAX_WORKERS = 8
@@ -3246,6 +3247,222 @@ class Selector:
             return None
         return set(site["differs"])
 
+    # ---- module- and class-level binding edits, for the TPC-DS replay
+    #
+    # Adapted from EvanDamron/blast-radius-selector ("Codegen-stage proof for
+    # test_execute_tpcds", MIT): a class-level constant may change if no line the test runs
+    # after its early stages mentions the name. Re-implemented on this selector's replay.
+
+    @staticmethod
+    def _type_checking_test(node):
+        t = node.test
+        return (isinstance(t, ast.Name) and t.id == "TYPE_CHECKING") or \
+            (isinstance(t, ast.Attribute) and t.attr == "TYPE_CHECKING" and isinstance(t.value, ast.Name)
+             and t.value.id in ("t", "typing"))
+
+    def _binding_skeleton(self, body, path, binds, imports):
+        """The statements of a module or class body with each plain binding (a pure-valued
+        assignment to one name, or an import) replaced by a marker that keeps its place and
+        name; the bindings' values go to `binds`. `if TYPE_CHECKING:` bodies never run, so
+        they are left out. Nested class bodies are treated the same way."""
+        out = []
+        for st in body:
+            if isinstance(st, ast.If) and self._type_checking_test(st) and not st.orelse:
+                out.append("<type-checking>")
+                continue
+            name = None
+            if isinstance(st, ast.Assign) and len(st.targets) == 1 and isinstance(st.targets[0], ast.Name) \
+                    and self.pure_value(st.value):
+                name, value = st.targets[0].id, ast.dump(st.value)
+            elif isinstance(st, ast.AnnAssign) and isinstance(st.target, ast.Name) and st.simple \
+                    and st.value is not None and self.pure_value(st.value) and self.pure_value(st.annotation):
+                name, value = st.target.id, ast.dump(st.value) + "|" + ast.dump(st.annotation)
+            elif isinstance(st, ast.ImportFrom) and len(st.names) == 1 and st.names[0].name != "*" and not path:
+                a = st.names[0]
+                name, value = a.asname or a.name, ("from", st.level, st.module, a.name)
+                imports[(path, name)] = st
+            if name is not None:
+                if (path, name) in binds or name.startswith("__"):
+                    return None
+                binds[(path, name)] = value
+                out.append(("bind", name))
+                continue
+            if isinstance(st, ast.ClassDef):
+                inner = self._binding_skeleton(st.body, path + (st.name,), binds, imports)
+                if inner is None:
+                    return None
+                head = ast.dump(ast.ClassDef(name=st.name, bases=st.bases, keywords=st.keywords, body=[],
+                                             decorator_list=st.decorator_list, type_params=[]))
+                out.append(("class", head, tuple(inner)))
+                continue
+            out.append(ast.dump(st))
+        return out
+
+    def tpcds_binding_change(self, rel):
+        """For a patched sqlglot module: None unless every change in it is a plain module- or
+        class-level binding (pure value, or a one-name `from X import a`) changed, added or
+        deleted, or a change inside an `if TYPE_CHECKING:` body; else the changed names
+        (empty: nothing that runs changed). Statements keep their order."""
+        new_text = self.patched.get(rel)
+        if new_text is None or not rel.endswith(".py"):
+            return None
+        try:
+            old_text, _ = self.index(rel)
+            old_tree, new_tree = ast.parse(old_text), ast.parse(new_text)
+        except Exception:
+            return None
+        ob, nb, oi, ni = {}, {}, {}, {}
+        a = self._binding_skeleton(old_tree.body, (), ob, oi)
+        b = self._binding_skeleton(new_tree.body, (), nb, ni)
+        if a is None or b is None:
+            return None
+        changed = {k for k in set(ob) | set(nb) if ob.get(k) != nb.get(k)}
+
+        def strip(sk, gone):
+            res = []
+            for x in sk:
+                if isinstance(x, tuple) and x[0] == "bind" and x in gone:
+                    continue
+                if isinstance(x, tuple) and x[0] == "class":
+                    x = (x[0], x[1], tuple(strip(x[2], gone)))
+                res.append(x)
+            return res
+
+        # only the markers of bindings that exist on one side may differ in place (added or
+        # deleted); names flat across nesting, which only makes the strip coarser
+        one_side = {("bind", k[1]) for k in set(ob) ^ set(nb)}
+        if strip(a, one_side) != strip(b, one_side):
+            return None
+        for k in changed:
+            if k in oi and k not in ni:
+                # a deleted import: its module must still be imported (it's named by an
+                # import line some other module runs while importing)
+                st = oi[k]
+                target = self.resolve_from(rel, st)
+                if target is None or not self.module_imported_elsewhere(target, rel):
+                    return None
+            elif k in oi or k in ni:
+                return None  # an import added or rebound
+        return {k[1] for k in changed}
+
+    def module_imported_elsewhere(self, target, rel):
+        if target in ("typing", "__future__"):
+            return target != "__future__"
+        self.name_used_elsewhere("import", "")  # loads _all_texts
+        leaf = target.rpartition(".")[2]
+        for r, imp in self.import_lines.items():
+            if r == rel or r in self.patched or not r.startswith("sqlglot/"):
+                continue
+            text = self._all_texts.get(r)
+            if text is None or leaf not in text:
+                continue
+            lines = text.split("\n")
+            for ln in imp:
+                if ln > len(lines):
+                    continue
+                line = lines[ln - 1].strip()
+                if not line.startswith(("import ", "from ")):
+                    continue
+                try:
+                    node = ast.parse(line).body[0]
+                except Exception:
+                    continue
+                if isinstance(node, ast.Import) and any(x.name == target for x in node.names):
+                    return True
+                if isinstance(node, ast.ImportFrom) and self.resolve_from(r, node) == target:
+                    return True
+        return False
+
+    def tpcds_late_text(self, data):
+        """The source text of every line test_execute_tpcds runs after its queries' early
+        stages (planning and execution, the digest code, the table setup), and, apart, of the
+        debug-log rendering, plus every line any module runs while being imported."""
+        got = data.get("_late_text")
+        if got is None:
+            def text_of(sets):
+                chunks = []
+                for r, lines in sets.items():
+                    try:
+                        src = (SRC / r).read_bytes().decode("utf-8", "surrogateescape").split("\n")
+                    except OSError:
+                        return None
+                    chunks.extend(src[ln - 1] for ln in sorted(lines) if 0 < ln <= len(src))
+                return "\n".join(chunks)
+
+            late, logs = {}, {}
+            for part in [data["setup_sets"], data["digest_sets"]] + [q["exec_sets"] for q in data["queries"]]:
+                for r, v in part.items():
+                    late.setdefault(r, set()).update(v)
+            for q in data["queries"]:
+                for r, v in q["log_sets"].items():
+                    logs.setdefault(r, set()).update(v)
+            imp = {r: v for r, v in self.import_lines.items() if r.endswith(".py")}
+            got = data["_late_text"] = (text_of(late), text_of(logs), imp)
+        return got
+
+    def tpcds_bindings_ok(self, data, rel, names):
+        """Whether the changed bindings can reach test_execute_tpcds only through its queries'
+        early stages: no line it runs later, and no line run at import (outside the edited
+        statements themselves, here old and new), mentions any of the names. Returns the
+        replay mode for every query ("front", or "log" if the log rendering mentions one),
+        or None."""
+        late, logs, imp = self.tpcds_late_text(data)
+        self.name_used_elsewhere("import", "")  # loads _all_texts
+        if late is None or logs is None:
+            return None
+        if any(has_word(late, n) for n in names):
+            log(f"TPC-DS: {sorted(names)} mentioned at execution time")
+            return None
+        own = {}
+        for r, lines in imp.items():
+            if r in self.patched:
+                continue  # the edited modules are checked on their new text below
+            if not any(n in self._all_texts.get(r, "") for n in names):
+                continue
+            src = self._all_texts.get(r, "").split("\n")
+            text = "\n".join(src[ln - 1] for ln in lines if 0 < ln <= len(src))
+            if any(has_word(text, n) for n in names):
+                log(f"TPC-DS: {sorted(names)} mentioned at import in {r}")
+                return None
+        for r, new_text in self.patched.items():
+            if not r.endswith(".py"):
+                continue
+            # an edited module: every mention outside a plain binding of the name itself
+            # (import time or not, conservatively)
+            try:
+                tree = ast.parse(new_text)
+                old_tree = ast.parse(self.index(r)[0]) if (SRC / r).is_file() else None
+            except Exception:
+                return None
+            for tr in (tree, old_tree):
+                if tr is None:
+                    continue
+                for node in ast.walk(tr):
+                    if isinstance(node, ast.Name) and node.id in names and isinstance(node.ctx, ast.Store):
+                        continue
+                    if isinstance(node, ast.alias) and (node.asname or node.name) in names:
+                        continue
+                    if isinstance(node, ast.Name) and node.id in names:
+                        log(f"TPC-DS: {sorted(names)} mentioned in {r}: {type(node).__name__} line {getattr(node, 'lineno', 0)}")
+                        return None
+                    if isinstance(node, ast.Attribute) and node.attr in names:
+                        log(f"TPC-DS: {sorted(names)} mentioned in {r}: {type(node).__name__} line {getattr(node, 'lineno', 0)}")
+                        return None
+                    if isinstance(node, ast.Constant) and isinstance(node.value, str) and \
+                            any(has_word(node.value, n) for n in names):
+                        log(f"TPC-DS: {sorted(names)} mentioned in {r}: {type(node).__name__} line {getattr(node, 'lineno', 0)}")
+                        return None
+                    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node.name in names:
+                        log(f"TPC-DS: {sorted(names)} mentioned in {r}: {type(node).__name__} line {getattr(node, 'lineno', 0)}")
+                        return None
+                    if isinstance(node, ast.arg) and node.arg in names:
+                        log(f"TPC-DS: {sorted(names)} mentioned in {r}: {type(node).__name__} line {getattr(node, 'lineno', 0)}")
+                        return None
+                    if isinstance(node, ast.keyword) and node.arg in names:
+                        log(f"TPC-DS: {sorted(names)} mentioned in {r}: {type(node).__name__} line {getattr(node, 'lineno', 0)}")
+                        return None
+        return "log" if any(has_word(logs, n) for n in names) else "front"
+
     def tpcds_plan(self, chosen, duration, tpcds_number):
         """A replay plan when it is provably enough and clearly cheaper than the test, else None.
 
@@ -3268,18 +3485,42 @@ class Selector:
         if not tbit or any(self.doc["file_opens"].get(r, 0) & tbit or "/tpc-" in r for r in self.data_files):
             return None
         code = []
+        binding_rels = {}  # module -> its changed binding names (tpcds_binding_change)
         for rel, lo, hi, kind in self.touched:
             if rel in self.data_files or (rel.startswith("tests/") and rel.endswith(".py") and lo == hi == 0
                                           and rel not in TPCDS_TEST_MODULES):
                 continue
-            if kind not in ("function", "lambda", "env") or not rel.startswith("sqlglot/"):
+            if not rel.startswith("sqlglot/"):
                 return None
+            if kind not in ("function", "lambda", "env"):
+                if rel not in binding_rels:
+                    binding_rels[rel] = self.tpcds_binding_change(rel) if TPCDS_BINDINGS else None
+                if binding_rels[rel] is None:
+                    if TPCDS_BINDINGS:
+                        log(f"TPC-DS: {rel} is not only binding edits")
+                    return None
+                continue
+            if rel in binding_rels:
+                return None  # (cannot happen: such a module has only binding edits)
             code.append((rel, lo, hi, kind))
-        if not code:
+        if any(rel in binding_rels for rel, *_ in code):
+            return None
+        if not code and not binding_rels:
             return None
         data = load_tpcds()
         if data is None:
             return None
+        all_mode = None  # every query re-checked this way: a binding changed
+        names = set().union(*binding_rels.values()) if binding_rels else set()
+        if names:
+            all_mode = self.tpcds_bindings_ok(data, None, names)
+            if all_mode is None:
+                return None
+            log(f"TPC-DS: bindings {sorted(names)} reach only the early stages: every query {all_mode}")
+        elif not code:
+            # nothing that runs changed (only `if TYPE_CHECKING:` bodies): the test can't change
+            log("TPC-DS: only TYPE_CHECKING bodies changed")
+            return {"mode": "front", "modes": {}, "queries": [], "estimate": 0.5, "budget": 5.0, "inert": True}
 
         def hits(sets, rel, lo, hi):
             lines = sets.get(rel)
@@ -3318,8 +3559,13 @@ class Selector:
             in_log = any(hits(q["log_sets"], *s) for s in live)
             in_env = env_queries is not None and q["index"] in env_queries
             if not (in_exec or in_log or in_env or any(hits(q["front_sets"], *s) for s in live)):
+                if all_mode is not None:
+                    modes[q["index"]] = "full" if digest_hit else all_mode
+                    reached.append(q)
                 continue
             modes[q["index"]] = "full" if in_exec or in_env or digest_hit else ("log" if in_log else "front")
+            if all_mode == "log" and modes[q["index"]] == "front":
+                modes[q["index"]] = "log"
             reached.append(q)
         if not reached and env_queries is None:
             return None  # the test runs this code somewhere the replay doesn't: keep it
