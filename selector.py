@@ -907,6 +907,10 @@ class Selector:
             return m
         if st["scope"] == "class":
             return self.class_change(rel, idx, st, line, blk)
+        if blk is not None and st["scope"] == "module" and not self.defer_all:
+            gone = self.removed_binding_mask(rel, idx, st, blk)
+            if gone is not None:
+                return gone
         if blk is not None and isinstance(st["node"], (ast.Assign, ast.AnnAssign)):
             entry = self.dict_entry_mask(rel, st["node"], line, blk)
             if entry is not None:
@@ -1185,6 +1189,269 @@ class Selector:
                     return None
                 m |= tm
         return m
+
+    # ---- a top-level import or assignment deleted outright
+
+    NOOP_FUTURES = {"annotations", "division", "absolute_import", "print_function", "unicode_literals",
+                    "generators", "nested_scopes", "with_statement", "generator_stop"}
+
+    @staticmethod
+    def module_name(rel):
+        mod = rel[:-3].replace("/", ".")
+        return mod[: -len(".__init__")] if mod.endswith(".__init__") else mod
+
+    @classmethod
+    def resolve_from(cls, rel, node):
+        """The absolute module an ImportFrom in `rel` names (None if it climbs out of the tree)."""
+        if not node.level:
+            return node.module
+        pkg = cls.module_name(rel) if rel.endswith("__init__.py") else cls.module_name(rel).rpartition(".")[0]
+        parts = pkg.split(".") if pkg else []
+        if node.level - 1 > len(parts) or (node.level - 1 == len(parts) and not node.module):
+            return None
+        base = parts[: len(parts) - (node.level - 1)]
+        return ".".join(base + ([node.module] if node.module else []))
+
+    def star_imported(self):
+        """Modules some file under sqlglot/ or tests/ star-imports (their public names re-export)."""
+        got = self.__dict__.get("_star_imported")
+        if got is None:
+            self.name_used_elsewhere("import", "")  # loads _all_texts
+            got = set()
+            for r, text in self._all_texts.items():
+                if "import *" not in text and "import*" not in text:
+                    continue
+                try:
+                    tree = ast.parse(text)
+                except SyntaxError:
+                    got.add(None)
+                    continue
+                for n in ast.walk(tree):
+                    if isinstance(n, ast.ImportFrom) and any(a.name == "*" for a in n.names):
+                        got.add(self.resolve_from(r, n))
+            self._star_imported = got
+        return got
+
+    def name_read_outside(self, name, rel, mod):
+        """Whether another file could read `name` off module `mod` (rel): an attribute `.name`,
+        the string "name" (getattr and the like), `from mod import name`, or a star import of mod."""
+        if mod in self.star_imported() or None in self.star_imported():
+            return True
+        if not self.name_used_elsewhere(name, rel):
+            return False
+        attr = re.compile(r"\.\s*" + re.escape(name) + r"(?![\w])")
+        string = re.compile(r"""['"]""" + re.escape(name) + r"""['"]""")
+        last = mod.rpartition(".")[2]
+        texts = dict(self._all_texts)
+        texts.update(self.patched)
+        for r, text in texts.items():
+            if r == rel or not has_word(text, name):
+                continue
+            if attr.search(text) or string.search(text):
+                return True
+            if not (has_word(text, last) or re.search(r"from\s+\.", text)):
+                continue
+            try:
+                tree = ast.parse(text)
+            except SyntaxError:
+                return True
+            unrun = self.type_checking_only(tree)
+            for n in ast.walk(tree):
+                if isinstance(n, ast.ImportFrom) and id(n) not in unrun and self.resolve_from(r, n) in (mod, None) \
+                        and any(a.name == name for a in n.names):
+                    return True
+        return False
+
+    @staticmethod
+    def type_checking_only(tree):
+        """ids of the nodes under an `if TYPE_CHECKING:` (or `t.TYPE_CHECKING`) body: never run."""
+        out = set()
+        for n in ast.walk(tree):
+            if isinstance(n, ast.If) and not n.orelse and (
+                    (isinstance(n.test, ast.Name) and n.test.id == "TYPE_CHECKING")
+                    or (isinstance(n.test, ast.Attribute) and n.test.attr == "TYPE_CHECKING"
+                        and isinstance(n.test.value, ast.Name) and n.test.value.id in ("t", "typing"))):
+                for b in n.body:
+                    out.update(id(x) for x in ast.walk(b))
+        return out
+
+    @staticmethod
+    def scan_names(tree, skip, names):
+        """Every load of one of `names` in the module, outside the statement `skip`, as
+        (node, runtime, annotation): runtime when it runs only after import (a function or
+        lambda body, a generator expression); annotation "def" (a parameter or return
+        annotation) or "assign" (an AnnAssign's). Also the defs and classes in runtime code
+        whose annotations are evaluated when they run (without postponed annotations)."""
+        hits, nested = [], []
+
+        def visit(node, runtime, ann):
+            if node is skip:
+                return
+            if isinstance(node, ast.Name) and node.id in names:
+                hits.append((node, runtime, ann))
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                for d in node.decorator_list:
+                    visit(d, runtime, None)
+                a = node.args
+                for d in a.defaults + [d for d in a.kw_defaults if d is not None]:
+                    visit(d, runtime, None)
+                every = a.posonlyargs + a.args + a.kwonlyargs + [x for x in (a.vararg, a.kwarg) if x]
+                anns = [x.annotation for x in every if x.annotation is not None]
+                if node.returns is not None:
+                    anns.append(node.returns)
+                if runtime and anns:
+                    nested.append(node)
+                for x in anns:
+                    visit(x, runtime, "def")
+                for x in getattr(node, "type_params", None) or ():
+                    visit(x, True, None)
+                for b in node.body:
+                    visit(b, True, None)
+                return
+            if isinstance(node, ast.Lambda):
+                a = node.args
+                for d in a.defaults + [d for d in a.kw_defaults if d is not None]:
+                    visit(d, runtime, None)
+                visit(node.body, True, None)
+                return
+            if isinstance(node, ast.ClassDef):
+                if runtime and any(isinstance(b, ast.AnnAssign) for b in node.body):
+                    nested.append(node)
+                for c in node.decorator_list + node.bases + [k.value for k in node.keywords]:
+                    visit(c, runtime, None)
+                for x in getattr(node, "type_params", None) or ():
+                    visit(x, True, None)
+                for b in node.body:
+                    visit(b, runtime, None)
+                return
+            if isinstance(node, ast.AnnAssign):
+                visit(node.target, runtime, ann)
+                if node.value is not None:
+                    visit(node.value, runtime, ann)
+                visit(node.annotation, runtime, "assign")
+                return
+            if isinstance(node, ast.GeneratorExp):
+                runtime = True  # consumed lazily, maybe only once a test runs
+            for child in ast.iter_child_nodes(node):
+                visit(child, runtime, ann)
+
+        for st in tree.body:
+            visit(st, False, None)
+        return hits, nested
+
+    def removed_binding_mask(self, rel, idx, st, blk):
+        """A top-level import (`from X import a`, `import X`, `from __future__ import
+        annotations`) or plain assignment of pure values, deleted outright. If importing every
+        module still builds the same state but for the deleted bindings (the import-time
+        state check, with those bindings masked), what can change is only where code that runs
+        after import reads a deleted name: the tests that ran those lines, plus, for postponed
+        annotations no longer postponed, the tests that ran a def or class inside a function
+        whose annotations are now evaluated (a read at import time breaks the import: that is
+        left to the import-failure narrowing). A deleted import must also leave nothing
+        unimported: X is loaded by `import sqlglot` (which every importer of this module runs
+        first) and this module isn't (the import-time state check confirms both, `state_needs`).
+        None if the statement isn't such a deletion or a read of its names can't be followed;
+        while widening, also None (the module-wide fallback), with the check requested."""
+        node = st["node"]
+        lo, hi = st["full"]
+        if st["depth"] != 0 or blk["added"] or not all(ln in blk["removed"] for ln in range(lo, hi + 1)):
+            return None
+        if not rel.startswith("sqlglot/") or self.new_idx is None:
+            return None
+        mod = self.module_name(rel)
+        future = False
+        loaded = set()
+        if isinstance(node, ast.ImportFrom):
+            if any(a.name == "*" for a in node.names):
+                return None
+            target = self.resolve_from(rel, node)
+            if target is None:
+                return None
+            if target == "__future__":
+                if not all(a.name in self.NOOP_FUTURES for a in node.names):
+                    return None
+                future = any(a.name == "annotations" for a in node.names)
+            else:
+                loaded.add(target)
+                for a in node.names:
+                    sub = f"{target}.{a.name}"
+                    path = SRC / sub.replace(".", "/")
+                    if path.with_suffix(".py").exists() or (path / "__init__.py").exists() or path.is_dir():
+                        loaded.add(sub)
+            names = {a.asname or a.name for a in node.names}
+        elif isinstance(node, ast.Import):
+            names = set()
+            for a in node.names:
+                loaded.add(a.name)
+                names.add(a.asname or a.name.split(".")[0])
+        elif isinstance(node, ast.Assign):
+            if not all(isinstance(t, ast.Name) for t in node.targets) or not self.pure_value(node.value):
+                return None
+            names = {t.id for t in node.targets}
+        elif isinstance(node, ast.AnnAssign):
+            if not isinstance(node.target, ast.Name) or node.value is None or not self.pure_value(node.value) \
+                    or not self.pure_value(node.annotation):
+                return None
+            names = {node.target.id}
+        else:
+            return None
+        if any(n.startswith("__") and n.endswith("__") for n in names):
+            return None
+        tree = idx.tree
+        postponed = any(isinstance(n, ast.ImportFrom) and n.module == "__future__" and n is not node
+                        and any(a.name == "annotations" for a in n.names) for n in self.new_idx.tree.body)
+        # names that reach the module namespace some other way, or code that compiles more code
+        # under this module's future flags
+        for n in ast.walk(tree):
+            if isinstance(n, (ast.Global, ast.Nonlocal)) and names & set(n.names):
+                return None
+            if isinstance(n, ast.Name) and n.id in ("globals", "vars", "locals", "eval", "exec", "compile",
+                                                     "__import__", "__getattr__", "__dict__"):
+                return None
+            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name in ("__getattr__", "__dir__") \
+                    and n in tree.body:
+                return None
+            if isinstance(n, ast.Constant) and isinstance(n.value, str) and n.value in names:
+                return None
+            if isinstance(n, ast.Attribute) and n.attr == "__dict__":
+                return None
+        hits, nested = self.scan_names(tree, node, names)
+        m = 0
+        for name_node, runtime, ann in hits:
+            if ann == "assign" and (runtime or postponed):
+                continue  # never evaluated
+            if ann == "def" and postponed:
+                continue
+            if not runtime:
+                # read at import: the module no longer imports (that path narrows to its importers)
+                return None
+            s, span = idx.stmt_at(name_node.lineno)
+            a, b = span if span else (name_node.lineno, name_node.lineno)
+            m |= self.line_union(rel, min(a, name_node.lineno), max(b, name_node.end_lineno or name_node.lineno))
+        if future:
+            for n in nested:
+                if isinstance(n, ast.ClassDef):
+                    a, b = n.lineno, n.end_lineno
+                else:
+                    a = min([n.lineno] + [d.lineno for d in n.decorator_list])
+                    b = max(n.lineno, n.body[0].lineno - 1)
+                m |= self.line_union(rel, a, b)
+        if not future or names - {"annotations"}:
+            for name in names:
+                if name == "annotations" and future:
+                    continue
+                if self.name_read_outside(name, rel, mod):
+                    return None
+        self.import_widened = True
+        if not self.no_import_widen:
+            return None
+        for name in names:
+            self.state_masks.append((mod, "", name))
+        self.state_needs["loaded"] |= loaded
+        if loaded:
+            self.state_needs["unloaded"].add(mod)
+        log(f"{rel}:{lo} deleted binding(s) {', '.join(sorted(names))}: narrowed to their reads after import")
+        return m | self.subprocess
 
     # ---- class attribute changes
 
@@ -2440,6 +2707,7 @@ class Selector:
         self.verifiable = True
         self.data_files = set()  # changed files we don't overlay: their readers can't be checked
         self.state_masks = []  # bindings the import-time state check leaves out (the edited ones)
+        self.state_needs = {"loaded": set(), "unloaded": set()}  # modules `import sqlglot` must (not) load
         self.guard_mask = 0  # the selection to fall back to unless a check child imports the patch
         self.env_keys = set()  # executor ENV keys whose entries changed
         self.import_widened = False
@@ -4266,6 +4534,7 @@ def state_digests(test_modules, masks=()):
 
     import sqlglot
 
+    first = sorted(sys.modules)  # what `import sqlglot` alone loads
     names = sorted(m.name for m in pkgutil.walk_packages(sqlglot.__path__, "sqlglot.") if not m.name.endswith("__main__"))
     failed = []
     for name in names + sorted(test_modules):
@@ -4284,10 +4553,12 @@ def state_digests(test_modules, masks=()):
         for k, v in sorted(vars(mod).items()):
             if k.startswith("__") and k.endswith("__"):
                 continue
+            if (name, "", k) in fp.masks:
+                continue  # a deleted module-level binding (removed_binding_mask)
             out.append(k)
             fp.tok(v, out)
         digests[name] = hashlib.sha256("\x00".join(out).encode("utf-8", "surrogatepass")).hexdigest()
-    return {"digests": digests, "failed": failed}
+    return {"digests": digests, "failed": failed, "base": first}
 
 
 def state_main(args):
@@ -4332,7 +4603,7 @@ def import_states(jobs, budget_s):
     env = dict(os.environ, PYTHONHASHSEED="0", PYTHONDONTWRITEBYTECODE="1")
     env.pop("PYTHONPATH", None)
     runs = {}
-    for key, (patched, mods, masks) in jobs.items():
+    for key, (patched, mods, masks, *_) in jobs.items():
         mods, masks = tuple(mods), tuple(sorted(masks))
         runs[key] = (patched, mods, masks)
         runs[("pristine", mods, masks)] = ({}, mods, masks)
@@ -4371,9 +4642,23 @@ def import_states(jobs, budget_s):
         import shutil
         shutil.rmtree(tmp, ignore_errors=True)
     verdict = {}
-    for key, (_, mods, masks) in jobs.items():
+    for key, (_, mods, masks, *rest) in jobs.items():
         mine, base = outputs.get(key), outputs.get(("pristine", tuple(mods), tuple(sorted(masks))))
-        verdict[key] = bool(mine and base and mine["digests"] == base["digests"] and mine["failed"] == base["failed"])
+        ok = bool(mine and base and mine["digests"] == base["digests"] and mine["failed"] == base["failed"])
+        needs = rest[0] if rest else None
+        if ok and needs and (needs.get("loaded") or needs.get("unloaded")):
+            # a deleted import: what `import sqlglot` loads is the same, with every module the
+            # statement imported and without the module that held it
+            first = set(mine.get("base") or ())
+            ok = bool(first) and first == set(base.get("base") or ()) \
+                and all(m in first for m in needs.get("loaded", ())) \
+                and not any(m in first for m in needs.get("unloaded", ()))
+        if not ok and os.environ.get("BR_DEBUG") and mine and base:
+            diff = sorted(k for k in set(mine["digests"]) | set(base["digests"])
+                          if mine["digests"].get(k) != base["digests"].get(k))
+            log(f"{key}: state differs in {diff[:5]}; failed {set(mine['failed']) ^ set(base['failed'])}; "
+                f"first {sorted(set(mine.get('base') or ()) ^ set(base.get('base') or ()))[:5]}")
+        verdict[key] = ok
     return verdict
 
 
@@ -4827,6 +5112,7 @@ def main():
                 "unreadable": set(to_numbers(selector.data_mask)), "touched": list(selector.touched),
                 "data_files": set(selector.data_files), "import_widened": selector.import_widened,
                 "state_masks": list(selector.state_masks), "fixture_checks": dict(selector.fixture_checks),
+                "state_needs": {k: sorted(v) for k, v in selector.state_needs.items()},
                 "env_keys": set(selector.env_keys),
                 "guard": to_numbers(selector.guard_mask) if selector.guard_mask else None}
 
@@ -4866,7 +5152,7 @@ def main():
             if gain is not None and gain >= STATE_MIN_GAIN_MS:
                 narrow[commit] = alt
                 state_jobs[commit] = (snap["patched"], tuple((load_imports() or {}).get("test_modules", ())),
-                                      tuple(alt["state_masks"]))
+                                      tuple(alt["state_masks"]), alt.get("state_needs"))
     if state_jobs:
         verdict = import_states(state_jobs, max(5.0, STATE_BUDGET_S))
         for commit, same in sorted(verdict.items()):
