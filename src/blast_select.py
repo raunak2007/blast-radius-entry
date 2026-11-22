@@ -1576,6 +1576,68 @@ class Selector:
             self.patched[path] = text
         return text
 
+    _source_words = None
+
+    def source_words(self):
+        """Every identifier-like word in the pinned sqlglot and tests sources."""
+        if self._source_words is None:
+            words = set()
+            for top in ("sqlglot", "tests"):
+                for root, _dirs, names in os.walk(os.path.join(self.sources, top)):
+                    for name in names:
+                        if name.endswith(".py"):
+                            with open(os.path.join(root, name), encoding="utf-8", errors="replace") as f:
+                                words.update(re.findall(r"[A-Za-z_]\w*", f.read()))
+            Selector._source_words = words
+        return self._source_words
+
+    def unused_method(self, path, info, blocks, block):
+        """True for a block that only inserts whole method definitions into a class body, under
+        names nothing can look up: no decorator, literal defaults only, not a dunder, not a
+        public ``*_sql`` method (the generator dispatches on those by name), no attribute of the
+        builtin types a class may derive from, and a word that appears nowhere in the pinned
+        sqlglot or tests sources (so no caller, override or getattr string names it). Such a def
+        only adds an unused entry to the class namespace; the caller checks the module still
+        imports (annotations may be evaluated when the class is created)."""
+        if block.old or not path.startswith("sqlglot/") or not code_lines(block.new):
+            return False
+        try:
+            import ast
+            import enum
+
+            tree = ast.parse(self.patched_text(path, info, blocks))
+            shift = sum(len(b.new) - len(b.old) for b in blocks if b.start < block.start)
+            first = block.start + shift
+            last = first + len(block.new) - 1
+            covered = set()
+            for cls in ast.walk(tree):
+                if not isinstance(cls, ast.ClassDef):
+                    continue
+                for node in cls.body:
+                    if node.lineno > last or node.end_lineno < first:
+                        continue
+                    if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) or node.decorator_list:
+                        return False
+                    if node.lineno < first or node.end_lineno > last:
+                        return False  # the block is only part of this statement
+                    name = node.name
+                    if name.startswith("__") or name.endswith("_sql") or name in self.source_words():
+                        return False
+                    if any(hasattr(t, name) for t in (object, type, dict, list, str, int, float, set, tuple,
+                                                       Exception, enum.Enum)):
+                        return False
+                    args = node.args
+                    if any(d is not None and not isinstance(d, ast.Constant) for d in args.defaults + args.kw_defaults):
+                        return False
+                    covered.update(range(node.lineno, node.end_lineno + 1))
+            for i, line in enumerate(block.new):
+                if first + i not in covered and strip_comment(line).strip():
+                    return False
+            return bool(covered)
+        except Exception as error:  # noqa: BLE001
+            log(path, "inserted methods could not be checked:", repr(error)[:200])
+            return False
+
     def charge_line(self, acc, info, ln):
         """Charges the tests of a function line, with its queries of the per-query test. A line
         that also ran while sqlglot was imported has them only on condition that what the
@@ -1624,6 +1686,11 @@ class Selector:
             self.unimportable(path, info, acc)
             return
         sets = info["sets"]
+        unused = [b for b in live if self.unused_method(path, info, blocks, b)]
+        if unused:
+            log(path, "adds methods nothing can call:", len(unused), "block(s)")
+            self.import_check.add(path)  # their headers are evaluated when the class is created
+            live = [b for b in live if b not in unused]
         self.binding_changes(path, info, live, acc)
         for b in live:
             pairs = len(b.old) == len(b.new)
