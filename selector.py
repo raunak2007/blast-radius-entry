@@ -35,6 +35,8 @@ from pathlib import Path
 
 DATA = Path(os.environ.get("BR_DATA", "/data"))
 SRC = Path(os.environ.get("BR_SRC", "/opt/sqlglot"))
+# the pinned commit's top-level config files (pyproject.toml, setup.cfg, setup.py), for judging edits to them
+ROOT_FILES = Path(os.environ.get("BR_ROOT_FILES", "/opt/sqlglot_root"))
 MAP = Path(os.environ.get("BR_MAP", str(Path(__file__).with_name("blast_map.pkl.gz"))))
 TPCDS_DATA = Path(os.environ.get("BR_TPCDS", str(Path(__file__).with_name("tpcds.pkl.gz"))))
 GLOBALS_DATA = Path(os.environ.get("BR_GLOBALS", str(Path(__file__).with_name("globals_refs.pkl.gz"))))
@@ -117,7 +119,8 @@ def parse_patch(text):
     diffs, cur, i, n = [], None, 0, len(lines)
 
     def new_diff():
-        d = {"old": None, "new": None, "hunks": [], "binary": False, "new_file": False, "deleted": False}
+        d = {"old": None, "new": None, "hunks": [], "binary": False, "new_file": False, "deleted": False,
+             "mode": False}
         diffs.append(d)
         return d
 
@@ -175,6 +178,8 @@ def parse_patch(text):
                 cur["new_file"] = True
             elif line.startswith("deleted file mode"):
                 cur["deleted"] = True
+            elif line.startswith(("old mode ", "new mode ")):
+                cur["mode"] = True
             elif line.startswith(("Binary files", "GIT binary patch")):
                 cur["binary"] = True
             elif line.startswith("rename from "):
@@ -1824,6 +1829,10 @@ class Selector:
         except SyntaxError:
             raise Fallback(f"syntax error in {rel}")
         self.new_idx = new_idx
+        self.check_coding(rel, blocks, new_text)
+        if self.same_code(blocks, idx, new_idx):
+            log(f"{rel}: only layout changed (same syntax tree)")
+            return 0
         m = 0
         for blk in blocks:
             if self.comment_only(blk, idx, new_idx):
@@ -1832,6 +1841,93 @@ class Selector:
                 m |= self.mask_for_old_line(rel, idx, ln, blk)
             if blk["added"]:
                 m |= self.mask_for_added(rel, idx, new_idx, blk)
+        m |= self.removed_names_mask(rel, idx, new_idx)
+        return m
+
+    # ---- edits whose effect isn't where their lines run
+
+    @staticmethod
+    def check_coding(rel, blocks, new_text):
+        """A coding declaration (line 1 or 2) decides how the whole file is decoded: unless the
+        new text decodes the same under it, every test runs."""
+        if not any(ln <= 2 for blk in blocks for ln in blk["removed"] + blk["added"]):
+            return
+        for line in new_text.split("\n")[:2]:
+            mt = re.match(r"^[ \t\f]*#.*?coding[:=][ \t]*([-\w.]+)", line)
+            if not mt:
+                continue
+            raw = new_text.encode("utf-8", "surrogateescape")
+            try:
+                if raw.decode(mt.group(1)) == raw.decode("utf-8"):
+                    return
+            except (LookupError, UnicodeError):
+                pass
+            raise Fallback(f"coding declaration in {rel}")
+
+    @staticmethod
+    def same_code(blocks, idx, new_idx):
+        """Whether every block only moves whitespace around and the syntax trees match (line
+        breaks inside brackets, trailing spaces, blank lines): nothing Python runs changes."""
+        if not blocks:
+            return False
+        for blk in blocks:
+            a = re.sub(r"\s+", "", "".join(blk["removed_text"]))
+            b = re.sub(r"\s+", "", "".join(blk["added_text"]))
+            if a != b:
+                return False
+        return ast.dump(idx.tree) == ast.dump(new_idx.tree)
+
+    def name_used_elsewhere(self, name, rel):
+        """Whether `name` appears as a word in any Python file under sqlglot/ or tests/ other
+        than `rel` (the patched text where the commit edits one)."""
+        if getattr(self, "_all_texts", None) is None:
+            texts = {}
+            for sub in ("sqlglot", "tests"):
+                for path in sorted((SRC / sub).rglob("*.py")):
+                    r = path.relative_to(SRC).as_posix()
+                    if "/fixtures/" in r:
+                        continue
+                    try:
+                        texts[r] = path.read_bytes().decode("utf-8", "surrogateescape")
+                    except OSError:
+                        continue
+            self._all_texts = texts
+        for r, text in self._all_texts.items():
+            if r != rel and has_word(self.patched.get(r, text), name):
+                return True
+        for r, text in self.patched.items():
+            if r != rel and r not in self._all_texts and has_word(text, name):
+                return True
+        return False
+
+    def removed_names_mask(self, rel, idx, new_idx):
+        """A module- or class-level function or class that no longer exists under its name
+        (deleted or renamed): anything that looked it up now fails, wherever it did. A name
+        another file mentions, or one this file mentions outside a function body (read at
+        import), runs every test; otherwise the module's and its classes' users."""
+        def defs(index):
+            out = {}
+            for st in index.stmts:
+                if st["kind"] in ("def", "class") and st["scope"] in ("module", "class"):
+                    out.setdefault((st["cls"] if st["scope"] == "class" else None, st["node"].name), st)
+            return out
+
+        old, new = defs(idx), defs(new_idx)
+        gone = [k for k in old if k not in new]
+        if not gone:
+            return 0
+        m = 0
+        for cls, name in gone:
+            if name.startswith("__") and name.endswith("__") or self.name_used_elsewhere(name, rel):
+                log(f"{rel}: {name} removed or renamed and used elsewhere")
+                return self.ALL
+            pat = re.compile(r"(?<![\w])" + re.escape(name) + r"(?![\w])")
+            for ln, line in enumerate(new_idx.lines, start=1):
+                if pat.search(line):
+                    st, _ = new_idx.stmt_at(ln)
+                    if st is None or st["scope"] != "function":
+                        return self.ALL
+            m |= self.module_fallback(rel, idx, old[(cls, name)]["node"])
         return m
 
     def mask_for_added(self, rel, idx, new_idx, blk):
@@ -1840,8 +1936,18 @@ class Selector:
         statement changes the module."""
         old_defs = {(st["cls"], st["node"].name) for st in idx.stmts if st["kind"] in ("def", "class")}
         same_shape = len(blk["removed"]) == len(blk["added"])
+        only_new_defs = True  # every line is blank, a comment or part of an inert new function
         for ln in blk["added"]:
+            if is_comment_or_blank(new_idx.lines[ln - 1]) and not new_idx.in_string(ln):
+                continue  # a blank line or comment between statements runs nothing
             st, _ = new_idx.stmt_at(ln)
+            if st is not None and self.inert_new_def(rel, new_idx, st, old_defs):
+                continue
+            if st is not None and st["scope"] == "function":
+                outer = self.enclosing_new_def(new_idx, st)
+                if outer is not None and self.inert_new_def(rel, new_idx, outer, old_defs):
+                    continue
+            only_new_defs = False
             if st is None or st["scope"] == "function":
                 continue
             if st["kind"] in ("def", "class") and blk["removed"] and (st["cls"], st["node"].name) in old_defs:
@@ -1853,12 +1959,78 @@ class Selector:
                 return self.class_fallback(rel, st["cls"], idx)
             return self.module_fallback(rel, idx, st["node"])
         m = 0
+        if only_new_defs and not blk["removed"]:
+            log(f"{rel}: only new functions nothing can call")
+            return 0
         if not blk["removed"]:
             anchor = blk["anchor"]
             for ln in (anchor - 1, anchor):
                 if 0 < ln <= len(idx.lines):
                     m |= self.mask_for_old_line(rel, idx, ln)
         return m
+
+    @staticmethod
+    def enclosing_new_def(new_idx, st):
+        """The module- or class-level def statement whose body holds `st`."""
+        func = st["func"]
+        while func is not None:
+            for cand in new_idx.stmts:
+                if cand["node"] is func:
+                    if cand["scope"] in ("module", "class"):
+                        return cand
+                    func = cand["func"]
+                    break
+            else:
+                return None
+        return None
+
+    def inert_new_def(self, rel, new_idx, st, old_defs):
+        """A def the commit adds (not a rename: no old def of that scope disappears, checked
+        separately) that nothing can call: its name appears in no other line of any source
+        under sqlglot/ or tests/, isn't a dunder, isn't a generator handler name (`*_sql`,
+        found by dir()), and defining it runs nothing (no decorators but staticmethod,
+        classmethod and property, constant defaults, annotations postponed or absent), and
+        the module still compiles."""
+        if st["kind"] != "def" or st["scope"] not in ("module", "class"):
+            return False
+        node = st["node"]
+        key = (st["cls"], node.name)
+        if key in old_defs:
+            return False
+        cache = self.__dict__.setdefault("_inert_cache", {})
+        ck = (rel, id(new_idx), key)
+        if ck in cache:
+            return cache[ck]
+        ok = self._inert_new_def(rel, new_idx, node)
+        cache[ck] = ok
+        return ok
+
+    def _inert_new_def(self, rel, new_idx, node):
+        name = node.name
+        if name.startswith("__") or (name.endswith("_sql") and not name.startswith("_")):
+            return False
+        if any(not (isinstance(d, ast.Name) and d.id in ("staticmethod", "classmethod", "property"))
+               for d in node.decorator_list):
+            return False
+        args = node.args
+        if any(not isinstance(d, ast.Constant) for d in args.defaults + [d for d in args.kw_defaults if d is not None]):
+            return False
+        postponed = any(isinstance(n, ast.ImportFrom) and n.module == "__future__"
+                        and any(a.name == "annotations" for a in n.names) for n in new_idx.tree.body)
+        every = args.posonlyargs + args.args + args.kwonlyargs + [a for a in (args.vararg, args.kwarg) if a]
+        if not postponed and (node.returns is not None or any(a.annotation is not None for a in every)):
+            return False
+        if getattr(node, "type_params", None):
+            return False
+        pat = re.compile(r"(?<![\w])" + re.escape(name) + r"(?![\w])")
+        hits = [ln for ln, line in enumerate(new_idx.lines, start=1) if pat.search(line)]
+        if hits != [node.lineno] or self.name_used_elsewhere(name, rel):
+            return False
+        try:  # what ast.parse lets through but compiling rejects (a stray nonlocal, break, ...)
+            compile(ast.Module(body=[node], type_ignores=[]), rel, "exec", dont_inherit=True)
+        except (SyntaxError, ValueError, TypeError):
+            return False
+        return True
 
     @staticmethod
     def comment_only(blk, idx, new_idx):
@@ -1874,38 +2046,252 @@ class Selector:
         return True
 
     def test_source(self, rel, fd):
+        """A test module's edit: the edited tests, or their classes, and every class deriving
+        from an edited class in the test modules that import this one (the dialect tests all
+        derive from test_dialect's Validator). A module-level edit, or one that stops the
+        module importing, selects its tests and those of every test module importing it
+        (or, for a module-level function or class, the importers that name it)."""
         doc = self.doc
-        file_mask = doc["test_files"].get(rel, 0)
         try:
             old_text, idx = self.index(rel)
         except (OSError, SyntaxError):
             self.verifiable = False
-            return file_mask
+            return self.test_module_mask(rel)
         new_text, blocks = apply_hunks(old_text, fd["hunks"])
         self.patched[rel] = new_text
         try:
             new_idx = SourceIndex(new_text)
-        except SyntaxError:
-            return file_mask
+            compile(new_idx.tree, rel, "exec", dont_inherit=True)
+        except (SyntaxError, ValueError, TypeError):
+            return self.test_module_mask(rel)
+        old_tops = {n.name for n in idx.tree.body if isinstance(n, DEFS + (ast.ClassDef,))}
+        new_tops = {n.name for n in new_idx.tree.body if isinstance(n, DEFS + (ast.ClassDef,))}
+        if old_tops - new_tops:
+            return self.test_module_mask(rel)  # a removed or renamed class or function
         m = 0
         for blk in blocks:
             if self.comment_only(blk, idx, new_idx):
                 continue
-            lines = blk["removed"] or [blk["anchor"] - 1, blk["anchor"]]
-            for ln in lines:
-                st, _ = idx.stmt_at(ln)
-                if st is None or st["scope"] == "module" and st["kind"] != "class":
-                    return file_mask
-                cls = st["cls"]
-                func = st["func"] if st["scope"] == "function" else (st["node"] if st["kind"] == "def" else None)
-                if cls and func is not None:
-                    test_id = f"{rel}::{cls}::{func.name}"
-                    tm = self.test_bit.get(test_id)
-                    m |= tm if tm else doc["test_classes"].get(f"{rel}::{cls}", file_mask)
-                elif cls:
-                    m |= doc["test_classes"].get(f"{rel}::{cls}", file_mask)
+            for which, lines in (("old", blk["removed"] or [blk["anchor"] - 1, blk["anchor"]]),
+                                 ("new", blk["added"])):
+                index = idx if which == "old" else new_idx
+                for ln in lines:
+                    st, _ = index.stmt_at(ln)
+                    if st is None:
+                        if which == "new" and is_comment_or_blank(index.lines[ln - 1]) and not index.in_string(ln):
+                            continue
+                        return self.test_module_mask(rel)
+                    cls = st["cls"]
+                    if not cls:
+                        if st["scope"] == "function" or st["kind"] == "def":
+                            func = st["func"] if st["scope"] == "function" else st["node"]
+                            top = self.top_def(index, func)
+                            m |= self.test_module_mask(rel, {top} if top else None)
+                            continue
+                        if st["kind"] == "class":
+                            m |= self.test_class_mask(rel, st["node"].name)
+                            continue
+                        return self.test_module_mask(rel)
+                    top = cls.split(".")[0]
+                    func = st["func"] if st["scope"] == "function" else (st["node"] if st["kind"] == "def" else None)
+                    method = None
+                    if func is not None and func.name.startswith("test") and "." not in cls \
+                            and f"{rel}::{cls}::{func.name}" in self.test_bit:
+                        # only where the test runs, unless something else calls it by name
+                        if len(re.findall(r"(?<![\w])" + re.escape(func.name) + r"(?![\w])", new_text)) <= 1:
+                            method = func.name
+                    m |= self.test_class_mask(rel, top, method)
+        return m
+
+    @staticmethod
+    def top_def(index, func):
+        """The name of the module-level def that holds `func`."""
+        for node in index.tree.body:
+            if isinstance(node, DEFS) and node.lineno <= func.lineno <= (node.end_lineno or node.lineno):
+                return node.name
+        return None
+
+    # ---- files that aren't sqlglot code: config, test support, moved and binary files
+
+    def is_config(self, rel):
+        """Files pytest or the test package read before any test: pytest's config files in
+        the directories it searches (the top level and the test directories), conftest.py
+        anywhere, and the map's list (tests/__init__.py, tests/helpers.py, ...)."""
+        base = os.path.basename(rel)
+        return rel in self.config or base == "conftest.py" or \
+            (base in PYTEST_CONFIGS and os.path.dirname(rel) in ("", "tests", "tests/dialects"))
+
+    def moved_file_mask(self, fd):
+        """A binary, deleted or renamed file: the tests that read it, under either name. An
+        importable file (Python, extension), a config file or a package marker runs every
+        test, except scripts nothing imports and a deleted test module (its tests and those
+        of the test modules importing it)."""
+        m = 0
+        for p in sorted({fd["old"], fd["new"]} - {None}):
+            base = os.path.basename(p)
+            if self.is_config(p) or (base == "__init__.py" and p.startswith(("sqlglot/", "tests/"))):
+                raise Fallback(f"binary, deleted or renamed config file {p}")
+            if p.endswith(IMPORTABLE):
+                if p.startswith(UNREAD_DIRS):
+                    continue
+                if fd["deleted"] and not fd["binary"] and p.startswith("tests/") and base.startswith("test_") \
+                        and p.endswith(".py"):
+                    self.verifiable = False
+                    m |= self.test_module_mask(p)
+                    continue
+                raise Fallback(f"binary, deleted or renamed file {p}")
+            opens = self.doc["file_opens"].get(p, 0)
+            m |= opens
+            self.data_files.add(p)
+            self.data_mask |= opens
+            self.touched.append((p, 0, 0, "other"))
+        return m
+
+    def sibling_readers(self, rel):
+        """Tests that read a module in the same package (they may list it)."""
+        d = os.path.dirname(rel) + "/"
+        m = 0
+        for f, mask in self.doc["file_opens"].items():
+            if f.startswith(d) and "/" not in f[len(d):]:
+                m |= mask
+        return m
+
+    def config_mask(self, rel, fd):
+        """pyproject.toml, setup.cfg and setup.py at the top level: pytest parses the first two
+        when it looks for its configuration (a file it can't parse stops the whole run), and
+        nothing in the suite reads them otherwise. An edit selects nothing if pytest still
+        parses the file and the settings it could read are unchanged; setup.py only for
+        comment edits. tests/helpers.py is test code: the test modules importing it. Every
+        other config file, or any doubt, runs every test."""
+        if rel == "tests/helpers.py" and fd["hunks"] and not fd["new_file"]:
+            return self.test_source(rel, fd)
+        if fd["new_file"] or not fd["hunks"] or rel not in ("pyproject.toml", "setup.cfg", "setup.py"):
+            raise Fallback(f"config file {rel}")
+        try:
+            old_text = (ROOT_FILES / rel).read_bytes().decode("utf-8")
+        except (OSError, ValueError):
+            raise Fallback(f"config file {rel} (no pinned copy)")
+        new_text, blocks = apply_hunks(old_text, fd["hunks"])
+        try:
+            new_text.encode("utf-8")
+        except UnicodeError:
+            raise Fallback(f"config file {rel} is not UTF-8")
+        if rel == "setup.py":
+            try:
+                idx, new_idx = SourceIndex(old_text), SourceIndex(new_text)
+            except SyntaxError:
+                raise Fallback("syntax error in setup.py")
+            if all(self.comment_only(b, idx, new_idx) for b in blocks):
+                return 0
+            raise Fallback("setup.py changed")
+        if rel == "pyproject.toml":
+            import tomllib
+            try:
+                old, new = tomllib.loads(old_text), tomllib.loads(new_text)
+
+                def settings(d):
+                    tool = d.get("tool", {})
+                    if not isinstance(tool, dict):
+                        return d
+                    return {**d, "tool": {k: v for k, v in tool.items() if k not in INERT_TOOLS}}
+
+                same = settings(old) == settings(new)
+            except Exception as error:  # noqa: BLE001  pytest can't parse it: nothing runs
+                raise Fallback(f"pyproject.toml: {error}")
+            if same:
+                log("pyproject.toml edit leaves every setting pytest or the build reads unchanged")
+                return 0
+            raise Fallback("pyproject.toml settings changed")
+        sections = ini_sections(new_text)
+        if sections is None or "tool:pytest" in sections or "pytest" in sections:
+            raise Fallback("setup.cfg: pytest can't parse it or reads it")
+        log("setup.cfg edit: pytest still parses it and has no section there")
+        return 0
+
+    # ---- test modules: their tests, the classes deriving from an edited class, importers
+
+    def test_texts(self):
+        """{rel: text} of every Python file under tests/ (patched where the commit edits it)."""
+        if getattr(self, "_test_texts", None) is None:
+            texts = {}
+            base = SRC / "tests"
+            for path in sorted(base.rglob("*.py")):
+                rel = path.relative_to(SRC).as_posix()
+                if "/fixtures/" in rel:
+                    continue
+                try:
+                    texts[rel] = path.read_bytes().decode("utf-8", "surrogateescape")
+                except OSError:
+                    continue
+            self._test_texts = texts
+        out = dict(self._test_texts)
+        for rel, text in self.patched.items():
+            if rel.startswith("tests/"):
+                out[rel] = text
+        return out
+
+    def test_importers(self, rels):
+        """The test modules that import one of `rels` (paths under tests/), directly or through
+        another test module: any file that names the module and imports anything."""
+        texts = self.test_texts()
+        found, todo = set(rels), list(rels)
+        while todo:
+            r = todo.pop()
+            leaf = r[:-3].rsplit("/", 1)[-1]
+            if leaf == "__init__":
+                leaf = r.rsplit("/", 2)[-2]
+            for other, text in texts.items():
+                if other not in found and has_word(text, leaf) and "import" in text:
+                    found.add(other)
+                    todo.append(other)
+        return found
+
+    def test_module_mask(self, rel, names=None):
+        """Every test of `rel` and of the test modules importing it. With `names` (module-level
+        functions or classes of `rel`), only importers that mention one of them, and their
+        own importers."""
+        texts = self.test_texts()
+        if names is None:
+            files = self.test_importers([rel])
+        else:
+            direct = {rel}
+            for other in self.test_importers([rel]) - {rel}:
+                text = texts.get(other, "")
+                if any(has_word(text, n) for n in names):
+                    direct.add(other)
+            files = self.test_importers(direct)
+        m = 0
+        for f in files:
+            m |= self.doc["test_files"].get(f, 0)
+        return m
+
+    def test_class_mask(self, rel, cls, method=None):
+        """The tests of class `cls` of `rel`, and of every class deriving from it in the test
+        modules importing it (by base name, transitively). With `method`, a test method that
+        nothing else calls: only that test, in each of those classes."""
+        texts = self.test_texts()
+        files = self.test_importers([rel])
+        hier = []
+        for f in sorted(files):
+            for mt in re.finditer(r"^class\s+(\w+)\s*(?:\(([^)]*)\))?\s*:", texts.get(f, ""), re.M):
+                bases = set(re.findall(r"\w+", mt.group(2) or ""))
+                hier.append((f, mt.group(1), bases))
+        names, grew = {cls}, True
+        while grew:
+            grew = False
+            for f, c, bases in hier:
+                if c not in names and bases & names:
+                    names.add(c)
+                    grew = True
+        doc = self.doc
+        m = 0
+        for f in files:
+            for c in names:
+                key = f"{f}::{c}"
+                if method is not None:
+                    m |= self.test_bit.get(f"{key}::{method}", 0)
                 else:
-                    return file_mask
+                    m |= doc["test_classes"].get(key, 0)
         return m
 
     def select(self, text):
@@ -1932,8 +2318,12 @@ class Selector:
             old_rel = fd["old"]
             if rel is None:
                 continue
+            if fd["mode"] and not fd["hunks"] and not (fd["binary"] or fd["deleted"] or fd["new_file"]) \
+                    and (not old_rel or old_rel == rel):
+                continue  # only the file mode changed: no test reads it, the contents are the same
             if fd["binary"] or fd["deleted"] or (old_rel and old_rel != rel):
-                raise Fallback(f"binary, deleted or renamed file {rel}")
+                m |= self.moved_file_mask(fd)
+                continue
             narrowed = None
             if rel in FIXTURE_VIEWS and not reader_edit and not fd["new_file"] and fd["hunks"]:
                 narrowed = self.fixture_cases(rel, fd)
@@ -1941,8 +2331,13 @@ class Selector:
                 m |= doc["file_opens"].get(rel, 0)  # tests that read this file's text
             else:
                 fixture_m |= narrowed  # only the readers of the cases that changed
-            if rel in self.config or os.path.basename(rel) == "conftest.py":
-                raise Fallback(f"config file {rel}")
+            if self.is_config(rel):
+                m |= self.config_mask(rel, fd)
+                continue
+            if fd["new_file"] and os.path.basename(rel) == "__init__.py":
+                raise Fallback(f"new package {rel}")  # can shadow a module of the same name
+            if rel.endswith(".py") and rel.startswith(UNREAD_DIRS):
+                continue  # scripts nothing imports (benchmarks, docs)
             if not rel.endswith(".py"):
                 # data files and the like: we only overlay Python sources, so a check may only
                 # run tests that never open this file (they see exactly the patched sources);
@@ -1953,6 +2348,9 @@ class Selector:
                 self.verifiable = False  # Python we don't overlay
             if fd["new_file"]:
                 self.verifiable = False
+                if rel.endswith(".py") and rel.startswith("sqlglot/"):
+                    # a module beside ones a test lists and reads (pkgutil over sqlglot/typing)
+                    m |= self.sibling_readers(rel)
                 continue  # a new file nothing imports or opens can't change a test
             if rel.endswith(".py"):
                 if not fd["hunks"]:
@@ -2211,6 +2609,62 @@ def pack(numbers, duration):
 # ones that pass. Anything we can't run faithfully, or that misbehaves, stays selected.
 
 RUN = os.environ.get("BR_RUN", "1") != "0"
+# where pytest looks for its configuration (each it can't parse stops the run)
+PYTEST_CONFIGS = {"pytest.toml", ".pytest.toml", "pytest.ini", ".pytest.ini", "pyproject.toml", "tox.ini", "setup.cfg",
+                  "setup.py", ".coveragerc"}
+# pyproject.toml tables no test, pytest or install step reads
+INERT_TOOLS = {"ruff", "mypy", "black", "isort", "pylint", "codespell", "pyright", "uv"}
+# top-level directories of scripts and documents nothing in the suite imports or opens
+UNREAD_DIRS = ("benchmarks/", "docs/", "posts/", "pdoc/", ".github/")
+IMPORTABLE = (".py", ".pyi", ".pyc", ".so", ".pyd", ".pth")
+
+
+def has_word(text, word):
+    """Whether `word` occurs in `text` not inside a longer identifier."""
+    if word not in text:
+        return False
+    return re.search(r"(?<![\w])" + re.escape(word) + r"(?![\w])", text) is not None
+
+
+def ini_sections(text):
+    """The section names iniconfig (pytest's ini parser) finds in `text`, or None where it
+    raises ParseError (same rules as iniconfig 2.x parse_lines/parse_ini_data)."""
+    if text.startswith("\ufeff"):
+        text = text[1:]
+    sections, names, section, last_value = set(), set(), None, False
+    for raw in text.splitlines(True):
+        line = "" if raw.lstrip()[:1] in ("#", ";") else raw.rstrip()
+        if not line:
+            continue
+        if line[0] == "[":
+            head = line
+            for c in "#;":
+                head = head.split(c)[0].rstrip()
+            if head[-1:] == "]":
+                name = head[1:-1]
+                if not name or name in sections:
+                    return None
+                sections.add(name)
+                section, names, last_value = name, set(), False
+                continue
+            if not last_value:  # a continuation of nothing
+                return None
+            continue
+        if not line[0].isspace():
+            name, sep, _ = line.partition("=")
+            if not sep or ":" in name:
+                name, sep, _ = line.partition(":")
+                if not sep:
+                    return None
+            name = name.strip()
+            if section is None or name in names:
+                return None
+            names.add(name)
+            last_value = True
+            continue
+        if not last_value:
+            return None
+    return sections
 TIME_FACTOR = float(os.environ.get("BR_TIME_FACTOR", "1.0"))  # our run time / recorded time
 COMMIT_OVERHEAD_MS = 300  # fork, importing the patched sqlglot, plus a safety margin
 # measured: importing a test module and its dialects; the two heavy files also pay for
@@ -3783,6 +4237,307 @@ def import_states(jobs, budget_s):
     return verdict
 
 
+IMPORT_CHECK = os.environ.get("BR_IMPORT_CHECK", "1") != "0"
+IMPORT_WALL_S = 10.0
+
+
+def import_failures(test_modules):
+    """Import sqlglot, every sqlglot module, every dialect by name and the test modules whose
+    import runs sqlglot code; the ones that raise (with the exception's type)."""
+    import importlib
+    import pkgutil
+
+    failed = []
+    try:
+        import sqlglot
+    except BaseException as error:  # noqa: BLE001
+        return [f"sqlglot: {type(error).__name__}"]
+    names = sorted(m.name for m in pkgutil.walk_packages(sqlglot.__path__, "sqlglot.") if not m.name.endswith("__main__"))
+    for name in names:
+        try:
+            importlib.import_module(name)
+        except BaseException as error:  # noqa: BLE001
+            failed.append(f"{name}: {type(error).__name__}")
+    try:
+        from sqlglot.dialects.dialect import DIALECT_MODULE_NAMES, Dialect
+        keys = sorted(DIALECT_MODULE_NAMES)
+    except BaseException as error:  # noqa: BLE001
+        failed.append(f"dialect registry: {type(error).__name__}")
+        keys = []
+    for key in keys:
+        try:
+            Dialect.get_or_raise(key)
+        except BaseException as error:  # noqa: BLE001
+            failed.append(f"dialect {key}: {type(error).__name__}")
+    for name in sorted(test_modules):
+        try:
+            importlib.import_module(name)
+        except BaseException as error:  # noqa: BLE001
+            failed.append(f"{name}: {type(error).__name__}")
+    return failed
+
+
+def imports_main(args):
+    """`selector.py --imports <patched pickle> [test modules]`: print which imports fail with
+    that patch applied (an empty patch for the pinned sources)."""
+    import shutil
+    import site
+    import threading
+
+    path, test_modules = args[0], args[1:]
+    with open(path, "rb") as fh:
+        job = pickle.load(fh)
+    site.main()
+    overlay = enter_overlay(job["patched"])
+    result = {}
+
+    def run():
+        try:
+            result["failed"] = import_failures(test_modules)
+        except BaseException as error:  # noqa: BLE001
+            result["error"] = repr(error)[:200]
+
+    sys.setrecursionlimit(200000)
+    threading.stack_size(512 << 20)
+    worker = threading.Thread(target=run)
+    worker.start()
+    worker.join()
+    shutil.rmtree(overlay, ignore_errors=True)
+    sys.stdout.write(json.dumps(result))
+    sys.stdout.flush()
+
+
+def import_breaks(jobs, budget_s):
+    """jobs: {commit: patched}. Whether, in a fresh interpreter, the patched sources make some
+    import fail that doesn't fail at the pinned commit (or the run doesn't finish): such an
+    edit breaks every test that imports what failed, which no line or attribute map sees
+    (a dialect's import-time parse of its SQL templates, the lazy-import table). The pinned
+    sources are only run when some commit's run reports a failure."""
+    import subprocess
+    import tempfile
+    import time
+
+    env = dict(os.environ, PYTHONHASHSEED="0", PYTHONDONTWRITEBYTECODE="1")
+    env.pop("PYTHONPATH", None)
+    mods = tuple((load_imports() or {}).get("test_modules", ()))
+    tmp = tempfile.mkdtemp(prefix="br-imports-")
+    deadline = time.monotonic() + budget_s
+    outputs = {}
+
+    def run_all(items):
+        pending, running, started = list(items), {}, 0
+        while pending or running:
+            while pending and len(running) < PARALLEL and time.monotonic() < deadline:
+                key, patched = pending.pop(0)
+                started += 1
+                path = os.path.join(tmp, f"{len(outputs)}_{started}.pkl")
+                with open(path, "wb") as fh:
+                    pickle.dump({"patched": patched}, fh)
+                proc = subprocess.Popen([sys.executable, "-S", str(Path(__file__).resolve()), "--imports", path, *mods],
+                                        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=env, cwd=tmp,
+                                        preexec_fn=_state_limits)
+                running[key] = (proc, time.monotonic() + IMPORT_WALL_S)
+            if not running:
+                break
+            time.sleep(0.01)
+            for key, (proc, until) in list(running.items()):
+                if proc.poll() is None and time.monotonic() < min(until, deadline):
+                    continue
+                if proc.poll() is None:
+                    proc.kill()
+                out = proc.communicate()[0]
+                running.pop(key)
+                try:
+                    outputs[key] = json.loads(out.decode()).get("failed")
+                except ValueError:
+                    outputs[key] = None
+
+    try:
+        run_all(sorted(jobs.items()))
+        if any(v for v in outputs.values()):
+            run_all([("<pristine>", {})])
+    finally:
+        import shutil
+        shutil.rmtree(tmp, ignore_errors=True)
+    base = set(outputs.get("<pristine>") or ())
+    verdict = {}
+    for key in jobs:
+        got = outputs.get(key)
+        verdict[key] = got is None or bool(set(got) - base) or (bool(got) and outputs.get("<pristine>") is None)
+        if verdict[key]:
+            log(f"{key}: patched imports fail: {got if got is not None else 'no result'}")
+    return verdict
+
+
+def _record_import_order():
+    """A meta-path hook recording, per module of ours, the ticks its import started and
+    ended at (what refresh_modules needs to know which modules to load again)."""
+    import importlib.abc
+    import importlib.machinery
+    import itertools
+
+    tick = itertools.count()
+
+    class Watch(importlib.abc.MetaPathFinder):
+        def find_spec(self, fullname, path, target=None):
+            if fullname.split(".")[0] not in _OURS:
+                return None
+            spec = importlib.machinery.PathFinder.find_spec(fullname, path)
+            loader = getattr(spec, "loader", None)
+            if loader is None or not hasattr(loader, "exec_module"):
+                return spec
+            real = loader.exec_module
+
+            def exec_module(module):
+                start = next(tick)
+                real(module)
+                _IMPORT_ORDER[fullname] = (start, next(tick))
+
+            loader.exec_module = exec_module
+            return spec
+
+    watch = Watch()
+    sys.meta_path.insert(0, watch)
+    return watch
+
+
+def _zygote_imports(jobs, budget_s, wfd):
+    """In a forked child of the selector: import the pinned sources once, then fork one
+    grandchild per commit that reloads only what its patch reaches and imports everything
+    again; writes {commit: failures or None} and the pinned run's failures."""
+    import select
+    import signal
+    import time
+
+    mods = tuple((load_imports() or {}).get("test_modules", ()))
+    os.environ["SKIP_INTEGRATION"] = "0"
+    sys.path.insert(0, str(SRC))
+    os.chdir(str(SRC))
+    watch = _record_import_order()
+    base = import_failures(mods)
+    sys.meta_path.remove(watch)
+    out = {"base": base, "jobs": {}}
+    deadline = time.monotonic() + budget_s
+    pending, running = sorted(jobs.items()), {}
+    while pending or running:
+        while pending and len(running) < PARALLEL and time.monotonic() < deadline:
+            key, patched = pending.pop(0)
+            r, w = os.pipe()
+            pid = os.fork()
+            if pid == 0:
+                try:
+                    os.close(r)
+                    signal.signal(signal.SIGPROF, lambda *_: os._exit(3))
+                    signal.setitimer(signal.ITIMER_PROF, 6.0)
+                    enter_overlay(patched)
+                    try:
+                        refresh_modules(patched)
+                        failed = []
+                    except BaseException as error:  # noqa: BLE001  the patched import itself
+                        failed = [f"refresh: {type(error).__name__}"]
+                    failed += import_failures(mods)
+                    os.write(w, json.dumps(failed).encode())
+                    os._exit(0)
+                except BaseException:
+                    os._exit(1)
+            os.close(w)
+            running[pid] = (key, r, time.monotonic() + IMPORT_WALL_S, bytearray())
+        if not running:
+            break
+        fds = {v[1]: pid for pid, v in running.items()}
+        ready, _, _ = select.select(list(fds), [], [], 0.05)
+        for fd in ready:
+            pid = fds[fd]
+            chunk = os.read(fd, 1 << 16)
+            if chunk:
+                running[pid][3].extend(chunk)
+                continue
+            key, _, _, buf = running.pop(pid)
+            os.close(fd)
+            _, status = os.waitpid(pid, 0)
+            try:
+                out["jobs"][key] = json.loads(buf.decode()) if os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0 else None
+            except ValueError:
+                out["jobs"][key] = None
+        now = time.monotonic()
+        for pid, (key, fd, until, _) in list(running.items()):
+            if now > until or now > deadline:
+                try:
+                    os.kill(pid, signal.SIGKILL)
+                except OSError:
+                    pass
+                os.waitpid(pid, 0)
+                os.close(fd)
+                running.pop(pid)
+                out["jobs"][key] = None
+    os.write(wfd, json.dumps(out).encode())
+
+
+def import_breaks_forked(jobs, budget_s):
+    """import_breaks, from a fork of this process that imports the pinned sources once and
+    reloads per commit only the modules its patch reaches. None if that doesn't work out."""
+    import select
+    import signal
+    import time
+
+    r, w = os.pipe()
+    sys.stdout.flush()
+    sys.stderr.flush()
+    pid = os.fork()
+    if pid == 0:
+        try:
+            os.close(r)
+            devnull = os.open(os.devnull, os.O_WRONLY)
+            os.dup2(devnull, 1)
+            if not os.environ.get("BR_DEBUG"):
+                os.dup2(devnull, 2)
+            _zygote_imports(jobs, budget_s, w)
+            os._exit(0)
+        except BaseException:
+            os._exit(1)
+    os.close(w)
+    buf, until = bytearray(), time.monotonic() + budget_s + 10
+    while time.monotonic() < until:
+        ready, _, _ = select.select([r], [], [], 0.1)
+        if ready:
+            chunk = os.read(r, 1 << 16)
+            if not chunk:
+                break
+            buf.extend(chunk)
+    else:
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except OSError:
+            pass
+    os.close(r)
+    _, status, ru = os.wait4(pid, 0)
+    log(f"import check of {len(jobs)} commits used {ru.ru_utime + ru.ru_stime:.2f}s CPU")
+    try:
+        out = json.loads(buf.decode())
+    except ValueError:
+        return None
+    base = set(out["base"])
+    verdict = {}
+    for key in jobs:
+        got = out["jobs"].get(key)
+        verdict[key] = got is None or bool(set(got) - base)
+        if verdict[key]:
+            log(f"{key}: patched imports fail: {got if got is not None else 'no result'}")
+    return verdict
+
+
+def needs_import_check(selector, snap, every):
+    """A selection short of every test for a commit that edits sqlglot code at module or class
+    level, or a function line that runs while modules are imported."""
+    if len(snap["chosen"]) >= len(every) or not snap["patched"]:
+        return False
+    for rel, lo, hi, kind in snap["touched"]:
+        if rel.startswith("sqlglot/") and rel.endswith(".py") and rel in snap["patched"]:
+            if kind != "function" or selector.touches_import(rel, lo, hi):
+                return True
+    return False
+
+
 def main():
     import time
     started = time.monotonic()
@@ -3886,6 +4641,17 @@ def main():
             if same:
                 snaps[commit] = narrow[commit]
 
+    # 1b. edits that run while modules are imported: does every import still succeed?
+    if IMPORT_CHECK and selector is not None:
+        imp_jobs = {c: snap["patched"] for c, snap in snaps.items() if needs_import_check(selector, snap, every)}
+        if imp_jobs:
+            verdict = import_breaks_forked(imp_jobs, 30.0) if ZYGOTE else None
+            if verdict is None:
+                verdict = import_breaks(imp_jobs, 30.0)
+            for commit, broken in verdict.items():
+                if broken:
+                    snaps[commit] = dict(snaps[commit], chosen=every, verifiable=False)
+
     # 2. the checks each selection is worth
     answers = {}
     jobs, tpcds_jobs = [], []
@@ -3971,5 +4737,7 @@ def main():
 if __name__ == "__main__":
     if len(sys.argv) > 2 and sys.argv[1] == "--state":
         state_main(sys.argv[2:])
+    elif len(sys.argv) > 2 and sys.argv[1] == "--imports":
+        imports_main(sys.argv[2:])
     else:
         main()
