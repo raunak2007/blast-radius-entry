@@ -68,6 +68,10 @@ POINTS_PATH = os.path.splitext(PLANS_PATH)[0] + "_points.pickle"
 # What test_max_nodes sees on scaled copies of its input at the pinned commit (max_nodes_check.py).
 MAX_NODES_REF = os.environ.get("BLAST_MAX_NODES_REF", os.path.join(HERE, "max_nodes_ref.json"))
 MAX_NODES_TEST = "tests/test_parser.py::TestParser::test_max_nodes"
+EXEC_TESTS = {  # the fixture each TestExecutor._mp_execute test loads its pairs from
+    "tests/fixtures/optimizer/tpc-ds/tpc-ds.sql": "tests/test_executor.py::TestExecutor::test_execute_tpcds",
+    "tests/fixtures/optimizer/tpc-h/tpc-h.sql": "tests/test_executor.py::TestExecutor::test_execute_tpch",
+}
 # A selection this small is cheaper to run here than to pay a worker for: dialect tests only
 # (they need nothing beyond sqlglot and the standard library), at most this many, recorded at
 # most this long together.
@@ -507,10 +511,18 @@ class Selector:
         self.import_values = set()
         self.patched = {}
         self.changed = {}
+        self.fixture_parses = []
         for change in parse_patch(patch_text):
             self.file_change(change, acc)
             if acc[1]:
                 break
+        if self.fixture_parses and not acc[1] and not self.fixture_sqls_parse(
+                [sql for _bit, sqls in self.fixture_parses for sql in sqls]):
+            log("a changed TPC query no longer parses cleanly: its executor test is kept")
+            for bit, _sqls in self.fixture_parses:
+                acc[0] |= bit
+                if bit == self.pq_bit:
+                    acc[3] = True  # (never re-checked: the commit touches a fixture)
         if self.import_check and not acc[1]:
             if not self.imports_cleanly():
                 log("patched modules no longer import:", sorted(self.import_check))
@@ -1076,7 +1088,37 @@ class Selector:
             if len(before) == len(after) and all(a[:2] == b[:2] for a, b in zip(before, after)):
                 log(path, "changes no query the per-query test runs")
                 return sid_without_pq
+        # test_execute_tpcds / test_execute_tpch parse every pair's SQL (parse_one, then a pickle
+        # round trip to their pool) but execute only those whose meta says "execute"; the result
+        # of any other pair is never looked at (no TPC-H pair is executed). Changed pairs that
+        # are not executed before or after the patch leave such a test alone as long as the new
+        # SQL still parses: that is checked once every file of the commit is known (run()).
+        runner = EXEC_TESTS.get(path)
+        if runner in self.test_ids and sid >= 0 and loader == "load_sql_fixture_pairs" and len(before) == len(after):
+            bit = 1 << self.test_ids.index(runner)
+            changed = [i for i, (a, b) in enumerate(zip(before, after)) if a[:2] != b[:2]]
+            if self.sets[sid] & bit and changed and all(
+                    not before[i][0].get("execute") and not after[i][0].get("execute") for i in changed):
+                log(path, "changes only queries", runner.rsplit("::", 1)[-1], "parses but does not execute:", changed)
+                self.fixture_parses.append((bit, [after[i][1] for i in changed]))
+                self.sets.append(self.sets[sid] & ~bit)
+                return len(self.sets) - 1
         return sid
+
+    def fixture_sqls_parse(self, sqls):
+        """True if every SQL parses with the (patched) sqlglot and survives the pickle round
+        trip test_execute_tpcds puts it through, in a forked child."""
+
+        def check():
+            import pickle
+
+            from sqlglot import parse_one
+
+            for sql in sqls:
+                pickle.loads(pickle.dumps(parse_one(sql)))
+            return True
+
+        return self.in_patched_child(check, timeout=min(CHILD_SECONDS, 5.0))
 
     def module_level(self, path, info, acc):
         """An edit that runs when the module is imported."""
