@@ -56,6 +56,13 @@ CMP_NAMES = {ast.Is: "is", ast.IsNot: "is not", ast.Eq: "==", ast.NotEq: "!=", a
              ast.Gt: ">", ast.GtE: ">=", ast.In: "in", ast.NotIn: "not in"}
 CMP_ALT = {"is": "==", "is not": "!=", "<": "<=", "<=": "<", ">": ">=", ">=": ">"}  # as tools/cmp_plugin.py
 GENMEM_TEST = "tests/test_generator.py::TestGenerator::test_generator_memory"
+# test_max_nodes (28.8 s) parses 10,000 copies of a depth-100 comparison against node limits
+# of 1,000,000 and 50,000. A child re-runs its small asserts as written and the two limit
+# asserts on a prefix: the patched parser's node count per copy (linear over 10, 40 and 160
+# copies) must put 10,000 copies past 1,000,000, and a prefix just long enough to pass
+# 50,000 nodes must raise the test's error at the same point the full statement would.
+MAXNODES_TEST = "tests/test_parser.py::TestParser::test_max_nodes"
+MAXNODES_EST_S = 2.0  # CPU of the child: importing the test module and ~200k tokens, with margin
 # file -> (function that builds a per-process cache on first use, the cache's name)
 FIRST_USE = {"sqlglot/generator.py": ("_build_dispatch", "_DISPATCH_CACHE")}
 TPCDS_TEST = "tests/test_executor.py::TestExecutor::test_execute_tpcds"
@@ -3546,6 +3553,59 @@ def child_genmem(patched, plan, wfd):
     os.close(wfd)
 
 
+def child_maxnodes(patched, plan, wfd):
+    """In a forked child: test_max_nodes on the patched sources, with the two limit asserts
+    on a prefix of the statement (see MAXNODES_TEST). Reports the test failing on any doubt;
+    an exception fails the child, which keeps the test."""
+    import importlib
+    import shutil
+    import signal
+
+    signal.signal(signal.SIGPROF, lambda *_: os._exit(3))
+    signal.setitimer(signal.ITIMER_PROF, plan["budget"])
+    overlay = enter_overlay(patched)
+    refresh_modules(patched)
+    importlib.import_module("tests.test_parser")  # an import error fails the test (and this child)
+    from sqlglot import exp, parse_one
+    from sqlglot.dialects.dialect import Dialect
+    from sqlglot.errors import ParseError
+
+    def raises(sql, limit):
+        try:
+            parse_one(sql, max_nodes=limit)
+        except ParseError as error:
+            return str(error)
+        return None
+
+    ok = isinstance(parse_one("SELECT 1", max_nodes=1_000_000), exp.Select)
+    cols = [f"col{i}" for i in range(500)]
+    ok = ok and isinstance(parse_one(f"SELECT {','.join(cols)} FROM t", max_nodes=1_000_000), exp.Select)
+    expr = "x" + "=x" * 100
+
+    def count(k):
+        sql = "SELECT " + ",".join([expr] * k)
+        dialect = Dialect.get_or_raise(None)
+        parser = dialect.parser(max_nodes=10**12)
+        parser.parse(dialect.tokenize(sql), sql)
+        return parser._node_count
+
+    if ok:
+        # exact, not with a margin: at the pinned commit 10,000 copies make 1,000,001 nodes
+        c10, c40, c160 = count(10), count(40), count(160)
+        per = (c160 - c40) / 120
+        ok = per >= 1 and c40 - c10 == 30 * per and c10 + 9990 * per > 1_000_000
+    if ok:
+        width = int(1.2 * 50_000 / per) + 20
+        msg = raises("SELECT " + ",".join([expr] * width), 50_000)
+        ok = msg is not None and "(50000)" in msg and "Maximum number of AST nodes" in msg
+    if ok:
+        ok = raises("SELECT " + ",".join(f"x={i}" for i in range(100)), 5) is not None
+        ok = ok and isinstance(parse_one("SELECT 1, 2, 3"), exp.Select)
+    shutil.rmtree(overlay, ignore_errors=True)
+    os.write(wfd, json.dumps([] if ok else [MAXNODES_TEST]).encode())
+    os.close(wfd)
+
+
 def child_run(patched, test_ids, limits, wfd):
     """Runs in a forked child: import patched sqlglot, run the tests, report failures."""
     import importlib
@@ -3950,6 +4010,8 @@ def run_checks(jobs, budget_s):
                     if "__tpcds__" in limits:
                         limit_memory()  # only the replay: duckdb's own tests reserve far more address space
                         child_tpcds(patched, limits["__tpcds__"], w)
+                    elif "__maxnodes__" in limits:
+                        child_maxnodes(patched, limits["__maxnodes__"], w)
                     elif "__genmem__" in limits:
                         child_genmem(patched, limits["__genmem__"], w)
                     elif "__fixture__" in limits:
@@ -4960,6 +5022,15 @@ def main():
                 tpcds_jobs.append(((commit, "fixture"), patched, sorted(fplan["tests"]),
                                    {"__fixture__": fplan, **{t: duration[number_of[t]] / 1000 for t in fplan["tests"]}},
                                    10 + 1.5 * fplan["budget"]))
+        maxnodes_number = number_of.get(MAXNODES_TEST)
+        if RUN and verifiable and selector is not None and maxnodes_number in chosen and patched \
+                and not snap["data_files"] and all(r.startswith("sqlglot/") and r.endswith(".py") for r in patched):
+            saving = (pack_cost(chosen, duration) - pack_cost([n for n in chosen if n != maxnodes_number], duration)) / 1000
+            if 2 * MAXNODES_EST_S < saving:  # its CPU at about the board's price
+                log(f"max_nodes check planned to save {saving:.1f}s")
+                tpcds_jobs.append(((commit, "maxnodes"), patched, [MAXNODES_TEST],
+                                   {"__maxnodes__": {"budget": 4 * MAXNODES_EST_S},
+                                    MAXNODES_TEST: duration[maxnodes_number] / 1000}, 10 + 4 * MAXNODES_EST_S))
         if RUN and verifiable and selector is not None and genmem_number in chosen:
             gplan = selector.genmem_plan(chosen, duration, genmem_number)
             if gplan is not None and not gplan["dialects"] and not gplan["import_check"]:
