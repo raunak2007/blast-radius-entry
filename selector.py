@@ -10,7 +10,11 @@ which the track rules allow:
 - A changed statement inside a function selects the tests that executed it.
 - A changed class attribute selects the tests that used that class: the dialects
   it serves, or the expression type and its subclasses.
-- A changed fixture or data file selects the tests that opened it.
+- A changed fixture or data file selects the tests that opened it. For the TPC-H and
+  TPC-DS query files, whose readers loop over cases, the old and new files are split
+  into cases by the tests' own load_sql_fixture_pairs, and only readers of a changed
+  case are selected; test_execute_tpc* is then cleared if each changed case passes
+  the test's own steps when re-run here.
 - Anything we can't reason about (a patch that won't apply, a syntax error, a
   module-level change other modules import, config files) runs every test.
 
@@ -50,6 +54,30 @@ GENMEM_TEST = "tests/test_generator.py::TestGenerator::test_generator_memory"
 # file -> (function that builds a per-process cache on first use, the cache's name)
 FIRST_USE = {"sqlglot/generator.py": ("_build_dispatch", "_DISPATCH_CACHE")}
 TPCDS_TEST = "tests/test_executor.py::TestExecutor::test_execute_tpcds"
+TPCH_EXEC_TEST = "tests/test_executor.py::TestExecutor::test_execute_tpch"
+# The SQL fixtures whose readers loop over cases, and what each reader takes from every case
+# (meta, sql, expected), as read from the tests at the pinned commit:
+#   "pair"  test_optimizer's check_file: the whole case (meta keys, input, expected output)
+#   "sql_expected"  test_optimized_tpch: duckdb runs the input and the expected output
+#   "exec"  test_execute_tpc*: parse_one(input) for every case, and for cases whose meta says
+#           execute, the Python executor's rows against duckdb's (subtestHelper)
+# Every other test of TestExecutor only needs setUpClass, which parses both files with
+# load_sql_fixture_pairs; any other reader of the file keeps the file-level rule.
+FIXTURE_VIEWS = {
+    "tests/fixtures/optimizer/tpc-ds/tpc-ds.sql": {
+        "tests/test_optimizer.py::TestOptimizer::test_tpcds": "pair",
+        TPCDS_TEST: "exec",
+    },
+    "tests/fixtures/optimizer/tpc-h/tpc-h.sql": {
+        "tests/test_optimizer.py::TestOptimizer::test_tpch": "pair",
+        "tests/test_executor.py::TestExecutor::test_optimized_tpch": "sql_expected",
+        TPCH_EXEC_TEST: "exec",
+    },
+}
+FIXTURE_LOAD_CLASS = "tests/test_executor.py::TestExecutor::"
+# test sources whose change could change how the cases above are read or used
+FIXTURE_READER_FILES = {"tests/helpers.py", "tests/test_executor.py", "tests/test_optimizer.py", "tests/__init__.py"}
+FIXTURE_GATE = 0.4  # a case check is planned only if its CPU estimate is at most this share of the saving
 # Plan a TPC-DS replay only if its estimated CPU is at most this share of the time it would
 # save. Full replays run the executor on changed code, where outputs often differ late and
 # changed plans can run slower, so they get a stricter gate.
@@ -712,6 +740,7 @@ class Selector:
         self.no_import_widen = False  # set to see the selection an unchanged import-time state allows
         self.defaults_only = False
         self.import_widened = False
+        self.fixture_checks = {}
 
     def index(self, rel):
         if rel not in self.cache:
@@ -1763,9 +1792,13 @@ class Selector:
         self.import_widened = False
         self.data_mask = 0
         self.touched = []
+        self.fixture_checks = {}  # test id -> changed cases it alone is selected for
+        fixture_m = 0
         diffs = parse_patch(text)
         if not diffs:
             raise Fallback("no file changes found in the patch")
+        reader_edit = any((fd["new"] or fd["old"]) in FIXTURE_READER_FILES or fd["old"] in FIXTURE_READER_FILES
+                          for fd in diffs)
         for fd in diffs:
             rel = fd["new"] or fd["old"]
             old_rel = fd["old"]
@@ -1773,7 +1806,13 @@ class Selector:
                 continue
             if fd["binary"] or fd["deleted"] or (old_rel and old_rel != rel):
                 raise Fallback(f"binary, deleted or renamed file {rel}")
-            m |= doc["file_opens"].get(rel, 0)  # tests that read this file's text
+            narrowed = None
+            if rel in FIXTURE_VIEWS and not reader_edit and not fd["new_file"] and fd["hunks"]:
+                narrowed = self.fixture_cases(rel, fd)
+            if narrowed is None:
+                m |= doc["file_opens"].get(rel, 0)  # tests that read this file's text
+            else:
+                fixture_m |= narrowed  # only the readers of the cases that changed
             if rel in self.config or os.path.basename(rel) == "conftest.py":
                 raise Fallback(f"config file {rel}")
             if not rel.endswith(".py"):
@@ -1798,6 +1837,87 @@ class Selector:
                 else:
                     m |= doc["test_files"].get("tests/test_sqlglotc.py", 0) | doc["test_files"].get("tests/test_build.py", 0)
             self.touched.append((rel, 0, 0, "other"))
+        # a case check can only stand in for a test the rest of the commit doesn't select
+        self.fixture_checks = {t: c for t, c in self.fixture_checks.items() if not m & self.test_bit.get(t, 0)}
+        return m | fixture_m
+
+    # ---- loop tests over SQL fixture cases: select a reader only if a case it reads changed
+
+    _fixture_loader = None
+    _fixture_old = {}
+
+    @classmethod
+    def fixture_pairs(cls, raw):
+        """The cases of a fixture file's bytes, by the tests' own load_sql_fixture_pairs
+        (tests/helpers.py at the pinned commit, reading these bytes as open() would)."""
+        import io
+
+        if cls._fixture_loader is None:
+            source = (SRC / "tests" / "helpers.py").read_text("utf-8")
+            space = {"__name__": "br_fixture_helpers", "__file__": str(SRC / "tests" / "helpers.py")}
+            exec(compile(source, "tests/helpers.py", "exec"), space)
+            cls._fixture_loader = space
+        space = cls._fixture_loader
+        space["open"] = lambda *args, **kwargs: io.TextIOWrapper(io.BytesIO(raw), encoding=kwargs.get("encoding"))
+        try:
+            return list(space["load_sql_fixture_pairs"]("x.sql"))
+        finally:
+            del space["open"]
+
+    def fixture_cases(self, rel, fd):
+        """The mask of the file's readers whose cases changed, or None for the file-level rule.
+        Records, per "exec" reader, the changed cases a check could clear it on."""
+        doc = self.doc
+        views = FIXTURE_VIEWS[rel]
+        try:
+            raw_old = (SRC / rel).read_bytes()
+            if rel not in self._fixture_old:
+                Selector._fixture_old[rel] = self.fixture_pairs(raw_old)
+            old = self._fixture_old[rel]
+            new_text, _ = apply_hunks(raw_old.decode("utf-8", "surrogateescape"), fd["hunks"])
+            new = self.fixture_pairs(new_text.encode("utf-8", "surrogateescape"))
+        except Fallback:
+            raise
+        except Exception as error:  # the file no longer loads: setUpClass fails, every reader fails
+            log(f"{rel}: cases don't load ({error!r}); every reader stays")
+            return None
+        opens = doc["file_opens"].get(rel, 0)
+        if not opens:
+            return None
+
+        def view(kind, case):
+            if case is None:
+                return None
+            meta, sql, expected = case
+            if kind == "pair":
+                return case
+            if kind == "sql_expected":
+                return sql, expected
+            return meta.get("execute"), sql
+
+        n = max(len(old), len(new))
+        old_c = old + [None] * (n - len(old))
+        new_c = new + [None] * (n - len(new))
+        m, mask = 0, opens
+        while mask:
+            low = mask & -mask
+            mask ^= low
+            test_id = doc["tests"][low.bit_length() - 1]
+            kind = views.get(test_id)
+            if kind is None:
+                if not test_id.startswith(FIXTURE_LOAD_CLASS):
+                    m |= low  # a reader we don't model
+                continue  # setUpClass only: the file still loads
+            changed = [i for i in range(n) if view(kind, old_c[i]) != view(kind, new_c[i])]
+            if not changed:
+                continue
+            m |= low
+            if kind == "exec":
+                # cases the test no longer has can't fail it; the rest are re-checked
+                cases = [(rel, i, new_c[i][0], new_c[i][1], old_c[i]) for i in changed if new_c[i] is not None]
+                if cases:
+                    self.fixture_checks[test_id] = cases
+        log(f"{rel}: {sum(1 for i in range(n) if old_c[i] != new_c[i])} cases changed")
         return m
 
     # ---- the 21 s TPC-DS executor test: replay what the edit can reach instead of running it
@@ -2386,6 +2506,183 @@ def child_tpcds(patched, plan, wfd):
     os.close(wfd)
 
 
+FIXTURE_PARSE_S = 0.05  # one case's parse and pickle
+FIXTURE_DUCK_S = 1.2  # numpy, pandas and duckdb imports, the views and one duckdb query
+
+
+def fixture_plan(checks, chosen, duration, number_of):
+    """Which "exec" readers to clear by checking their changed cases, or None.
+
+    test_execute_tpc* parse every case's input, pickle it to a pool worker and, if its
+    meta says execute, run sqlglot's executor there and compare the rows with duckdb
+    running the duckdb transpilation of the same input. A changed case is re-checked
+    exactly that way; a case that doesn't execute only needs to parse and pickle. Only
+    TPC-DS cases can be executed here (its tables are in tpcds.pkl.gz)."""
+    tests, estimate, duck = {}, 0.5, False
+    data = None
+    for test_id, cases in sorted(checks.items()):
+        number = number_of.get(test_id)
+        if number is None or number not in chosen:
+            continue
+        cost, ok = 0.0, True
+        for rel, i, meta, sql, old in cases:
+            cost += FIXTURE_PARSE_S
+            if meta.get("execute"):
+                if test_id != TPCDS_TEST:
+                    ok = False
+                    break
+                data = data or load_tpcds()
+                q = data and next((q for q in data["queries"] if q["index"] == i), None)
+                cost += 2 * (q["cpu"] if q else 1.0) + (0.0 if duck else FIXTURE_DUCK_S)
+                duck = True
+        if not ok:
+            continue
+        rest = [n for n in chosen if n != number]
+        saving = (pack_cost(chosen, duration) - pack_cost(rest, duration)) / 1000
+        if cost > FIXTURE_GATE * saving:
+            continue
+        tests[test_id] = cases
+        estimate += cost
+    if not tests:
+        return None
+    saving = (pack_cost(chosen, duration)
+              - pack_cost([n for n in chosen if n not in {number_of[t] for t in tests}], duration)) / 1000
+    log(f"fixture case check planned: {sum(len(c) for c in tests.values())} cases of {len(tests)} tests, "
+        f"est {estimate:.1f}s to save {saving:.1f}s")
+    return {"tests": tests, "estimate": estimate, "budget": max(estimate * 3 + 1.0, 0.5 * saving)}
+
+
+def child_fixture(patched, plan, wfd):
+    """In a forked child: each changed case of a test_execute_tpc* test, on the patched sources,
+    the way the test runs it: parse_one(input), pickled to the worker; if its meta says
+    execute, sqlglot's executor on the TPC-DS tables there, pickled back, against duckdb
+    running transpile(input, write="duckdb") over the same CSV files, compared with the
+    test's own assert_frame_equal call. A test passes only if every changed case does
+    (unchanged cases pass as they did: whatever the rest of the commit changes didn't
+    select the test). Stops itself past the budget, which keeps every test."""
+    import pickle
+    import resource
+    import shutil
+    import signal
+
+    import time
+
+    signal.signal(signal.SIGPROF, lambda *_: os._exit(3))
+    signal.setitimer(signal.ITIMER_PROF, plan["budget"])
+    overlay = enter_overlay(patched)
+    refresh_modules(patched)
+    from sqlglot import find_tables, parse_one, transpile
+
+    state = {}
+    debug = bool(os.environ.get("BR_DEBUG"))
+
+    def tpcds():
+        if "tables" not in state:
+            from sqlglot.executor.table import Table
+
+            data = load_tpcds()
+            tables = {t: Table(columns=c, rows=data["tables"][t]) for t, c in data["schema"].items()}
+            state["schema"], state["tables"] = pickle.loads(pickle.dumps((data["schema"], tables)))
+            state["queries"] = {q["index"]: q for q in data["queries"]}
+        return state
+
+    def duck():
+        if "conn" not in state:
+            import duckdb
+            from tests.helpers import FIXTURES_DIR, TPCDS_SCHEMA
+
+            conn = duckdb.connect()
+            conn.execute("SET threads TO 1")
+            conn.execute("SET memory_limit = '1GB'")
+            directory = FIXTURES_DIR + "/optimizer/tpc-ds/"
+            for table, columns in TPCDS_SCHEMA.items():  # as TestExecutor.setUpClass
+                file_name = f"{directory}{table}.csv.gz"
+                conn.execute(
+                    f"""
+                CREATE VIEW {table} AS
+                SELECT *
+                FROM READ_CSV('{file_name}', delim='|', header=True, columns={columns})
+                """
+                )
+            state["conn"] = conn
+        return state["conn"]
+
+    def executed(expression):
+        """mp_execute in the pool worker, under a memory cap: a broken query can blow up."""
+        from sqlglot.executor import execute
+
+        st = tpcds()
+        used = {t.name: st["tables"][t.name] for t in find_tables(expression)}
+        soft, hard = resource.getrlimit(resource.RLIMIT_AS)
+        try:
+            try:  # a soft cap only, so it can be lifted again for duckdb
+                with open("/proc/self/status") as fh:
+                    size = next(int(line.split()[1]) << 10 for line in fh if line.startswith("VmSize:"))
+                cap = size + CHILD_MEMORY
+                resource.setrlimit(resource.RLIMIT_AS, (cap if hard == resource.RLIM_INFINITY else min(cap, hard), hard))
+            except Exception:
+                pass
+            table = execute(expression, schema=st["schema"], tables=used)
+        finally:
+            try:
+                resource.setrlimit(resource.RLIMIT_AS, (soft, hard))
+            except (ValueError, OSError):
+                pass
+        return pickle.loads(pickle.dumps(table))
+
+    def passes(test_id, i, meta, sql, old):
+        expression = pickle.loads(pickle.dumps(parse_one(sql)))
+        if not meta.get("execute"):
+            return True
+        if test_id != TPCDS_TEST:
+            return False
+        if old is not None and old[0].get("execute") and expression.dump() == parse_one(old[1]).dump():
+            return True  # the same expression: every later step sees what it saw before
+        table = executed(expression)
+        duck_sql = transpile(sql, write="duckdb")[0]
+        if debug:
+            print(f"fixture case {i}: executed at {time.process_time():.2f}s", file=sys.stderr)
+        q = tpcds()["queries"].get(i)
+        if q is not None and old is not None and q["sql"] == old[1] and duck_sql == q["duck_sql"] \
+                and tuple(table.columns) == q["columns"] and list(table.rows) == q["rows"]:
+            return True  # both sides of the comparison are what they were when it passed
+        cursor = duck().execute(duck_sql)
+        if len(cursor.description) != len(table.columns):
+            return False  # assert_frame_equal fails on the shape before it looks at values
+        rows = cursor.fetchall()
+        if len(rows) != len(table.rows):
+            return False
+        if debug:
+            print(f"fixture case {i}: same shape, comparing frames at {time.process_time():.2f}s", file=sys.stderr)
+        import numpy as np
+        import pandas as pd
+        from pandas.testing import assert_frame_equal
+
+        a = duck().execute(duck_sql).fetchdf()
+        b = pd.DataFrame(((np.nan if c is None else c for c in r) for r in table.rows), columns=table.columns)
+        assert_frame_equal(a, b, check_dtype=False, check_index_type=False)
+        return True
+
+    failed = []
+    for test_id, cases in plan["tests"].items():
+        for rel, i, meta, sql, old in cases:
+            try:
+                ok = passes(test_id, i, meta, sql, old)
+            except BaseException as error:  # the test raises here too
+                if os.environ.get("BR_DEBUG"):
+                    print(f"fixture case {test_id} {i}: {error!r}"[:300], file=sys.stderr)
+                ok = False
+            if debug:
+                print(f"fixture case {test_id} {i}: {'passes' if ok else 'fails'} at {time.process_time():.2f}s",
+                      file=sys.stderr)
+            if not ok:
+                failed.append(test_id)
+                break
+    shutil.rmtree(overlay, ignore_errors=True)
+    os.write(wfd, json.dumps(failed).encode())
+    os.close(wfd)
+
+
 def child_genmem(patched, plan, wfd):
     """In a forked child: test_generator_memory's body, on the patched sources, for the planned
     dialects only (in the test's order). Reports the test as failing if any of them leaks."""
@@ -2563,7 +2860,8 @@ def warm(jobs):
              "sqlite3 importlib.metadata importlib.abc importlib.util select signal zoneinfo uuid hashlib "
              "textwrap pprint operator numbers weakref types").split()
     if any(t.split("::")[0] in HEAVY_FILES for job in jobs
-           if "__tpcds__" not in job[3] and "__genmem__" not in job[3] for t in job[2]):
+           if "__tpcds__" not in job[3] and "__genmem__" not in job[3] and "__fixture__" not in job[3]
+           for t in job[2]):
         names += ["numpy", "pandas", "pandas.testing", "duckdb"]
     for name in names:
         try:
@@ -2613,7 +2911,9 @@ def preimport(jobs):
 
     if not ZYGOTE:
         return
-    files = sorted({t.split("::")[0] for job in jobs if "__tpcds__" not in job[3] and "__genmem__" not in job[3] for t in job[2]})
+    files = sorted({t.split("::")[0] for job in jobs
+                    if "__tpcds__" not in job[3] and "__genmem__" not in job[3] and "__fixture__" not in job[3]
+                    for t in job[2]})
     tick = itertools.count()
 
     class Watch(importlib.abc.MetaPathFinder):
@@ -2644,7 +2944,7 @@ def preimport(jobs):
         names = ["sqlglot"]
         if any("__genmem__" in job[3] for job in jobs):
             names += ["tests.test_generator"]
-        if any("__tpcds__" in job[3] for job in jobs):
+        if any("__tpcds__" in job[3] or "__fixture__" in job[3] for job in jobs):
             names += ["sqlglot.executor", "sqlglot.optimizer"]
         names += [f[:-3].replace("/", ".") for f in files]
         for name in names:
@@ -2832,6 +3132,8 @@ def run_checks(jobs, budget_s):
                         child_tpcds(patched, limits["__tpcds__"], w)
                     elif "__genmem__" in limits:
                         child_genmem(patched, limits["__genmem__"], w)
+                    elif "__fixture__" in limits:
+                        child_fixture(patched, limits["__fixture__"], w)
                     else:
                         child_run(patched, test_ids, limits, w)
                     os._exit(0)
@@ -3310,7 +3612,7 @@ def main():
         return {"chosen": chosen, "patched": dict(selector.patched), "verifiable": selector.verifiable,
                 "unreadable": set(to_numbers(selector.data_mask)), "touched": list(selector.touched),
                 "data_files": set(selector.data_files), "import_widened": selector.import_widened,
-                "state_masks": list(selector.state_masks)}
+                "state_masks": list(selector.state_masks), "fixture_checks": dict(selector.fixture_checks)}
 
     # 1. selections, and the commits whose selection an unchanged import-time state would shrink
     snaps, narrow, state_jobs = {}, {}, {}
@@ -3324,7 +3626,7 @@ def main():
         except Exception as error:
             log(f"{commit}: running every test ({error})")
             snap = {"chosen": every, "patched": {}, "verifiable": False, "unreadable": set(), "touched": [],
-                    "data_files": set(), "import_widened": False, "state_masks": []}
+                    "data_files": set(), "import_widened": False, "state_masks": [], "fixture_checks": {}}
         snaps[commit] = snap
         if RUN and snap["verifiable"] and snap["import_widened"] and not snap["data_files"] and snap["patched"]:
             try:
@@ -3371,6 +3673,12 @@ def main():
                 tpcds_jobs.append(((commit, "tpcds"), patched, [TPCDS_TEST],
                                    {"__tpcds__": plan, TPCDS_TEST: duration[tpcds_number] / 1000},
                                    10 + max(3 * plan["estimate"], 1.5 * plan["budget"])))
+        if RUN and verifiable and selector is not None and snap.get("fixture_checks"):
+            fplan = fixture_plan(snap["fixture_checks"], chosen, duration, number_of)
+            if fplan:
+                tpcds_jobs.append(((commit, "fixture"), patched, sorted(fplan["tests"]),
+                                   {"__fixture__": fplan, **{t: duration[number_of[t]] / 1000 for t in fplan["tests"]}},
+                                   10 + 1.5 * fplan["budget"]))
         if RUN and verifiable and selector is not None and genmem_number in chosen:
             gplan = selector.genmem_plan(chosen, duration, genmem_number)
             if gplan is not None and not gplan["dialects"] and not gplan["import_check"]:
