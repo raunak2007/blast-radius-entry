@@ -607,7 +607,11 @@ class Selector:
             return cost
 
         estimate = run_cost(full) + sum(plans["seconds"][k] if replay[k] is None else replay[k] for k in cheap)
-        limit = WHOLE_RECHECK_BUDGET if whole else min(PER_QUERY_BUDGET, 0.6 * saving)
+        # The estimate is in build-time seconds, about twice the CPU a re-check really takes,
+        # and the board bills CPU at about twice what it measures here: a re-check pays for
+        # itself only while its estimate stays below the seconds it saves. (A re-check of every
+        # query, about 36 s estimated and 16 s of CPU, against a 21.5 s test, never does.)
+        limit = min(WHOLE_RECHECK_BUDGET, saving) if whole else min(PER_QUERY_BUDGET, 0.6 * saving)
         if estimate > limit:
             log("per-query test: %d queries (%d before planning only), about %.1f s to re-check for %.1f s saved; "
                 "running it whole" % (len(queries), len(cheap), estimate, saving))
