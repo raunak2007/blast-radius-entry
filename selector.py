@@ -4895,14 +4895,36 @@ IMPORT_DETAIL = {}  # commit -> what fails to import with its patch (and every f
 
 def needs_import_check(selector, snap, every):
     """A selection short of every test for a commit that edits sqlglot code at module or class
-    level, or a function line that runs while modules are imported."""
+    level, or a function line that runs while modules are imported. Not for an edit confined
+    to the bodies of lambdas nothing calls before the tests (Selector.lambda_body_mask: the
+    statement builds the same objects at import, and tools/build_import_lambdas.py saw no
+    such lambda called while every sqlglot and test module imported and every dialect was
+    instantiated, which is all the check does), once the patched file compiles."""
     if len(snap["chosen"]) >= len(every) or not snap["patched"]:
         return False
     for rel, lo, hi, kind in snap["touched"]:
         if rel.startswith("sqlglot/") and rel.endswith(".py") and rel in snap["patched"]:
+            if kind == "lambda" and compiles(rel, snap["patched"][rel]):
+                continue
             if kind != "function" or selector.touches_import(rel, lo, hi):
                 return True
     return False
+
+
+_COMPILES = {}
+
+
+def compiles(rel, text):
+    """Whether the text compiles as a module (ast.parse alone misses the compiler's own
+    errors, such as `await` outside an async function)."""
+    key = (rel, text)
+    if key not in _COMPILES:
+        try:
+            compile(text, str(SRC / rel), "exec", dont_inherit=True)
+            _COMPILES[key] = True
+        except Exception:  # noqa: BLE001  SyntaxError, ValueError (null bytes), RecursionError
+            _COMPILES[key] = False
+    return _COMPILES[key]
 
 
 def phase(name):
