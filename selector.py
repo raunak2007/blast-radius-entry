@@ -2598,7 +2598,8 @@ class Selector:
         # changed input of another case, its meta lines as they were, fails them only by not
         # parsing, which a child finds out with the pinned sqlglot.
         run = [i for i in inputs if old[i][0] != new[i][0] or old[i][0].get("execute")]
-        if inputs and not run and not (RUN and pinned_parses([new[i][1] for i in inputs])):
+        if inputs and not run and not (RUN and getattr(self, "fixtures_only", False)
+                                       and pinned_parses([new[i][1] for i in inputs])):
             run = inputs
         m = 0
         for name in (spec["cases"] if changed else ()) + (spec["inputs"] if run else ()):
@@ -2634,9 +2635,17 @@ class Selector:
         self.import_widened = False
         self.data_mask = 0
         self.touched = []
+        if not text.strip():
+            return 0  # an empty patch changes nothing
         diffs = parse_patch(text)
         if not diffs:
             raise Fallback("no file changes found in the patch")
+        # Only fixture files change: then what a test does with an edited one can be worked out
+        # with the pinned code. Next to a code edit the same test may run the new data through
+        # changed code that it never reached with the old data.
+        self.fixtures_only = all(
+            p.startswith("tests/fixtures/") and not p.endswith(IMPORTABLE)
+            for fd in diffs for p in ((fd["new"] or ""), (fd["old"] or fd["new"] or "")))
         self.subprocess = self.subprocess_all
         if self.subprocess_imports_core_only and not any(self.reaches_core_import(fd) for fd in diffs):
             self.subprocess = 0
