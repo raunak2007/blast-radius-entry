@@ -22,6 +22,7 @@ sys.path.insert(0, str(HERE))
 from br.diff import parse_patch  # noqa: E402
 from br.impact import ALL, Analyzer, Maps  # noqa: E402
 from br.importcheck import ImportChecker  # noqa: E402
+from br import tpcfix  # noqa: E402
 from br import probe  # noqa: E402
 from br.schedule import split  # noqa: E402
 
@@ -140,6 +141,8 @@ class TpcdsProbe:
         return out
 
     def prune(self, analyzer: Analyzer, chosen: set[int]) -> set[int]:
+        if self.number in chosen and analyzer.fixture_probe and not analyzer.patched_sources:
+            return self.prune_fixture(analyzer, chosen)
         if self.number not in chosen or not self.lines or analyzer.import_time:
             return chosen
         ranges = analyzer.changed_ranges
@@ -151,6 +154,19 @@ class TpcdsProbe:
             return chosen
         passed = probe.run_queries(self.src_root, analyzer.patched_sources, sorted(queries))
         log(f"  tpcds probe on {len(queries)} queries: {'pass, dropping it' if passed else 'fail, keeping it'}")
+        return chosen - {self.number} if passed else chosen
+
+
+    def prune_fixture(self, analyzer: Analyzer, chosen: set[int]) -> set[int]:
+        """A TPC-DS fixture edit (no Python change): replay only the queries whose sql or meta changed."""
+        if set(analyzer.fixture_probe) != {tpcfix.TPCDS}:
+            return chosen
+        text, indices = analyzer.fixture_probe[tpcfix.TPCDS]
+        if not indices or len(indices) > MAX_PROBE_QUERIES:
+            return chosen
+        rel = tpcfix.TPCDS[len(tpcfix.FIXTURES):]
+        passed = probe.run_queries(self.src_root, {"__fixtures__": {rel: text}}, indices)
+        log(f"  tpcds fixture probe on {len(indices)} queries: {'pass, dropping it' if passed else 'fail, keeping it'}")
         return chosen - {self.number} if passed else chosen
 
 
@@ -220,6 +236,7 @@ def main() -> None:
     ms_of = {t["number"]: round(t["seconds"] * 1000) for t in tests}
     everything = set(ms_of)
     analyzer = Analyzer(SRC, load_maps(tests))
+    analyzer.test_numbers = {t["id"]: t["number"] for t in tests}
     modules = collection_modules()
     checker = ImportChecker(SRC, modules, analyzer.maps.import_groups.get("dependents", {}))
     tpcds = None if os.environ.get("BR_NO_PROBE") else TpcdsProbe(tests, SRC)

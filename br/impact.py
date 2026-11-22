@@ -16,6 +16,7 @@ from br.astutil import chain as _chain
 from br.astutil import own_lines as _own_lines
 from br.astutil import start as _start
 from br.diff import FileDiff, Hunk, apply_hunks
+from br import tpcfix
 from br.equiv import Equivalence, module_key
 from br.readers import ReaderIndex
 
@@ -186,6 +187,9 @@ class Analyzer:
         self.changed_ranges: list[tuple[str, int, int]] | None = []
         self.patched_sources: dict[str, str] = {}
         self.verifiable = False
+        self.test_numbers: dict[str, int] = {}  # test id -> number, set by the selector
+        # TPC-DS fixture edits whose changed queries the probe can replay: path -> (text, indices)
+        self.fixture_probe: dict[str, tuple[str, list[int]]] = {}
 
     def reset(self) -> None:
         self.verifiable = False  # set by the selector: may the selection be run here?
@@ -193,6 +197,7 @@ class Analyzer:
         self.refine_info = {}
         self.changed_ranges = []
         self.patched_sources = {}
+        self.fixture_probe = {}
 
     def _changed(self, path: str, start: int, end: int) -> None:
         if self.changed_ranges is not None:
@@ -530,6 +535,18 @@ class Analyzer:
             return ALL
 
     def _fixture(self, fd: FileDiff) -> set[int] | None:
+        if fd.path in tpcfix.TESTS and fd.old_path == fd.new_path and not fd.binary and fd.hunks:
+            try:
+                with open(os.path.join(self.src_root, fd.path), encoding="utf-8") as handle:
+                    new_lines = apply_hunks(handle.read().split("\n"), fd.hunks)
+            except OSError:
+                new_lines = None
+            got = tpcfix.narrow(self.src_root, fd.path, new_lines, self.test_numbers) if new_lines else None
+            if got is not None:
+                tests, sql_changed = got
+                if fd.path == tpcfix.TPCDS and sql_changed:
+                    self.fixture_probe[fd.path] = ("\n".join(new_lines), sql_changed)
+                return tests
         if fd.path.endswith(".sql") and not fd.binary and fd.old_path and fd.new_path:
             changed = [t for h in fd.hunks for t in h.changed_text()]
             if all(not t or t.startswith("--") for t in changed):
