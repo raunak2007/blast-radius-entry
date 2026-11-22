@@ -2529,7 +2529,13 @@ class Selector:
             rel = fd["new"] or fd["old"]
             old_rel = fd["old"]
             if rel is None:
+                if fd["hunks"] or fd["binary"] or fd["new_file"] or fd["deleted"]:
+                    raise Fallback("a change to a file whose name can't be read")
                 continue
+            if any(p and "/" in p and p.split("/", 1)[0].endswith((".egg-info", ".dist-info")) for p in (rel, old_rel)):
+                # package metadata beside the sources: the repository root is on sys.path, so
+                # entry points (the dialect plugins) and versions are read from it
+                raise Fallback(f"package metadata {rel}")
             if fd["mode"] and not fd["hunks"] and not fd["binary"] and not fd["deleted"] and not fd["new_file"] \
                     and (not old_rel or old_rel == rel):
                 continue  # only the file's mode changed: what Python and the tests read is as before
@@ -4620,6 +4626,88 @@ def phase(name):
         log(f"PHASE {name}: self {me.ru_utime + me.ru_stime:.3f}s children {ch.ru_utime + ch.ru_stime:.3f}s")
 
 
+# A run that dies or runs out of time prints nothing and is rejected, so the last resort is an
+# answer for every commit from what is proven by then. The watchdog fires well inside the three
+# minutes a practice run gets (the checks' own budget ends earlier).
+WATCHDOG_S = int(os.environ.get("BR_WATCHDOG", "165"))
+_GUARD = {"pid": None, "duration": None, "every": None, "answers": None, "written": False}
+
+
+def emergency_output(reason):
+    """Print an answer for every commit and leave: a commit's selection once its import check is
+    done, less what a check saw pass (main's `answers`, sound at every moment), and every test
+    for a commit that isn't that far yet."""
+    if os.getpid() != _GUARD["pid"]:
+        os._exit(3)  # a forked child never answers
+    if _GUARD["written"]:
+        return
+    _GUARD["written"] = True
+    try:
+        try:
+            log(f"emergency output: {reason!r}")
+        except Exception:
+            pass
+        duration, every, answers = _GUARD["duration"], _GUARD["every"], _GUARD["answers"] or {}
+        if every is None:
+            tests = json.loads((DATA / "tests.json").read_text("utf-8"))["tests"]
+            duration = {t["number"]: math.floor(t["seconds"] * 1000 + 0.5) for t in tests}
+            every = sorted(duration)
+        lines = []
+        for patch in sorted((DATA / "commits").glob("*.patch")):
+            chosen = list(answers.get(patch.name[: -len(".patch")], every))
+            try:
+                workers = pack(chosen, duration)
+            except Exception:
+                workers = [chosen[i::MAX_WORKERS] for i in range(MAX_WORKERS) if chosen[i::MAX_WORKERS]]
+            lines.append(json.dumps({"commit": patch.name[: -len(".patch")], "workers": workers}, separators=(",", ":")))
+        sys.stdout.write("\n".join(lines) + ("\n" if lines else ""))
+        sys.stdout.flush()
+        stop_children()
+    finally:
+        os._exit(0)
+
+
+def stop_children():
+    """Kill the checks still running (each sits in a process group of its own)."""
+    me = os.getpid()
+    try:
+        for entry in os.listdir("/proc"):
+            if not entry.isdigit():
+                continue
+            try:
+                with open(f"/proc/{entry}/stat") as fh:
+                    parent = int(fh.read().rsplit(")", 1)[1].split()[1])
+            except (OSError, ValueError, IndexError):
+                continue
+            if parent == me:
+                for kill in (os.killpg, os.kill):
+                    try:
+                        kill(int(entry), 9)
+                    except OSError:
+                        pass
+    except OSError:
+        pass
+
+
+def cli():
+    """main() under the guard: the watchdog, and the emergency output if anything raises."""
+    _GUARD["pid"] = os.getpid()
+    try:
+        import signal
+        signal.signal(signal.SIGALRM, lambda *_: emergency_output("out of time"))
+        signal.alarm(WATCHDOG_S)
+    except Exception:
+        pass
+    try:
+        main()
+    except BaseException as error:
+        emergency_output(error)
+    try:
+        sys.stdout.flush()
+    finally:
+        os._exit(0)
+
+
 def main():
     import time
     started = time.monotonic()
@@ -4627,6 +4715,7 @@ def main():
     tests = json.loads((DATA / "tests.json").read_text("utf-8"))["tests"]
     duration = {t["number"]: math.floor(t["seconds"] * 1000 + 0.5) for t in tests}
     every = sorted(duration)
+    _GUARD["duration"], _GUARD["every"] = duration, every
     number_of = {t["id"]: t["number"] for t in tests}
     id_of = {t["number"]: t["id"] for t in tests}
     info = {}
@@ -4684,8 +4773,9 @@ def main():
     snaps, narrow, state_jobs = {}, {}, {}
     for patch in sorted((DATA / "commits").glob("*.patch")):
         commit = patch.name[: -len(".patch")]
-        text = patch.read_bytes().decode("utf-8", "surrogateescape")
+        text = ""
         try:
+            text = patch.read_bytes().decode("utf-8", "surrogateescape")
             if selector is None:
                 raise Fallback("no map")
             snap = run_select(text)
@@ -4757,6 +4847,7 @@ def main():
     phase("import checks")
     # 2. the checks each selection is worth
     answers = {}
+    _GUARD["answers"] = answers  # from here on a commit's entry is sound whenever it exists
     jobs, tpcds_jobs = [], []
     tpcds_number = number_of.get(TPCDS_TEST)
     genmem_number = number_of.get(GENMEM_TEST)
@@ -4845,6 +4936,7 @@ def main():
     phase("checks run")
     out = [json.dumps({"commit": c, "workers": pack(answers[c], duration)}, separators=(",", ":"))
            for c in answers]
+    _GUARD["written"] = True
     sys.stdout.write("\n".join(out) + ("\n" if out else ""))
 
 
@@ -4852,4 +4944,4 @@ if __name__ == "__main__":
     if len(sys.argv) > 2 and sys.argv[1] == "--state":
         state_main(sys.argv[2:])
     else:
-        main()
+        cli()

@@ -63,6 +63,8 @@ Every map comes from running sqlglot's own tests at the pinned commit (`eb11aec4
 
 Tests are packed longest-first, trying 1 to 8 workers and keeping the cheapest.
 
+**A run never ends without an answer.** A run that crashes or runs out of time prints nothing and is rejected, so `main()` runs under a guard: if anything raises, or a watchdog fires 165 seconds in (the checks' own budget ends at 140), the selector prints an answer for every commit from what is proven by then and exits cleanly: a commit's selection once its import check is done, less the tests a check saw pass, and every test for a commit that isn't that far yet. A patch that can't be read or parsed selects every test, as does a change to a file whose name can't be read or to package metadata beside the sources (`*.egg-info`, `*.dist-info`: the repository root is on `sys.path`, so entry points are read from it).
+
 ## Files
 
 | File | What it is |
