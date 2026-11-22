@@ -752,6 +752,17 @@ class Selector:
         self.defaults_only = False
         self.import_widened = False
         self.fixture_checks = {}
+        # set for a second look at a commit that selected everything: an import edit or a lost
+        # name that would select every test is noted in `deferred` instead, to be settled by
+        # the import check (only if that module itself then fails to import)
+        self.defer_all = False
+        self.deferred = set()
+
+    def all_or_defer(self, rel):
+        if self.defer_all and rel.startswith("sqlglot/") and rel.endswith(".py"):
+            self.deferred.add(rel)
+            return 0
+        return self.ALL
 
     def index(self, rel):
         if rel not in self.cache:
@@ -789,7 +800,7 @@ class Selector:
         doc = self.doc
         if node is not None:
             if isinstance(node, (ast.Import, ast.ImportFrom)):
-                return self.ALL
+                return self.all_or_defer(rel)
             names = set()
             for sub in ast.walk(node):
                 if isinstance(sub, ast.Name) and isinstance(sub.ctx, ast.Store):
@@ -797,7 +808,7 @@ class Selector:
             if isinstance(node, DEFS + (ast.ClassDef,)):
                 names.add(node.name)
             if names & set(doc["exported"].get(rel, ())):
-                return self.ALL
+                return self.all_or_defer(rel)
         m = doc["module_any"].get(rel, 0)
         for qual in idx.classes():
             m |= doc["class_users"].get((rel, qual), 0)
@@ -1781,6 +1792,126 @@ class Selector:
             self._class_users_by_file = by
         return doc["module_any"].get(f, 0) | self._class_users_by_file.get(f, 0)
 
+    @staticmethod
+    def module_file(name):
+        """The repository path of a module of ours, or None."""
+        base = name.replace(".", "/")
+        for rel in (base + ".py", base + "/__init__.py"):
+            if (SRC / rel).is_file():
+                return rel
+        return None
+
+    def import_sites(self):
+        """Every import statement under sqlglot/ and tests/: (rel, line, end line, nested,
+        names of the modules it can import)."""
+        if getattr(self, "_import_sites", None) is None:
+            sites = []
+            for sub in ("sqlglot", "tests"):
+                for path in sorted((SRC / sub).rglob("*.py")):
+                    rel = path.relative_to(SRC).as_posix()
+                    if "/fixtures/" in rel:
+                        continue
+                    try:
+                        tree = ast.parse(path.read_bytes())
+                    except (OSError, SyntaxError, ValueError):
+                        continue
+                    pkg = rel[:-3].replace("/", ".")
+                    pkg = pkg[: -len(".__init__")] if pkg.endswith(".__init__") else pkg.rpartition(".")[0]
+                    for node in ast.walk(tree):
+                        names = set()
+                        if isinstance(node, ast.Import):
+                            for a in node.names:
+                                names.add(a.name)
+                        elif isinstance(node, ast.ImportFrom):
+                            mod = node.module or ""
+                            if node.level:
+                                parts = pkg.split(".")
+                                up = parts[: len(parts) - (node.level - 1)] if node.level > 1 else parts
+                                mod = ".".join(up + ([mod] if mod else []))
+                            names.add(mod)
+                            for a in node.names:
+                                # a submodule, or a class a package's __getattr__ loads lazily
+                                # from its lower-case module (sqlglot.dialects.Athena)
+                                names.add(f"{mod}.{a.name}")
+                                names.add(f"{mod}.{a.name.lower()}")
+                        else:
+                            continue
+                        full = set()
+                        for n in names:  # importing a.b.c imports a and a.b first
+                            parts = n.split(".")
+                            full.update(".".join(parts[:i]) for i in range(1, len(parts) + 1))
+                        sites.append((rel, node.lineno, node.end_lineno or node.lineno, node.col_offset > 0, full))
+            self._import_sites = sites
+        return self._import_sites
+
+    def import_failure_mask(self, entries):
+        """The tests an import failure can reach, from the import check's report of what fails
+        with the patch that doesn't at the pinned commit ("module: Error", "dialect key:
+        Error"): every user of a failing module (ran its code, used its dialect classes), the
+        tests running an import of it inside a function, every test module importing it, and
+        the test modules that fail to import. None if a failure can't be placed."""
+        doc = self.doc
+        failing, test_mods = set(), set()
+        for entry in entries:
+            what = entry.rpartition(": ")[0] or entry
+            if what == "refresh":
+                continue  # the patched module's own re-import: its module is reported as well
+            if what.startswith("dialect "):
+                key = what[len("dialect "):]
+                if key == "registry" or not re.fullmatch(r"\w+", key):
+                    return None
+                what = f"sqlglot.dialects.{key}"
+            top = what.split(".")[0]
+            if what == "sqlglot" or top not in ("sqlglot", "tests"):
+                return None
+            rel = self.module_file(what)
+            if rel is None:
+                return None
+            (test_mods if top == "tests" else failing).add(what)
+        if not failing and not test_mods:
+            return None
+        m = self.subprocess
+        for name in failing:
+            m |= self.file_users(self.module_file(name))
+        hit = failing | test_mods
+        for rel, lo, hi, nested, names in self.import_sites():
+            if not names & hit:
+                continue
+            if rel.startswith("tests/"):
+                m |= self.test_module_mask(rel)
+            elif nested:
+                m |= self.line_union(rel, lo, hi)
+        for name in test_mods:
+            m |= self.test_module_mask(self.module_file(name))
+        # tests that name a failing module (or its dialect class) in their own body, say by
+        # reading sqlglot.dialects.Snowflake without building one
+        leaves = {n.rsplit(".", 1)[-1] for n in failing}
+        pat = re.compile(r"(?<![\w])(?:" + "|".join(map(re.escape, sorted(leaves))) + r")(?![\w])", re.I)
+        for rel, cls, name, text in self.test_bodies():
+            if pat.search(text):
+                m |= self.test_bit.get(f"{rel}::{cls}::{name}", 0)
+        return m
+
+    def test_bodies(self):
+        """(test file, class, method, source) of every method of a test class."""
+        if getattr(self, "_test_bodies", None) is None:
+            out = []
+            for rel in sorted(self.doc["test_files"]):
+                try:
+                    text = (SRC / rel).read_bytes().decode("utf-8", "surrogateescape")
+                    tree = ast.parse(text)
+                except (OSError, SyntaxError, ValueError):
+                    continue
+                lines = text.split("\n")
+                for node in tree.body:
+                    if isinstance(node, ast.ClassDef):
+                        for f in node.body:
+                            if isinstance(f, DEFS):
+                                out.append((rel, node.name, f.name,
+                                            "\n".join(lines[f.lineno - 1: f.end_lineno or f.lineno])))
+            self._test_bodies = out
+        return self._test_bodies
+
     def import_users_mask(self, rel, lo, hi):
         """A function body that also runs while other modules are imported (the trie builder
         every tokenizer class calls, the error formatter a dialect's import-time parse
@@ -1920,13 +2051,21 @@ class Selector:
         for cls, name in gone:
             if name.startswith("__") and name.endswith("__") or self.name_used_elsewhere(name, rel):
                 log(f"{rel}: {name} removed or renamed and used elsewhere")
-                return self.ALL
+                if self.all_or_defer(rel):
+                    return self.ALL
+                continue
             pat = re.compile(r"(?<![\w])" + re.escape(name) + r"(?![\w])")
+            at_import = False
             for ln, line in enumerate(new_idx.lines, start=1):
                 if pat.search(line):
                     st, _ = new_idx.stmt_at(ln)
                     if st is None or st["scope"] != "function":
-                        return self.ALL
+                        at_import = True
+                        break
+            if at_import:
+                if self.all_or_defer(rel):
+                    return self.ALL
+                continue
             m |= self.module_fallback(rel, idx, old[(cls, name)]["node"])
         return m
 
@@ -2304,6 +2443,7 @@ class Selector:
         self.guard_mask = 0  # the selection to fall back to unless a check child imports the patch
         self.env_keys = set()  # executor ENV keys whose entries changed
         self.import_widened = False
+        self.deferred = set()
         self.data_mask = 0
         self.touched = []
         self.fixture_checks = {}  # test id -> changed cases it alone is selected for
@@ -4470,7 +4610,89 @@ def _zygote_imports(jobs, budget_s, wfd):
                 os.close(fd)
                 running.pop(pid)
                 out["jobs"][key] = None
+    # commits with a new failure: which test modules no longer import (any of them, not just
+    # those whose import runs sqlglot code). No pinned run: a test module that also fails
+    # at the pinned commit only adds its tests.
+    broken = sorted(k for k, v in out["jobs"].items() if v and set(v) - set(base))
+    if broken and IMPORT_TEST_MODULES and time.monotonic() < deadline:
+        out["tests"] = _zygote_test_imports({k: jobs[k] for k in broken}, deadline)
     os.write(wfd, json.dumps(out).encode())
+
+
+IMPORT_TEST_MODULES = []  # every test module, set by main for the import-failure narrowing
+
+
+def _zygote_test_imports(jobs, deadline):
+    """In the import-check zygote: per commit, a grandchild that imports every test module
+    on the patched sources; {commit: failing test modules, or None}."""
+    import importlib
+    import select
+    import signal
+    import time
+
+    for name in ("numpy", "pandas", "pandas.testing", "duckdb"):  # what the heavy test modules import
+        try:
+            importlib.import_module(name)
+        except BaseException:  # noqa: BLE001
+            pass
+    res = {}
+    pending, running = sorted(jobs.items()), {}
+    while pending or running:
+        while pending and len(running) < PARALLEL and time.monotonic() < deadline:
+            key, patched = pending.pop(0)
+            r, w = os.pipe()
+            pid = os.fork()
+            if pid == 0:
+                try:
+                    os.close(r)
+                    signal.signal(signal.SIGPROF, lambda *_: os._exit(3))
+                    signal.setitimer(signal.ITIMER_PROF, 8.0)
+                    enter_overlay(patched)
+                    try:
+                        refresh_modules(patched)
+                    except BaseException:  # noqa: BLE001
+                        pass
+                    failed = []
+                    for name in IMPORT_TEST_MODULES:
+                        try:
+                            importlib.import_module(name)
+                        except BaseException as error:  # noqa: BLE001
+                            failed.append(f"{name}: {type(error).__name__}")
+                    os.write(w, json.dumps(failed).encode())
+                    os._exit(0)
+                except BaseException:
+                    os._exit(1)
+            os.close(w)
+            running[pid] = (key, r, time.monotonic() + IMPORT_WALL_S, bytearray())
+        if not running:
+            break
+        fds = {v[1]: pid for pid, v in running.items()}
+        ready, _, _ = select.select(list(fds), [], [], 0.05)
+        for fd in ready:
+            pid = fds[fd]
+            chunk = os.read(fd, 1 << 16)
+            if chunk:
+                running[pid][3].extend(chunk)
+                continue
+            key, _, _, buf = running.pop(pid)
+            os.close(fd)
+            _, status = os.waitpid(pid, 0)
+            try:
+                res[key] = json.loads(buf.decode()) if os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0 else None
+            except ValueError:
+                res[key] = None
+        now = time.monotonic()
+        for pid, (key, fd, until, _) in list(running.items()):
+            if now > until or now > deadline:
+                try:
+                    os.kill(pid, signal.SIGKILL)
+                except OSError:
+                    pass
+                os.waitpid(pid, 0)
+                os.close(fd)
+                running.pop(pid)
+                res[key] = None
+    return res
 
 
 def import_breaks_forked(jobs, budget_s):
@@ -4518,12 +4740,20 @@ def import_breaks_forked(jobs, budget_s):
         return None
     base = set(out["base"])
     verdict = {}
+    tests = out.get("tests") or {}
     for key in jobs:
         got = out["jobs"].get(key)
         verdict[key] = got is None or bool(set(got) - base)
         if verdict[key]:
             log(f"{key}: patched imports fail: {got if got is not None else 'no result'}")
+            extra = tests.get(key)
+            if got is not None and extra is not None:
+                IMPORT_DETAIL[key] = sorted(set(got) - base) + extra
+                log(f"{key}: test modules failing to import: {extra}")
     return verdict
+
+
+IMPORT_DETAIL = {}  # commit -> what fails to import with its patch (and every failing test module)
 
 
 def needs_import_check(selector, snap, every):
@@ -4641,14 +4871,51 @@ def main():
             if same:
                 snaps[commit] = narrow[commit]
 
+    # 1a. commits that select every test only for an import edit or a lost name read
+    # elsewhere: if that module then fails to import, its importers are what can fail
+    deferred = {}
+    if IMPORT_CHECK and ZYGOTE and selector is not None:
+        for commit, snap in snaps.items():
+            if len(snap["chosen"]) < len(every) or not snap["patched"]:
+                continue
+            text = (DATA / "commits" / f"{commit}.patch").read_bytes().decode("utf-8", "surrogateescape")
+            selector.defer_all = True
+            try:
+                alt = run_select(text)
+                rels = set(selector.deferred)
+            except Exception:
+                alt, rels = None, set()
+            finally:
+                selector.defer_all = False
+            if alt is not None and rels and len(alt["chosen"]) < len(every):
+                deferred[commit] = (alt, rels)
+        IMPORT_TEST_MODULES[:] = sorted(f[:-3].replace("/", ".") for f in selector.doc["test_files"]
+                                        if f.endswith(".py") and not f.endswith("__init__.py"))
+
     # 1b. edits that run while modules are imported: does every import still succeed?
     if IMPORT_CHECK and selector is not None:
-        imp_jobs = {c: snap["patched"] for c, snap in snaps.items() if needs_import_check(selector, snap, every)}
+        imp_jobs = {c: snap["patched"] for c, snap in snaps.items()
+                    if needs_import_check(selector, snap, every) or c in deferred}
         if imp_jobs:
             verdict = import_breaks_forked(imp_jobs, 30.0) if ZYGOTE else None
             if verdict is None:
                 verdict = import_breaks(imp_jobs, 30.0)
             for commit, broken in verdict.items():
+                if commit in deferred:
+                    alt, rels = deferred[commit]
+                    detail = IMPORT_DETAIL.get(commit) if broken else None
+                    mods = {e.rpartition(": ")[0] for e in detail or ()}
+                    extra = selector.import_failure_mask(detail) if detail else None
+                    # only when every file the commit changes is a module that no longer imports:
+                    # nothing of theirs runs, and what the rest of the map recorded still holds
+                    files = set(alt["patched"]) | rels
+                    if extra is not None and all(r.startswith("sqlglot/") and r.endswith(".py") and
+                                                 r[:-3].replace("/", ".").removesuffix(".__init__") in mods
+                                                 for r in files):
+                        chosen = sorted(set(alt["chosen"]) | set(to_numbers(extra)) | set(always))
+                        log(f"{commit}: {', '.join(sorted(rels))} no longer imports: {len(chosen)} tests")
+                        snaps[commit] = dict(alt, chosen=chosen, verifiable=False)
+                    continue
                 if broken:
                     snaps[commit] = dict(snaps[commit], chosen=every, verifiable=False)
 
