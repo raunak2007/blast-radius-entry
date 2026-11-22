@@ -49,6 +49,11 @@ def _fp(value: object, depth: int, seen: _Memo) -> int:
     kind = type(value)
     if kind in _ATOMS:
         return hash((kind.__name__, value))
+    if depth > 0 and kind is types.FunctionType and _named(value):
+        # a module- or class-level function referenced from a table: its own key carries
+        # its code, so a body edit stays one change rather than many. Decided before the
+        # memo: the same function met at depth 0 (as its own key) must hash its contents.
+        return hash(("fnref", value.__module__, value.__qualname__))
     key = id(value)
     if key in seen.done:
         return seen.done[key]
@@ -82,10 +87,6 @@ def _compound(value: object, kind: type, depth: int, seen: "_Memo") -> int:
     if isinstance(value, enum.Enum):
         return hash(("enum", type(value).__qualname__, value.name))
     if isinstance(value, types.FunctionType):
-        if depth > 0 and _named(value):
-            # a module- or class-level function referenced from a table: its own key
-            # carries its code, so a body edit stays one change rather than many
-            return hash(("fnref", value.__module__, value.__qualname__))
         cells = tuple(_fp(c.cell_contents, d, seen) if _filled(c) else 0 for c in value.__closure__ or ())
         return hash(("fn", _code(value.__code__, d, seen), _fp(value.__defaults__, d, seen),
                      _fp(value.__kwdefaults__, d, seen), cells))

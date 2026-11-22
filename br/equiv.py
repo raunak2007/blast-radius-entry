@@ -12,16 +12,15 @@ Two tests, both far cheaper than dumping syntax trees:
 
 from __future__ import annotations
 
-import re
+import io
+import tokenize
 import types
 
 from br.diff import Hunk
 
+_SKIP_TOKENS = (tokenize.NL, tokenize.NEWLINE, tokenize.COMMENT, tokenize.INDENT, tokenize.DEDENT,
+                tokenize.ENDMARKER)
 EQ_UNSAFE_FILES = ("sqlglot/executor/env.py",)
-_NONE_EQ = re.compile(r"==\s*None\b")
-_NONE_NE = re.compile(r"!=\s*None\b")
-_NONE_EQ_LEFT = re.compile(r"\bNone\s*==")
-_NONE_NE_LEFT = re.compile(r"\bNone\s*!=")
 
 
 def _code_key(code: types.CodeType) -> tuple:
@@ -42,19 +41,32 @@ def module_key(source, path: str) -> tuple:
 
 class Equivalence:
     def __init__(self, enums: frozenset[str]) -> None:
-        names = "|".join(map(re.escape, sorted(enums)))
-        self.enum_eq = re.compile(r"==(\s*)(" + names + r")\.") if enums else None
-        self.enum_ne = re.compile(r"!=(\s*)(" + names + r")\.") if enums else None
+        self.enums = frozenset(enums)
 
-    def _canon(self, line: str) -> str:
-        line = _NONE_EQ.sub("is None", line)
-        line = _NONE_NE.sub("is not None", line)
-        line = _NONE_EQ_LEFT.sub("None is", line)
-        line = _NONE_NE_LEFT.sub("None is not", line)
-        if self.enum_eq is not None:
-            line = self.enum_eq.sub(r"is\1\2.", line)
-            line = self.enum_ne.sub(r"is not\1\2.", line)
-        return " ".join(line.split())
+    def _canon(self, line: str):
+        """Token strings of one line with the equivalent comparison forms unified.
+
+        Whitespace between tokens is dropped, but a string literal keeps its text exactly
+        (collapsing whitespace inside one changes behaviour). A line that does not tokenize
+        on its own (an open multi-line string, say) is compared verbatim."""
+        tokens: list[tuple[int, str]] = []
+        try:
+            for tok in tokenize.generate_tokens(io.StringIO(line.strip() + "\n").readline):
+                if tok.type in _SKIP_TOKENS:
+                    continue
+                tokens.append((tok.type, tok.string))
+        except (tokenize.TokenError, SyntaxError, IndentationError):
+            if not tokens or any(q in line for q in "'\""):
+                return "\0" + line.strip()
+            # no quote on the line: only an unclosed bracket stopped it, the tokens are exact
+        out = [s for _, s in tokens]
+        for i, word in enumerate(out):
+            nxt = out[i + 1] if i + 1 < len(out) else ""
+            prev = out[i - 1] if i else ""
+            if word in ("==", "!=") and (nxt == "None" or prev == "None" or (
+                    self.enums and nxt in self.enums and i + 2 < len(out) and out[i + 2] == ".")):
+                out[i] = "is" if word == "==" else "is not"
+        return " ".join(out)
 
     def same_hunk_text(self, hunk: Hunk, path: str) -> bool:
         """True when the hunk only swaps equivalent comparison forms."""
