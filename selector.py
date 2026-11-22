@@ -89,7 +89,7 @@ TPCDS_TEST_MODULES = {"tests/__init__.py", "tests/test_executor.py", "tests/help
 # changed plans can run slower, so they get a stricter gate: on the scorer's machines they
 # take about 1.3x the recorded estimate, and the board bills CPU at about twice that, so a
 # full replay estimated at 10 s that passes costs more than the 21.5 s test it drops.
-TPCDS_GATE = {"front": 0.8, "full": 0.35}
+TPCDS_GATE = {"front": 0.4, "full": 0.35}  # front: 0.8 at local CPU prices, halved for the board's
 TPCDS_BUDGET = 0.85  # the replay child is stopped (and the test kept) past this share of the saving
 TPCDS_RERUN_SHARE = float(os.environ.get("BR_RERUN_SHARE", "0.5"))  # second front pass only if its estimate fits in this share of what is left
 TPCDS_EARLY_RERUNS = 3  # changed plans run to the end at once, before deferring the rest
@@ -2568,7 +2568,7 @@ class Selector:
         estimate = (0.3 + GENMEM_MODULE_S * len(modules) + sum(data["seconds"][d] for d in dialects)) \
             if dialects or import_check else 0.0
         saving = (pack_cost(chosen, duration) - pack_cost([n for n in chosen if n != genmem_number], duration)) / 1000
-        if estimate > 0.8 * saving:
+        if CPU_PRICE * estimate > 0.8 * saving:
             return None
         log(f"generator memory check planned: {len(dialects)} of {len(data['order'])} dialects, "
             f"est {estimate:.1f}s to save {saving:.1f}s")
@@ -2666,6 +2666,9 @@ def ini_sections(text):
             return None
     return sections
 TIME_FACTOR = float(os.environ.get("BR_TIME_FACTOR", "1.0"))  # our run time / recorded time
+# what a CPU second costs against a simulated second: the board bills container CPU at about
+# twice what our runs measure, so a check pays only if it saves twice its CPU
+CPU_PRICE = float(os.environ.get("BR_CPU_PRICE", "2.0"))
 COMMIT_OVERHEAD_MS = 300  # fork, importing the patched sqlglot, plus a safety margin
 # measured: importing a test module and its dialects; the two heavy files also pay for
 # duckdb/pandas and a setUpClass that loads data
@@ -2707,7 +2710,7 @@ def plan_check(chosen, duration, info, excluded=()):
         prev = k
         overhead = COMMIT_OVERHEAD_MS + sum(FILE_OVERHEAD_MS.get(f, DEFAULT_FILE_OVERHEAD_MS) for f in files)
         rest = sorted(chosen_set - set(runnable[:k]))
-        gain = base - pack_cost(rest, duration) - run_ms - overhead
+        gain = base - pack_cost(rest, duration) - CPU_PRICE * (run_ms + overhead)
         if gain > best_gain:
             best_gain, best_k = gain, k
     return runnable[:best_k]
@@ -3872,7 +3875,7 @@ def run_checks(jobs, budget_s):
 # runs later is what line coverage already decides. Equal fingerprints mean the edit only
 # matters where its lines run in tests.
 
-STATE_MIN_GAIN_MS = 3000  # the check costs ~0.8 s of CPU per commit, plus the pristine sources once
+STATE_MIN_GAIN_MS = 6000  # the check costs ~0.8 s of CPU per commit, plus the pristine sources once (x2 at board prices)
 STATE_BUDGET_S = float(os.environ.get("BR_STATE_BUDGET", "40"))
 STATE_WALL_S = 8.0  # a normal run takes under a second; an edit that loops at import doesn't get far
 
