@@ -47,6 +47,7 @@ OPERANDS_DATA = Path(os.environ.get("BR_OPERANDS", str(Path(__file__).with_name(
 DICTREADS_DATA = Path(os.environ.get("BR_DICTREADS", str(Path(__file__).with_name("dictreads.pkl.gz"))))
 DEFAULTS_DATA = Path(os.environ.get("BR_DEFAULTS", str(Path(__file__).with_name("defaults.pkl.gz"))))
 ATTR_OWNERS_DATA = Path(os.environ.get("BR_ATTR_OWNERS", str(Path(__file__).with_name("attr_owners.pkl.gz"))))
+IMPORT_LAMBDAS_DATA = Path(os.environ.get("BR_IMPORT_LAMBDAS", str(Path(__file__).with_name("import_lambdas.pkl.gz"))))
 CMP_NAMES = {ast.Is: "is", ast.IsNot: "is not", ast.Eq: "==", ast.NotEq: "!=", ast.Lt: "<", ast.LtE: "<=",
              ast.Gt: ">", ast.GtE: ">=", ast.In: "in", ast.NotIn: "not in"}
 CMP_ALT = {"is": "==", "is not": "!=", "<": "<=", "<=": "<", ">": ">=", ">=": ">"}  # as tools/cmp_plugin.py
@@ -78,6 +79,7 @@ FIXTURE_LOAD_CLASS = "tests/test_executor.py::TestExecutor::"
 # test sources whose change could change how the cases above are read or used
 FIXTURE_READER_FILES = {"tests/helpers.py", "tests/test_executor.py", "tests/test_optimizer.py", "tests/__init__.py"}
 FIXTURE_GATE = 0.4  # a case check is planned only if its CPU estimate is at most this share of the saving
+TPCDS_TEST_MODULES = {"tests/__init__.py", "tests/test_executor.py", "tests/helpers.py"}  # its module and what it imports
 # Plan a TPC-DS replay only if its estimated CPU is at most this share of the time it would
 # save. Full replays run the executor on changed code, where outputs often differ late and
 # changed plans can run slower, so they get a stricter gate.
@@ -838,6 +840,14 @@ class Selector:
             else:
                 self.touched.append((rel, lo, hi, "function"))
             return m
+        if st["kind"] == "stmt" and st["scope"] in ("module", "class") and blk is not None:
+            lam = self.lambda_body_mask(rel, st, line, blk)
+            if lam is not None:
+                mask, spans = lam
+                self.touched.extend((rel, a, b, "lambda") for a, b in spans)
+                if st["scope"] == "class":
+                    return self.class_change(rel, idx, st, line, blk) & mask
+                return mask
         self.touched.append((rel, lo, hi, "other"))
         if st["kind"] == "def":
             body_lo, body_hi = st["full"]
@@ -884,6 +894,63 @@ class Selector:
             if entry is not None:
                 return entry | self.subprocess
         return self.module_fallback(rel, idx, st["node"])
+
+    # ---- an edit inside the body of a module- or class-level lambda
+
+    @staticmethod
+    def _lambda_shape(node):
+        """The statement's dump with every outermost lambda's body blanked out, and those lambdas."""
+        import copy
+
+        lams = []
+
+        class Blank(ast.NodeTransformer):
+            def visit_Lambda(self, n):
+                lams.append(n)
+                return ast.Lambda(args=n.args, body=ast.Constant(value=None))
+
+        shape = ast.dump(Blank().visit(copy.deepcopy(node)))
+        return shape, lams
+
+    def lambda_body_mask(self, rel, st, line, blk):
+        """A line-for-line edit of a module- or class-level statement (an ENV entry, a
+        TRANSFORMS lambda) that changes nothing but the bodies of lambdas in it: the statement
+        builds the same objects at import, and the new code runs only where the lambda is
+        called, which is where its lines run in a test's coverage (they also run at import,
+        where the lambda is created, outside every test). Only for lambdas nothing calls
+        before the tests (tools/build_import_lambdas.py: none while modules import, while
+        every dialect is instantiated, or in test_execute_tpcds's table setup). Returns the
+        tests that ran those lambdas and their (first, last) line spans, or None."""
+        if not blk["removed"] or len(blk["removed"]) != len(blk["added"]) or line not in blk["removed"]:
+            return None
+        data = load_import_lambdas()
+        if data is None or self.new_idx is None:
+            return None
+        new_line = blk["added"][blk["removed"].index(line)]
+        new_st, _ = self.new_idx.stmt_at(new_line)
+        old, new = st["node"], new_st["node"] if new_st is not None else None
+        if new is None or new_st["kind"] != "stmt" or new_st["scope"] != st["scope"] or type(new) is not type(old):
+            return None
+        shift = new_line - line
+        if new.lineno - old.lineno != shift or (new.end_lineno or 0) - (old.end_lineno or 0) != shift:
+            return None
+        old_shape, old_lams = self._lambda_shape(old)
+        new_shape, new_lams = self._lambda_shape(new)
+        if old_shape != new_shape or len(old_lams) != len(new_lams):
+            return None
+        changed = [a for a, b in zip(old_lams, new_lams) if ast.dump(a.body) != ast.dump(b.body)]
+        if not changed:
+            return None
+        called = data.get(rel, ())
+        spans = []
+        m = 0
+        for lam in changed:
+            lo, hi = lam.lineno, lam.end_lineno or lam.lineno
+            if any(ln in called for ln in range(lo, hi + 1)):
+                return None  # this lambda (or one sharing its lines) is called before tests
+            spans.append((lo, hi))
+            m |= self.line_union(rel, lo, hi)
+        return m | self.subprocess, spans
 
     # ---- a comparison operator swapped for another
 
@@ -1933,9 +2000,24 @@ class Selector:
         debug-log rendering execute() does next, that rendering is checked too ("log"); if
         planning or execution (or the digest code), its rows ("full"). The duckdb
         transpilation, the expected side of the test's comparison, is always compared."""
-        if not self.verifiable or self.data_files or not self.patched or not self.touched:
+        if not self.verifiable or not self.patched or not self.touched:
             return None
-        if any(kind != "function" or not rel.startswith("sqlglot/") for rel, _, _, kind in self.touched):
+        # Other parts of a multi-file commit may be data files the test never opens (its own
+        # are the TPC fixtures its class setup reads) or test files outside the test's module
+        # and what it imports; neither reaches the replay, which uses the recorded tables and
+        # queries and the test's own code from the pinned commit.
+        tbit = self.test_bit.get(TPCDS_TEST, 0)
+        if not tbit or any(self.doc["file_opens"].get(r, 0) & tbit or "/tpc-" in r for r in self.data_files):
+            return None
+        code = []
+        for rel, lo, hi, kind in self.touched:
+            if rel in self.data_files or (rel.startswith("tests/") and rel.endswith(".py") and lo == hi == 0
+                                          and rel not in TPCDS_TEST_MODULES):
+                continue
+            if kind not in ("function", "lambda") or not rel.startswith("sqlglot/"):
+                return None
+            code.append((rel, lo, hi, kind))
+        if not code:
             return None
         data = load_tpcds()
         if data is None:
@@ -1945,8 +2027,10 @@ class Selector:
             lines = sets.get(rel)
             return bool(lines) and any(ln in lines for ln in range(lo, hi + 1))
 
-        spans = [(rel, lo, hi) for rel, lo, hi, _ in self.touched]
-        if any(hits(data["setup_sets"], *s) for s in spans):
+        spans = [(rel, lo, hi) for rel, lo, hi, _ in code]
+        # a lambda's lines run in the setup when it's created (at import); the lambdas allowed
+        # here are never called there (tools/build_import_lambdas.py)
+        if any(hits(data["setup_sets"], rel, lo, hi) for rel, lo, hi, kind in code if kind != "lambda"):
             return None
         # Per query, what the changed lines can affect decides how it's checked: "front"
         # (parse, optimize, duckdb transpile: the optimizer output digest and the duckdb SQL),
@@ -2145,6 +2229,23 @@ _OPERANDS = None
 _DICTREADS = None
 _DEFAULTS = None
 _ATTR_OWNERS = None
+
+
+_IMPORT_LAMBDAS = None
+
+
+def load_import_lambdas():
+    """Per file, the first lines of the lambdas called before any test (while modules are
+    imported, dialects instantiated, or TPC-DS tables set up; tools/build_import_lambdas.py)."""
+    global _IMPORT_LAMBDAS
+    if _IMPORT_LAMBDAS is None:
+        try:
+            with gzip.open(IMPORT_LAMBDAS_DATA, "rb") as fh:
+                _IMPORT_LAMBDAS = {r: set(v) for r, v in pickle.load(fh)["called"].items()}
+        except Exception as error:
+            log(f"no import-time lambda data ({error!r}); lambda edits keep the statement-level rules")
+            _IMPORT_LAMBDAS = False
+    return _IMPORT_LAMBDAS if _IMPORT_LAMBDAS is not False else None
 
 
 def load_attr_owners():
@@ -2482,8 +2583,14 @@ def child_tpcds(patched, plan, wfd):
             if spent() > budget:
                 same = False
                 break
+            if optimized and sum(max(by_index[j]["cpu"] - by_index[j]["front_cpu"], 0.0) for j in optimized) \
+                    > TPCDS_RERUN_SHARE * (budget - spent()):
+                # the second pass below would already refuse these reruns, and more changed
+                # plans or more CPU spent only make that surer: stop here and keep the test
+                same = False
+                break
         if debug:
-            print(f"tpcds child: first pass same={same} spent={spent():.2f}s changed_plans={len(optimized)} "
+            print(f"tpcds child: {plan.get('commit')} first pass same={same} spent={spent():.2f}s changed_plans={len(optimized)} "
                   f"budget={budget:.2f}s", file=sys.stderr)
         if same and optimized:
             todo = sorted((by_index[i] for i in optimized), key=lambda q: q["cpu"] - q["front_cpu"])
@@ -2500,7 +2607,7 @@ def child_tpcds(patched, plan, wfd):
     finally:
         executor_module.optimize = original_optimize
     if debug:
-        print(f"tpcds child: same={same} spent={spent():.2f}s", file=sys.stderr)
+        print(f"tpcds child: {plan.get('commit')} same={same} spent={spent():.2f}s", file=sys.stderr)
     shutil.rmtree(overlay, ignore_errors=True)
     os.write(wfd, json.dumps([] if same else [TPCDS_TEST]).encode())
     os.close(wfd)
@@ -3683,6 +3790,7 @@ def main():
         if RUN and verifiable and selector is not None and tpcds_number in chosen:
             plan = selector.tpcds_plan(chosen, duration, tpcds_number)
             if plan:
+                plan["commit"] = commit
                 tpcds_jobs.append(((commit, "tpcds"), patched, [TPCDS_TEST],
                                    {"__tpcds__": plan, TPCDS_TEST: duration[tpcds_number] / 1000},
                                    10 + max(3 * plan["estimate"], 1.5 * plan["budget"])))
