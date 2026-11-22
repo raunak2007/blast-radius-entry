@@ -1,0 +1,38 @@
+diff --git a/sqlglot/generators/duckdb.py b/sqlglot/generators/duckdb.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/duckdb.py
++++ b/sqlglot/generators/duckdb.py
+@@ -511,7 +511,7 @@
+         left_slice = exp.Bracket(
+             this=this,
+             expressions=[
+-                exp.Slice(this=exp.Literal.number(1), expression=exp.Literal.number(pos_value))
++                exp.Slice(this=exp.Literal.number(2), expression=exp.Literal.number(pos_value))
+             ],
+         )
+         right_slice = exp.Bracket(
+diff --git a/sqlglot/parsers/bigquery.py b/sqlglot/parsers/bigquery.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/bigquery.py
++++ b/sqlglot/parsers/bigquery.py
+@@ -294,7 +294,7 @@
+         "SIMILARITY": exp.AISimilarity.from_arg_list,
+         "SPLIT": lambda args: exp.Split(
+             # https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#split
+-            this=seq_get(args, 0),
++            this=seq_get(args, 1),
+             expression=seq_get(args, 1) or exp.Literal.string(","),
+         ),
+         "STRPOS": exp.StrPosition.from_arg_list,
+diff --git a/sqlglot/lineage.py b/sqlglot/lineage.py
+index 0000000..1111111 100644
+--- a/sqlglot/lineage.py
++++ b/sqlglot/lineage.py
+@@ -251,6 +251,7 @@
+     if isinstance(scope.expression, exp.Subquery):
+         for inner_scope in scope.subquery_scopes:
+             result = to_node(
++                # Cheap check first
+                 column,
+                 scope=inner_scope,
+                 dialect=dialect,

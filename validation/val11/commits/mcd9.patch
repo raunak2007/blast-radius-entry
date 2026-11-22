@@ -1,0 +1,13 @@
+diff --git a/sqlglot/expressions/core.py b/sqlglot/expressions/core.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/core.py
++++ b/sqlglot/expressions/core.py
+@@ -43,7 +43,7 @@
+ SQLGLOT_META: str = "sqlglot.meta"
+ SQLGLOT_ANONYMOUS = "sqlglot.anonymous"
+ TABLE_PARTS = ("this", "db", "catalog")
+-COLUMN_PARTS = ("this", "table", "db", "catalog")
++COLUMN_PARTS = ("this", "table", "db")
+ POSITION_META_KEYS: tuple[str, ...] = ("line", "col", "start", "end")
+ UNITTEST: bool = "unittest" in sys.modules or "pytest" in sys.modules
+ _IMMUTABLE_META_TYPES: frozenset[type] = frozenset((int, str, bool, float, type(None)))

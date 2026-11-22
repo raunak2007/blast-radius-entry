@@ -1,0 +1,4 @@
+diff --git a/sqlglot/generators/clickhouse.py b/sqlglot/generators/clickhouse_impl.py
+similarity index 100%
+rename from sqlglot/generators/clickhouse.py
+rename to sqlglot/generators/clickhouse_impl.py

@@ -1,0 +1,13 @@
+diff --git a/sqlglot/dialects/mysql.py b/sqlglot/dialects/mysql.py
+index 0000000..1111111 100644
+--- a/sqlglot/dialects/mysql.py
++++ b/sqlglot/dialects/mysql.py
+@@ -96,7 +96,7 @@
+ 
+         NESTED_COMMENTS = False
+         DASH_COMMENT_REQUIRES_BOUNDARY = True
+-        COMMENTS_TERMINATE_AT_NEWLINE_ONLY = True
++        COMMENTS_TERMINATE_AT_NEWLINE_ONLY = False
+ 
+         KEYWORDS = {
+             **tokens.Tokenizer.KEYWORDS,

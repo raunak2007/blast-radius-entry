@@ -1,0 +1,13 @@
+diff --git a/sqlglot/tokens.py b/sqlglot/tokens.py
+index 0000000..1111111 100644
+--- a/sqlglot/tokens.py
++++ b/sqlglot/tokens.py
+@@ -504,7 +504,7 @@
+         "TIME": TokenType.TIME,
+         "TIMETZ": TokenType.TIMETZ,
+         "TIME_NS": TokenType.TIME_NS,
+-        "TIMESTAMP": TokenType.TIMESTAMP,
++        "TIMESTAMPX": TokenType.TIMESTAMP,
+         "TIMESTAMPTZ": TokenType.TIMESTAMPTZ,
+         "TIMESTAMPLTZ": TokenType.TIMESTAMPLTZ,
+         "TIMESTAMP_LTZ": TokenType.TIMESTAMPLTZ,

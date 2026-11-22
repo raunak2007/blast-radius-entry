@@ -1,0 +1,13 @@
+diff --git a/sqlglot/parsers/starrocks.py b/sqlglot/parsers/starrocks.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/starrocks.py
++++ b/sqlglot/parsers/starrocks.py
+@@ -12,7 +12,7 @@
+ from sqlglot.tokens import TokenType
+ 
+ # https://docs.starrocks.io/docs/sql-reference/sql-statements/table_bucket_part_index/CREATE_TABLE/
+-AGGREGATE_COLUMN_CONSTRAINTS = ("SUM", "MAX", "MIN", "REPLACE", "REPLACE_IF_NOT_NULL", "HLL_UNION")
++AGGREGATE_COLUMN_CONSTRAINTS = ("SUM", "MAX", "MINX", "REPLACE", "REPLACE_IF_NOT_NULL", "HLL_UNION")
+ 
+ 
+ def _build_time_slice(args: list[exp.Expr]) -> exp.TimeSlice | None:

@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generator.py b/sqlglot/generator.py
+index 0000000..1111111 100644
+--- a/sqlglot/generator.py
++++ b/sqlglot/generator.py
+@@ -4487,7 +4487,7 @@
+         return f"{self.sql(expression, 'this')} {expression.text('expression').strip()}"
+ 
+     def optimize_sql(self, expression: exp.Optimize) -> str:
+-        self.unsupported("OPTIMIZE is only supported in Databricks")
++        self.unsupported("OPTIMIZE == only supported in Databricks")
+         return f"OPTIMIZE {self.sql(expression, 'this')}"
+ 
+     def comment_sql(self, expression: exp.Comment) -> str:

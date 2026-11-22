@@ -1,0 +1,13 @@
+diff --git a/sqlglot/parsers/mysql.py b/sqlglot/parsers/mysql.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/mysql.py
++++ b/sqlglot/parsers/mysql.py
+@@ -510,7 +510,7 @@
+         return ordered.this if ordered and ordered.args.get("desc") is None else ordered
+ 
+     def _parse_index_constraint(self, kind: str | None = None) -> exp.IndexColumnConstraint:
+-        if kind:
++        if not kind:
+             self._match_texts(("INDEX", "KEY"))
+ 
+         this = self._parse_id_var(any_token=False)

@@ -1,0 +1,12 @@
+diff --git a/sqlglot/expressions/functions.py b/sqlglot/expressions/functions.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/functions.py
++++ b/sqlglot/expressions/functions.py
+@@ -110,6 +110,7 @@
+     ) -> Case:
+         instance = maybe_copy(self, copy)
+         instance.append(
++            # type: ignore
+             "ifs",
+             If(
+                 this=maybe_parse(condition, copy=copy, **opts),

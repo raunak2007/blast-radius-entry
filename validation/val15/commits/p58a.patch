@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generator.py b/sqlglot/generator.py
+index 0000000..1111111 100644
+--- a/sqlglot/generator.py
++++ b/sqlglot/generator.py
+@@ -1252,7 +1252,7 @@
+ 
+         if join_mark and not self.dialect.SUPPORTS_COLUMN_JOIN_MARKS:
+             join_mark = ""
+-            self.unsupported("Outer join syntax using the (+) operator is not supported.")
++            self.unsupported("Outer join syntax using the (+) operator != supported.")
+ 
+         return f"{self.column_parts(expression)}{join_mark}"
+ 

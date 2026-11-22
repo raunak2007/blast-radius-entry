@@ -1,0 +1,11 @@
+diff --git a/tests/dialects/test_tableau.py b/tests/dialects/test_tableau.py
+index 0000000..1111111 100644
+--- a/tests/dialects/test_tableau.py
++++ b/tests/dialects/test_tableau.py
+@@ -73,5 +73,6 @@
+                 "presto": "COUNT(a)",
+                 "hive": "COUNT(a)",
+                 "tableau": "COUNT(a)",
++            # TODO: revisit
+             },
+         )

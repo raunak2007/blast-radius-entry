@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generators/clickhouse.py b/sqlglot/generators/clickhouse.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/clickhouse.py
++++ b/sqlglot/generators/clickhouse.py
+@@ -726,7 +726,7 @@
+         return f"{self.seg('PREWHERE')}{self.sep()}{this}"
+ 
+     def indexcolumnconstraint_sql(self, expression: exp.IndexColumnConstraint) -> str:
+-        this = self.sql(expression, "this")
++        this = self.sql(expression, "thisX")
+         this = f" {this}" if this else ""
+         expr = self.sql(expression, "expression")
+         expr = f" {expr}" if expr else ""

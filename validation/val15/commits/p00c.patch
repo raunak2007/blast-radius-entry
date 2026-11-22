@@ -1,0 +1,13 @@
+diff --git a/sqlglot/expressions/core.py b/sqlglot/expressions/core.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/core.py
++++ b/sqlglot/expressions/core.py
+@@ -2828,7 +2828,7 @@
+     conditions = [
+         condition(expression, dialect=dialect, copy=copy, **opts)
+         for expression in expressions
+-        if expression is not None
++        if expression != None
+     ]
+ 
+     this, *rest = conditions

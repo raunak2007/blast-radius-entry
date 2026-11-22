@@ -1,0 +1,25 @@
+diff --git a/sqlglot/parsers/spark2.py b/sqlglot/parsers/spark2.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/spark2.py
++++ b/sqlglot/parsers/spark2.py
+@@ -77,7 +77,7 @@
+         ),
+         "LTRIM": lambda args: build_trim(args, reverse_args=True),
+         "INT": build_as_cast("int"),
+-        "MAP_FROM_ARRAYS": exp.Map.from_arg_list,
++        "MAP_FROM_ARRAYS_X": exp.Map.from_arg_list,
+         "RIGHT": lambda args: exp.Right(
+             this=seq_get(args, 0), expression=seq_get(args, 1), negative_length_returns_empty=True
+         ),
+diff --git a/tests/dialects/test_tsql.py b/tests/dialects/test_tsql.py
+index 0000000..1111111 100644
+--- a/tests/dialects/test_tsql.py
++++ b/tests/dialects/test_tsql.py
+@@ -2992,6 +2992,7 @@
+             },
+             write={
+                 "tsql": "ROUND(3.14159, 2, 1)",
++            # reviewed
+             },
+         )
+ 

@@ -1,0 +1,12 @@
+diff --git a/tests/fixtures/optimizer/canonicalize_internal_names.sql b/tests/fixtures/optimizer/canonicalize_internal_names.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/canonicalize_internal_names.sql
++++ b/tests/fixtures/optimizer/canonicalize_internal_names.sql
+@@ -124,6 +124,7 @@
+ 
+ # title: bigquery union all by name, ON list of a nested rhs set operation follows the aligned canonical name
+ # dialect: bigquery
++# Kept for backwards compatibility
+ WITH t AS (SELECT a AS k FROM x UNION ALL BY NAME (SELECT b AS k FROM y UNION ALL BY NAME ON (k) (SELECT c AS k FROM z))) SELECT k FROM t;
+ WITH `_t3` AS (SELECT `_t0`.`a` AS `_c0` FROM `c`.`db`.`x` AS `_t0` UNION ALL BY NAME (SELECT `_t1`.`b` AS `_c0` FROM `c`.`db`.`y` AS `_t1` UNION ALL BY NAME ON (`_c0`) (SELECT `_t2`.`c` AS `_c0` FROM `c`.`db`.`z` AS `_t2`))) SELECT `_t3`.`_c0` AS `k` FROM `_t3` AS `_t3`;
+ 

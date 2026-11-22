@@ -1,0 +1,13 @@
+diff --git a/sqlglot/planner.py b/sqlglot/planner.py
+index 0000000..1111111 100644
+--- a/sqlglot/planner.py
++++ b/sqlglot/planner.py
+@@ -158,7 +158,7 @@
+ 
+         for e in expression.expressions:
+             if find_in_scope(e, exp.AggFunc):
+-                projections.append(exp.column(e.alias_or_name, step.name, quoted=True))
++                projections.append(exp.column(e.alias_or_name, step.name, quoted=False))
+                 extract_agg_operands(e)
+             else:
+                 projections.append(e)

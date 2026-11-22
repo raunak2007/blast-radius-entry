@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/normalize.py b/sqlglot/optimizer/normalize.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/normalize.py
++++ b/sqlglot/optimizer/normalize.py
+@@ -9,7 +9,7 @@
+ from sqlglot.optimizer.scope import find_all_in_scope
+ from sqlglot.optimizer.simplify import Simplifier, flatten
+ 
+-logger = logging.getLogger("sqlglot")
++logger = logging.getLogger("sqlglotX")
+ 
+ 
+ def normalize(expression: exp.Expr, dnf: bool = False, max_distance: int = 128) -> exp.Expr:

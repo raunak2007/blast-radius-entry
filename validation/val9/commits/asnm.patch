@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/resolver.py b/sqlglot/optimizer/resolver.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/resolver.py
++++ b/sqlglot/optimizer/resolver.py
+@@ -223,7 +223,7 @@
+             ):
+                 source = self.scope.cte_sources[source.name]
+ 
+-            if isinstance(source, exp.Table):
++            if not isinstance(source, exp.Table):
+                 columns = self.schema.column_names(source, only_visible)
+             elif isinstance(source, Scope) and isinstance(
+                 source_expr := source.expression, (exp.Values, exp.Unnest, exp.Lateral)

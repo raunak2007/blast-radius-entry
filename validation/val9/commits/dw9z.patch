@@ -1,0 +1,13 @@
+diff --git a/sqlglot/dialects/postgres.py b/sqlglot/dialects/postgres.py
+index 0000000..1111111 100644
+--- a/sqlglot/dialects/postgres.py
++++ b/sqlglot/dialects/postgres.py
+@@ -29,7 +29,7 @@
+     TIME_FORMAT = "'YYYY-MM-DD HH24:MI:SS'"
+     TABLESAMPLE_SIZE_IS_PERCENT = True
+     TABLES_REFERENCEABLE_AS_COLUMNS = True
+-    OUTER_COLUMNS_SHADOW_TABLE_ALIASES = True
++    OUTER_COLUMNS_SHADOW_TABLE_ALIASES = False
+ 
+     DEFAULT_FUNCTIONS_COLUMN_NAMES = {
+         exp.ExplodingGenerateSeries: "generate_series",

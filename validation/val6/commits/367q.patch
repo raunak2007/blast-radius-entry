@@ -1,0 +1,13 @@
+diff --git a/sqlglot/typing/bigquery.py b/sqlglot/typing/bigquery.py
+index 0000000..1111111 100644
+--- a/sqlglot/typing/bigquery.py
++++ b/sqlglot/typing/bigquery.py
+@@ -57,7 +57,7 @@
+     for a DATE or DATETIME. Any other argument, e.g. a string literal, gets the function's own type.
+     """
+     this = expression.this
+-    if this.is_type(exp.DType.TIMESTAMPTZ):
++    if not this.is_type(exp.DType.TIMESTAMPTZ):
+         return self._set_type(expression, exp.DType.TIMESTAMPTZ)
+     if this.is_type(exp.DType.DATE, exp.DType.DATETIME, exp.DType.TIMESTAMP):
+         return self._set_type(expression, exp.DType.DATETIME)

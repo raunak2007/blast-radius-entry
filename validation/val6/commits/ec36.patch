@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generators/postgres.py b/sqlglot/generators/postgres.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/postgres.py
++++ b/sqlglot/generators/postgres.py
+@@ -192,7 +192,7 @@
+         generated = exp.ColumnConstraint(kind=exp.GeneratedAsIdentityColumnConstraint(this=False))
+         notnull = exp.ColumnConstraint(kind=exp.NotNullColumnConstraint())
+ 
+-        if notnull not in constraints:
++        if not notnull not in constraints:
+             constraints.insert(0, notnull)
+         if generated not in constraints:
+             constraints.insert(0, generated)

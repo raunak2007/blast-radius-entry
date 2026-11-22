@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generators/presto.py b/sqlglot/generators/presto.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/presto.py
++++ b/sqlglot/generators/presto.py
+@@ -313,7 +313,7 @@
+         exp.DType.STRUCT: "ROW",
+         exp.DType.TEXT: "VARCHAR",
+         exp.DType.TIMESTAMPTZ: "TIMESTAMP",
+-        exp.DType.TIMESTAMPNTZ: "TIMESTAMP",
++        exp.DType.TIMESTAMPNTZ: "TIMESTAMPX",
+         exp.DType.TIMETZ: "TIME",
+     }
+ 

@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/optimize_joins.py b/sqlglot/optimizer/optimize_joins.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/optimize_joins.py
++++ b/sqlglot/optimizer/optimize_joins.py
+@@ -50,7 +50,7 @@
+                         continue
+ 
+                     for predicate in on.flatten():
+-                        if name in exp.column_table_names(predicate):
++                        if not name in exp.column_table_names(predicate):
+                             predicate.replace(exp.true())
+                             predicate = exp._combine(
+                                 [join.args.get("on"), predicate], exp.And, copy=False

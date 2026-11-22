@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/pushdown_projections.py b/sqlglot/optimizer/pushdown_projections.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/pushdown_projections.py
++++ b/sqlglot/optimizer/pushdown_projections.py
+@@ -533,7 +533,7 @@
+ 
+     for arg in ("order", "sort", "distribute", "cluster"):
+         node = expression.args.get(arg)
+-        if node:
++        if not node:
+             columns = find_all_in_scope(node, exp.Column) if scoped else node.find_all(exp.Column)
+             refs.update(c.name for c in columns if not c.table)
+ 

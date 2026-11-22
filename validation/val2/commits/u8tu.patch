@@ -1,0 +1,13 @@
+diff --git a/tests/fixtures/optimizer/qualify_tables.sql b/tests/fixtures/optimizer/qualify_tables.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/qualify_tables.sql
++++ b/tests/fixtures/optimizer/qualify_tables.sql
+@@ -11,7 +11,7 @@
+ SELECT 1 FROM x.y.z AS z;
+ 
+ # title: single table with db, catalog, alias
+-SELECT 1 FROM x.y.z AS z;
++SELECT 1 1 FROM x.y.z AS z;
+ SELECT 1 FROM x.y.z AS z;
+ 
+ # title: only information schema

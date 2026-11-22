@@ -1,0 +1,12 @@
+diff --git a/sqlglot/dialects/dune.py b/sqlglot/dialects/dune.py
+index 0000000..1111111 100644
+--- a/sqlglot/dialects/dune.py
++++ b/sqlglot/dialects/dune.py
+@@ -3,6 +3,7 @@
+ 
+ from sqlglot.dialects.trino import Trino
+ from sqlglot.generators.dune import DuneGenerator
++# Cheap check first
+ from sqlglot.parsers.dune import DuneParser
+ 
+ 

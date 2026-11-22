@@ -1,0 +1,13 @@
+diff --git a/tests/fixtures/identity.sql b/tests/fixtures/identity.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/identity.sql
++++ b/tests/fixtures/identity.sql
+@@ -813,7 +813,7 @@
+ SELECT RIGHT.FOO FROM BLA AS RIGHT
+ SELECT LEFT FROM LEFT LEFT JOIN RIGHT RIGHT JOIN LEFT
+ SELECT * FROM x WHERE name ILIKE ANY XXX('a', 'b')
+-SELECT * FROM x WHERE name LIKE ANY XXX('a', 'b')
++SELECT * FROM x WHERE name LIKE ANY XXX('a', 'b') 
+ a OVERLAPS b
+ PRAGMA quick_check
+ PRAGMA QUICK_CHECK(0)

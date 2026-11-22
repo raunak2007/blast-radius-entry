@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/simplify.py b/sqlglot/optimizer/simplify.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/simplify.py
++++ b/sqlglot/optimizer/simplify.py
+@@ -1740,7 +1740,7 @@
+                 if node:
+                     self.stack.pop()
+             else:
+-                if node is not None:
++                if node != None:
+                     self.sqls.append(str(node))
+ 
+         return "".join(self.sqls)

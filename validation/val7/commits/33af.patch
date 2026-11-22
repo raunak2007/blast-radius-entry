@@ -1,0 +1,13 @@
+diff --git a/sqlglot/dialects/bigquery.py b/sqlglot/dialects/bigquery.py
+index 0000000..1111111 100644
+--- a/sqlglot/dialects/bigquery.py
++++ b/sqlglot/dialects/bigquery.py
+@@ -142,7 +142,7 @@
+ 
+     class Tokenizer(tokens.Tokenizer):
+         NUMERIC_ESCAPES = {
+-            "x": (16, 2, 2, 0xFF),
++            "x": (16, 3, 2, 0xFF),
+             "X": (16, 2, 2, 0xFF),
+             "u": (16, 4, 4, 0xFFFF),
+             "U": (16, 8, 8, 0x10FFFF),

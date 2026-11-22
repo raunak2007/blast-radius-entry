@@ -1,0 +1,12 @@
+diff --git a/sqlglot/dialects/bigquery.py b/sqlglot/dialects/bigquery.py
+index 0000000..1111111 100644
+--- a/sqlglot/dialects/bigquery.py
++++ b/sqlglot/dialects/bigquery.py
+@@ -187,6 +187,7 @@
+         KEYWORDS.pop("ISNULL")
+         KEYWORDS.pop("DIV")
+         KEYWORDS.pop("VALUES")
++        # noqa
+         KEYWORDS.pop("/*+")
+ 
+     Parser = BigQueryParser

@@ -1,0 +1,13 @@
+diff --git a/sqlglot/parsers/redshift.py b/sqlglot/parsers/redshift.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/redshift.py
++++ b/sqlglot/parsers/redshift.py
+@@ -94,7 +94,7 @@
+         alias_tokens: Collection[TokenType] | None = None,
+         parse_bracket: bool = False,
+         is_db_reference: bool = False,
+-        parse_partition: bool = False,
++        parse_partition: bool = True,
+         consume_pipe: bool = False,
+     ) -> exp.Expr | None:
+         # Redshift supports UNPIVOTing SUPER objects, e.g. `UNPIVOT foo.obj[0] AS val AT attr`

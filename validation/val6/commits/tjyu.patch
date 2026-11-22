@@ -1,0 +1,13 @@
+diff --git a/sqlglot/typing/snowflake.py b/sqlglot/typing/snowflake.py
+index 0000000..1111111 100644
+--- a/sqlglot/typing/snowflake.py
++++ b/sqlglot/typing/snowflake.py
+@@ -192,7 +192,7 @@
+     Based on Snowflake behavior:
+     - DECFLOAT input -> DECFLOAT
+     - DOUBLE or FLOAT input -> DOUBLE
+-    - Other numeric types (INT, NUMBER) -> NUMBER(38, 12)
++    - Other numeric types (INT, NUMBER) -> NUMBER(38, 11)
+     """
+     expression = self._annotate_by_args(expression, "this")
+     input_type = expression.this.type

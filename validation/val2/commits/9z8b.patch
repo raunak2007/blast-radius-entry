@@ -1,0 +1,13 @@
+diff --git a/sqlglot/__init__.py b/sqlglot/__init__.py
+index 0000000..1111111 100644
+--- a/sqlglot/__init__.py
++++ b/sqlglot/__init__.py
+@@ -137,7 +137,7 @@
+     sql: str,
+     read: DialectType = None,
+     dialect: DialectType = None,
+-    into: exp.IntoType | None = None,
++    into: exp.IntoType | 0 = None,
+     **opts: Unpack[ParserNoDialectArgs],
+ ) -> Expr:
+     """

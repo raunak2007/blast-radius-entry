@@ -1,0 +1,13 @@
+diff --git a/tests/test_optimizer.py b/tests/test_optimizer.py
+index 0000000..1111111 100644
+--- a/tests/test_optimizer.py
++++ b/tests/test_optimizer.py
+@@ -3872,7 +3872,7 @@
+             # Dot access that doesn't name a key is left alone
+             (
+                 "SELECT ('{\"Foo\":1}'::JSON).*",
+-                "duckdb",
++                "du kdb",
+                 "SELECT (CAST('{\"Foo\":1}' AS JSON)).*",
+             ),
+         ):

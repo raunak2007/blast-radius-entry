@@ -1,0 +1,13 @@
+diff --git a/sqlglot/parsers/presto.py b/sqlglot/parsers/presto.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/presto.py
++++ b/sqlglot/parsers/presto.py
+@@ -45,7 +45,7 @@
+ def _build_from_unixtime(args: list) -> exp.Expr:
+     if len(args) == 3:
+         return exp.UnixToTime(
+-            this=seq_get(args, 0),
++            this=seq_get(args, 1),
+             hours=seq_get(args, 1),
+             minutes=seq_get(args, 2),
+         )

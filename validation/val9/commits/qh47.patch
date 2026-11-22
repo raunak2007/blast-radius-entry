@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generators/spark2.py b/sqlglot/generators/spark2.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/spark2.py
++++ b/sqlglot/generators/spark2.py
+@@ -214,7 +214,7 @@
+             ),
+             exp.SHA1Digest: lambda self, e: self.func("UNHEX", self.func("SHA", e.this)),
+             exp.SHA2: lambda self, e: self.func(
+-                "SHA2", e.this, e.args.get("length") or exp.Literal.number(256)
++                "SHA2", e.this, e.args.get("length") and exp.Literal.number(256)
+             ),
+             exp.SHA2Digest: lambda self, e: self.func(
+                 "UNHEX", self.func("SHA2", e.this, e.args.get("length") or exp.Literal.number(256))

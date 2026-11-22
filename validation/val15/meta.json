@@ -1,0 +1,282 @@
+{
+ "p005": {
+  "kind": "probe",
+  "desc": [
+   "sqlglot/optimizer/unnest_subqueries.py:351 is not -> !="
+  ],
+  "labeller": "pytest"
+ },
+ "p00c": {
+  "kind": "probe",
+  "desc": [
+   "sqlglot/expressions/core.py:2831 is not -> !="
+  ],
+  "labeller": "pytest"
+ },
+ "p117": {
+  "kind": "probe",
+  "desc": [
+   "sqlglot/optimizer/qualify_columns.py:279 is -> =="
+  ],
+  "labeller": "pytest"
+ },
+ "p123": {
+  "kind": "probe",
+  "desc": [
+   "sqlglot/optimizer/unnest_subqueries.py:326 != -> is not"
+  ],
+  "labeller": "pytest"
+ },
+ "p168": {
+  "kind": "probe",
+  "desc": [
+   "sqlglot/optimizer/simplify.py:541 == -> is"
+  ],
+  "labeller": "pytest"
+ },
+ "p1be": {
+  "kind": "probe",
+  "desc": [
+   "sqlglot/optimizer/scope.py:472 is -> =="
+  ],
+  "labeller": "pytest"
+ },
+ "p1ea": {
+  "kind": "probe",
+  "desc": [
+   "sqlglot/optimizer/simplify.py:526 == -> is"
+  ],
+  "labeller": "pytest"
+ },
+ "p1f3": {
+  "kind": "probe",
+  "desc": [
+   "sqlglot/expressions/core.py:2621 is -> =="
+  ],
+  "labeller": "pytest"
+ },
+ "p1f9": {
+  "kind": "probe",
+  "desc": [
+   "sqlglot/generator.py:6657 == -> is"
+  ],
+  "labeller": "pytest"
+ },
+ "p29d": {
+  "kind": "probe",
+  "desc": [
+   "sqlglot/generator.py:3060 is -> =="
+  ],
+  "labeller": "pytest"
+ },
+ "p331": {
+  "kind": "probe",
+  "desc": [
+   "sqlglot/generator.py:6347 == -> is"
+  ],
+  "labeller": "pytest"
+ },
+ "p3b4": {
+  "kind": "probe",
+  "desc": [
+   "sqlglot/optimizer/unnest_subqueries.py:77 == -> is"
+  ],
+  "labeller": "pytest"
+ },
+ "p456": {
+  "kind": "probe",
+  "desc": [
+   "sqlglot/expressions/core.py:1470 is not -> !="
+  ],
+  "labeller": "pytest"
+ },
+ "p4b3": {
+  "kind": "probe",
+  "desc": [
+   "sqlglot/optimizer/annotate_types.py:788 == -> is"
+  ],
+  "labeller": "pytest"
+ },
+ "p58a": {
+  "kind": "probe",
+  "desc": [
+   "sqlglot/generator.py:1255 is not -> !="
+  ],
+  "labeller": "pytest"
+ },
+ "p5d6": {
+  "kind": "probe",
+  "desc": [
+   "sqlglot/optimizer/simplify.py:351 is -> =="
+  ],
+  "labeller": "pytest"
+ },
+ "p5dc": {
+  "kind": "probe",
+  "desc": [
+   "sqlglot/expressions/core.py:3111 != -> is not"
+  ],
+  "labeller": "pytest"
+ },
+ "p5e5": {
+  "kind": "probe",
+  "desc": [
+   "sqlglot/optimizer/unnest_subqueries.py:142 is not -> !="
+  ],
+  "labeller": "pytest"
+ },
+ "p60c": {
+  "kind": "probe",
+  "desc": [
+   "sqlglot/helper.py:114 is -> =="
+  ],
+  "labeller": "pytest"
+ },
+ "p6e1": {
+  "kind": "probe",
+  "desc": [
+   "sqlglot/generator.py:3480 == -> is"
+  ],
+  "labeller": "pytest"
+ },
+ "p864": {
+  "kind": "probe",
+  "desc": [
+   "sqlglot/generator.py:4490 is -> =="
+  ],
+  "labeller": "pytest"
+ },
+ "p883": {
+  "kind": "probe",
+  "desc": [
+   "sqlglot/executor/python.py:372 is not -> !="
+  ],
+  "labeller": "pytest"
+ },
+ "p937": {
+  "kind": "probe",
+  "desc": [
+   "sqlglot/optimizer/scope.py:830 is -> =="
+  ],
+  "labeller": "pytest"
+ },
+ "p988": {
+  "kind": "probe",
+  "desc": [
+   "sqlglot/generator.py:1040 == -> is"
+  ],
+  "labeller": "pytest"
+ },
+ "p9b4": {
+  "kind": "probe",
+  "desc": [
+   "sqlglot/generator.py:2166 is -> =="
+  ],
+  "labeller": "pytest"
+ },
+ "pa11": {
+  "kind": "probe",
+  "desc": [
+   "sqlglot/optimizer/unnest_subqueries.py:593 is not -> !="
+  ],
+  "labeller": "pytest"
+ },
+ "pa27": {
+  "kind": "probe",
+  "desc": [
+   "sqlglot/optimizer/scope.py:851 is -> =="
+  ],
+  "labeller": "pytest"
+ },
+ "pb1b": {
+  "kind": "probe",
+  "desc": [
+   "sqlglot/generator.py:5229 is -> =="
+  ],
+  "labeller": "pytest"
+ },
+ "pb22": {
+  "kind": "probe",
+  "desc": [
+   "sqlglot/executor/env.py:47 is -> =="
+  ],
+  "labeller": "pytest"
+ },
+ "pb2a": {
+  "kind": "probe",
+  "desc": [
+   "sqlglot/optimizer/qualify_columns.py:1315 is -> =="
+  ],
+  "labeller": "pytest"
+ },
+ "pba8": {
+  "kind": "probe",
+  "desc": [
+   "sqlglot/optimizer/simplify.py:355 is -> =="
+  ],
+  "labeller": "pytest"
+ },
+ "pbc8": {
+  "kind": "probe",
+  "desc": [
+   "sqlglot/optimizer/qualify_columns.py:572 == -> is"
+  ],
+  "labeller": "pytest"
+ },
+ "pc00": {
+  "kind": "probe",
+  "desc": [
+   "sqlglot/optimizer/qualify_columns.py:642 != -> is not"
+  ],
+  "labeller": "pytest"
+ },
+ "pcc7": {
+  "kind": "probe",
+  "desc": [
+   "sqlglot/optimizer/merge_subqueries.py:425 is -> =="
+  ],
+  "labeller": "pytest"
+ },
+ "pd93": {
+  "kind": "probe",
+  "desc": [
+   "sqlglot/optimizer/simplify.py:509 == -> is"
+  ],
+  "labeller": "pytest"
+ },
+ "pdd9": {
+  "kind": "probe",
+  "desc": [
+   "sqlglot/optimizer/unnest_subqueries.py:334 is not -> !="
+  ],
+  "labeller": "pytest"
+ },
+ "pee7": {
+  "kind": "probe",
+  "desc": [
+   "sqlglot/optimizer/merge_subqueries.py:723 != -> is not"
+  ],
+  "labeller": "pytest"
+ },
+ "pf51": {
+  "kind": "probe",
+  "desc": [
+   "sqlglot/optimizer/simplify.py:1683 is not -> !="
+  ],
+  "labeller": "pytest"
+ },
+ "pf6b": {
+  "kind": "probe",
+  "desc": [
+   "sqlglot/optimizer/qualify_columns.py:1414 == -> is"
+  ],
+  "labeller": "pytest"
+ },
+ "pfb8": {
+  "kind": "probe",
+  "desc": [
+   "sqlglot/generator.py:3104 is not -> !="
+  ],
+  "labeller": "pytest"
+ }
+}

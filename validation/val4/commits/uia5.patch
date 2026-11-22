@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/unnest_subqueries.py b/sqlglot/optimizer/unnest_subqueries.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/unnest_subqueries.py
++++ b/sqlglot/optimizer/unnest_subqueries.py
+@@ -282,7 +282,7 @@
+             if not join.is_semi_or_anti_join:
+                 available_source_aliases.add(join.alias_or_name)
+ 
+-    if isinstance(on_clause_ancestor, exp.Join) and on_clause_join_index is None:
++    if isinstance(on_clause_ancestor, exp.Join) and on_clause_join_index == None:
+         return
+ 
+     zero_fill = False

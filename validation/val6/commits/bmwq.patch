@@ -1,0 +1,13 @@
+diff --git a/sqlglot/expressions/constraints.py b/sqlglot/expressions/constraints.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/constraints.py
++++ b/sqlglot/expressions/constraints.py
+@@ -22,7 +22,7 @@
+ 
+ 
+ class ColumnConstraint(Expression):
+-    arg_types = {"this": False, "kind": True}
++    arg_types = {"this": False, "kind": False}
+ 
+     @property
+     def kind(self) -> ColumnConstraintKind | Reference:

@@ -1,0 +1,13 @@
+diff --git a/sqlglot/tokens.py b/sqlglot/tokens.py
+index 0000000..1111111 100644
+--- a/sqlglot/tokens.py
++++ b/sqlglot/tokens.py
+@@ -488,7 +488,7 @@
+         "BPCHAR": TokenType.BPCHAR,
+         "STR": TokenType.TEXT,
+         "STRING": TokenType.TEXT,
+-        "TEXT": TokenType.TEXT,
++        "TEXTX": TokenType.TEXT,
+         "LONGTEXT": TokenType.LONGTEXT,
+         "MEDIUMTEXT": TokenType.MEDIUMTEXT,
+         "TINYTEXT": TokenType.TINYTEXT,

@@ -1,0 +1,26 @@
+diff --git a/sqlglot/optimizer/pushdown_predicates.py b/sqlglot/optimizer/pushdown_predicates.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/pushdown_predicates.py
++++ b/sqlglot/optimizer/pushdown_predicates.py
+@@ -300,7 +300,7 @@
+             # we can't push down predicates to select statements if they are referenced in
+             # multiple places.
+             if (
+-                not node.args.get("group")
++                node.args.get("group")
+                 and scope_ref_count[id(source)] < 2
+                 and not has_window_or_srf
+                 # These clauses select rows before the outer predicate runs
+diff --git a/sqlglot/optimizer/resolver.py b/sqlglot/optimizer/resolver.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/resolver.py
++++ b/sqlglot/optimizer/resolver.py
+@@ -282,7 +282,7 @@
+             node, _ = self.scope.selected_sources.get(name) or (None, None)
+             if node is None and name in self.scope.semi_or_anti_join_tables:
+                 # SEMI/ANTI sources are not selected, but their column alias lists still apply.
+-                if self._source_nodes is None:
++                if self._source_nodes is not None:
+                     self._source_nodes = dict(self.scope.references)
+                 node = self._source_nodes.get(name)
+ 

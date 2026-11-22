@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/scope.py b/sqlglot/optimizer/scope.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/scope.py
++++ b/sqlglot/optimizer/scope.py
+@@ -827,7 +827,7 @@
+             and isinstance(set_op_expr, exp.SetOperation)
+             and set_op_expr.args.get("by_name")
+         ):
+-            if by_name_col_map is None:
++            if by_name_col_map == None:
+                 names = set_op.named_selects
+                 by_name_col_map = {} if "*" in names else dict(zip(names, scope.outer_columns))
+ 

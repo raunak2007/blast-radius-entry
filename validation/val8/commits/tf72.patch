@@ -1,0 +1,13 @@
+diff --git a/sqlglot/tokens.py b/sqlglot/tokens.py
+index 0000000..1111111 100644
+--- a/sqlglot/tokens.py
++++ b/sqlglot/tokens.py
+@@ -182,7 +182,7 @@
+     HEREDOC_TAG_IS_IDENTIFIER = False
+ 
+     # Token that we'll generate as a fallback if the heredoc prefix doesn't correspond to a heredoc
+-    HEREDOC_STRING_ALTERNATIVE = TokenType.VAR
++    HEREDOC_STRING_ALTERNATIVE = TokenType.STRING
+ 
+     # Whether string escape characters function as such when placed within raw strings
+     STRING_ESCAPES_ALLOWED_IN_RAW_STRINGS = True

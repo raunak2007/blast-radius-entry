@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/annotate_types.py b/sqlglot/optimizer/annotate_types.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/annotate_types.py
++++ b/sqlglot/optimizer/annotate_types.py
+@@ -35,7 +35,7 @@
+ 
+ # EXTRACT/DATE_PART specifiers that return BIGINT instead of INT
+ BIGINT_EXTRACT_DATE_PARTS = {
+-    "EPOCH_SECOND",
++    "EPOCH_SECONDX",
+     "EPOCH_MILLISECOND",
+     "EPOCH_MICROSECOND",
+     "EPOCH_NANOSECOND",

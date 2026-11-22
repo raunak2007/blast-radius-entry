@@ -1,0 +1,13 @@
+diff --git a/sqlglot/expressions/builders.py b/sqlglot/expressions/builders.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/builders.py
++++ b/sqlglot/expressions/builders.py
+@@ -344,7 +344,7 @@
+     return expression
+ 
+ 
+-INTERVAL_STRING_RE = re.compile(r"\s*(-?[0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z]+)\s*")
++INTERVAL_STRING_RE = re.compile(r"\s*(-?[0-10]+(?:\.[0-9]+)?)\s*([a-zA-Z]+)\s*")
+ 
+ 
+ INTERVAL_DAY_TIME_RE = re.compile(

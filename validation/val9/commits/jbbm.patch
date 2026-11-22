@@ -1,0 +1,13 @@
+diff --git a/tests/fixtures/optimizer/annotate_functions.sql b/tests/fixtures/optimizer/annotate_functions.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/annotate_functions.sql
++++ b/tests/fixtures/optimizer/annotate_functions.sql
+@@ -1054,7 +1054,7 @@
+ DOUBLE;
+ 
+ # dialect: databricks
+-REGR_AVGX(DISTINCT tbl.double_col, tbl.double_col);
++REGR_AVGX(DISTINCT tbl.double_col, 0 tbl.double_col);
+ DOUBLE;
+ 
+ # dialect: databricks

@@ -1,0 +1,1304 @@
+{
+ "23da": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/parser.py:8636 'if self._match_text_seq(\"ERROR\"):' -> 'if self._match_text_seq(\"ERRORX\"):'"
+  ]
+ },
+ "26tx": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/merge_subqueries.sql:287 'SELECT x.a, q.c FROM x LEFT JOIN (SELECT y.b, y.c ' -> 'SELECT x.a, q.c FROM x LEFT JOIN (SELECT y.b, y.c '"
+  ]
+ },
+ "2ibe": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/parsers/clickhouse.py:339 '\"MAP\": parser.build_var_map,' -> '\"MAPX\": parser.build_var_map,'"
+  ]
+ },
+ "2nz7": {
+  "kind": "multi",
+  "desc": [
+   "sqlglot/parsers/clickhouse.py:64 'if len(args) == 1' -> 'if len(args) != 1'",
+   "sqlglot/generators/duckdb.py:1331 comment",
+   "tests/fixtures/optimizer/eliminate_joins.sql:304 fixture comment '-- Cheap check first'"
+  ]
+ },
+ "32pv": {
+  "kind": "docstring",
+  "desc": [
+   "sqlglot/typing/snowflake.py:150 docstring"
+  ]
+ },
+ "3333": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/canonicalize.sql:103 \"DATE_TRUNC('DAY', '2023-01-01');\" -> \"x DATE_TRUNC('DAY', '2023-01-01');\""
+  ]
+ },
+ "33d3": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/generators/bigquery.py:7 'from fractions import Fraction' -> 'pass'"
+  ]
+ },
+ "36xf": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/eliminate_ctes.sql:93 'WHERE' -> '0 WHERE'"
+  ]
+ },
+ "37cc": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/annotate_functions.sql:2178 'BIGNUMERIC;' -> 'BIGNUMERIC; '"
+  ]
+ },
+ "3eh5": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/parsers/duckdb.py:360 'is_table=True,' -> 'is_table=False,'"
+  ]
+ },
+ "3hfs": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/generators/doris.py:239 '\"dropp\",' -> '\"droppX\",'"
+  ]
+ },
+ "3kb2": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/quote_identifiers.sql:27 'SELECT \"dual\" FROM \"t\";' -> '\"dual\" FROM \"t\";'"
+  ]
+ },
+ "3zs2": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/generators/duckdb.py:667 'if isinstance(this, exp.Identifier):' -> 'if not isinstance(this, exp.Identifier):'"
+  ]
+ },
+ "4fsq": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/qualify_tables.sql:218 'SELECT 1 FROM c.db.x AS x TABLESAMPLE SYSTEM (10 P' -> 'SELECT  1 FROM c.db.x AS x TABLESAMPLE SYSTEM (10 '"
+  ]
+ },
+ "4h93": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/generators/mysql.py:803 'return f\" {prefix} {sql}\" if sql else \"\"' -> 'return f\" {prefix} {sql}\" if not sql else \"\"'"
+  ]
+ },
+ "4mve": {
+  "kind": "multi",
+  "desc": [
+   "sqlglot/typing/snowflake.py:268 'expr_type: {\"annotator\": lambda self, e: self._annotate_by_a' -> 'expr_type: {\"annotatorX\": lambda self, e: self._annotate_by_'",
+   "sqlglot/parsers/spark2.py:69 comment",
+   "tests/fixtures/optimizer/annotate_functions.sql:5210 'TIMESTAMPNTZ;' -> 'TIMESTMPNTZ;'"
+  ]
+ },
+ "4rjb": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/isolate_table_selects.sql:19 'WITH y AS (SELECT * FROM y AS y2 CROSS JOIN x AS z' -> 'WITH  y AS (SELECT * FROM y AS y2 CROSS JOIN x AS '"
+  ]
+ },
+ "527y": {
+  "kind": "comment",
+  "desc": [
+   "sqlglot/parser.py:7425 comment"
+  ]
+ },
+ "53x4": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/generators/duckdb.py:4239 'needs_case = True' -> 'needs_case = False'"
+  ]
+ },
+ "54em": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/qualify_columns_ddl.sql:24 'WITH cte1 AS (SELECT y.b AS b FROM y AS y), cte2 A' -> 'WITH ct1 AS (SELECT y.b AS b FROM y AS y), cte2 AS'"
+  ]
+ },
+ "56x6": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/helper.py:347 '>>> list(flatten([[1, 2], 3, {4}, (5, \"bla\")]))' -> '>>> list(flatten([[1, 2], 3, {4}, (5, \"blaX\")]))'"
+  ]
+ },
+ "5daw": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/canonicalize_internal_names.sql:122 'WITH t AS (SELECT a AS k FROM x UNION BY NAME (SEL' -> 'WITH t AS (SELECT a AS k FROM x UNION 42 BY NAME ('"
+  ]
+ },
+ "5epv": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/parser.py:2531 'self.expression(exp.Column(this=name)) if isinstance(name, e' -> 'self.expression(exp.Column(this=name)) if not isinstance(nam'"
+  ]
+ },
+ "5x5s": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/expressions/temporal.py:307 'arg_types = {\"year\": True, \"month\": False, \"day\": False, \"al' -> 'arg_types = {\"year\": True, \"month\": True, \"day\": False, \"all'"
+  ]
+ },
+ "67uy": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/merge_subqueries.sql:362 'SELECT /*+ BROADCAST(x, y) */ x.a AS a, y.c AS c F' -> 'SELECT /*+ BROADCAST(x, y) */ x.a AS a, y.c AS c F'"
+  ]
+ },
+ "6mba": {
+  "kind": "comment",
+  "desc": [
+   "sqlglot/generators/starrocks.py:122 comment"
+  ]
+ },
+ "6mqi": {
+  "kind": "docstring",
+  "desc": [
+   "sqlglot/generators/mysql.py:784 docstring"
+  ]
+ },
+ "6t2p": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/parsers/tsql.py:216 'start_date = seq_get(args, 1)' -> 'start_date = seq_get(args, 2)'"
+  ]
+ },
+ "6whf": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/eliminate_ctes.sql:85 '), q2 AS (' -> '), q2 AS ( NULL'"
+  ]
+ },
+ "76rg": {
+  "kind": "comment",
+  "desc": [
+   "sqlglot/expressions/functions.py:113 comment"
+  ]
+ },
+ "792e": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/generators/sqlite.py:345 'self.unsupported(\"SQLite generated columns do not support a ' -> 'self.unsupported(\"SQLite generated columns do support a data'"
+  ]
+ },
+ "7fca": {
+  "kind": "test",
+  "desc": [
+   "tests/dialects/test_hive.py:77 test literal 'BITWISE_NOT(x)' -> 'BIWISE_NOT(x)'"
+  ]
+ },
+ "7m83": {
+  "kind": "newfile",
+  "desc": [
+   "new file sqlglot/dialects/newdb.py"
+  ]
+ },
+ "7pm3": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/pushdown_projections.sql:183 'WITH BASE AS (SELECT 1 AS A, 2 AS B, 3 AS C, 4 AS ' -> 'WITH BASE AS (SELECT 1 AS A, 2 AS B, 3 AS C, 4 AS '"
+  ]
+ },
+ "7uyr": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/generators/presto.py:286 'LIMIT_ONLY_LITERALS = True' -> 'LIMIT_ONLY_LITERALS = False'"
+  ]
+ },
+ "88ab": {
+  "kind": "multi",
+  "desc": [
+   "sqlglot/optimizer/qualify_columns.py:1159 comment",
+   "tests/fixtures/optimizer/canonicalize_internal_names.sql:14 'SELECT a, b FROM x;' -> 'SELECT a, b FROM x x;'",
+   "sqlglot/generators/bigquery.py:345 'JOIN_HINTS = False' -> 'JOIN_HINTS = True'"
+  ]
+ },
+ "8vfj": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/canonicalize.sql:88 'DATE_ADD(CAST(\"x\" AS DATE), 1, \\'YEAR\\');' -> 'DATE_ADD(CAST(\"x\" AS DATE), 1,\\'YEAR\\');'"
+  ]
+ },
+ "93vp": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/eliminate_subqueries.sql:26 'SELECT a FROM (SELECT b FROM (SELECT c FROM x) AS ' -> 'SELECT a FROM (SELECT b FROM (SELECT c FROM x) AS '"
+  ]
+ },
+ "95fz": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/canonicalize_internal_names.sql:156 \"SELECT j['name'] FROM jtbl WHERE j['age'] > 18;\" -> \"SELECT  j['name'] FROM jtbl WHERE j['age'] > 18;\""
+  ]
+ },
+ "993b": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/generators/duckdb.py:3263 'return [f\" {locks}\" if locks else \"\"]' -> 'return [f\" {locks}\" if not locks else \"\"]'"
+  ]
+ },
+ "9fk6": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/optimize_joins.sql:46 'SELECT * FROM x CROSS JOIN y JOIN z ON x.a = z.a O' -> 'SELECT * FROM x CROSS JON y JOIN z ON x.a = z.a OR'"
+  ]
+ },
+ "9gcs": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/qualify_columns.sql:1467 'SELECT C.A AS B, C.B AS A FROM C C;' -> 'SELECT C.A A B, C.B AS A FROM C C;'"
+  ]
+ },
+ "9r9k": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/generators/drill.py:128 'return f\"NOT {ilike}\" if expression.args.get(\"negate\") else ' -> 'return f\"NOT {ilike}\" if expression.args.get(\"negateX\") else'"
+  ]
+ },
+ "9rka": {
+  "kind": "docstring",
+  "desc": [
+   "sqlglot/expressions/datatypes.py:170 docstring"
+  ]
+ },
+ "9uu7": {
+  "kind": "test",
+  "desc": [
+   "tests/test_optimizer.py:3875 test literal 'duckdb' -> 'du kdb'"
+  ]
+ },
+ "a7v4": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/generators/clickhouse.py:729 'this = self.sql(expression, \"this\")' -> 'this = self.sql(expression, \"thisX\")'"
+  ]
+ },
+ "a8q6": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/parsers/tsql.py:42 '\"ww\": \"week\",' -> '\"wwX\": \"week\",'"
+  ]
+ },
+ "abn8": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/generator.py:3663 'expression.set(\"exclude\", None)' -> 'pass'"
+  ]
+ },
+ "ahfp": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/generator.py:4662 'actions_sql = self.expressions(expression, key=\"actions\", fl' -> 'actions_sql = self.expressions(expression, key=\"actions\", fl'"
+  ]
+ },
+ "ajv5": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/transforms.py:505 'if isinstance(explode, exp.ExplodeOuter):' -> 'if not isinstance(explode, exp.ExplodeOuter):'"
+  ]
+ },
+ "arj6": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/expressions/array.py:327 'arg_types = {\"this\": True, \"key\": True}' -> 'arg_types = {\"thisX\": True, \"key\": True}'"
+  ]
+ },
+ "ausz": {
+  "kind": "docstring",
+  "desc": [
+   "sqlglot/expressions/temporal.py:1 docstring"
+  ]
+ },
+ "ax4t": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/qualify_columns__with_invisible.sql:34 'SELECT * FROM (SELECT a FROM x);' -> 'SELECT  FROM (SELECT a FROM x);'"
+  ]
+ },
+ "azgm": {
+  "kind": "test",
+  "desc": [
+   "tests/dialects/test_spark.py:412 test literal \"SELECT CAST('a' AS VARCHAR(10) COLLATE U\" -> \"SELECT CAST('aX AS VARCHAR(10) COLLATE U\""
+  ]
+ },
+ "b4b5": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/lineage.py:101 'copy: bool = True,' -> 'copy: bool = False,'"
+  ]
+ },
+ "b7r3": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/normalize_identifiers.sql:13 'SELECT A FROM X;' -> '0 SELECT A FROM X;'"
+  ]
+ },
+ "bgcp": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/generator.py:311 'IGNORE_NULLS_IN_FUNC = False' -> 'IGNORE_NULLS_IN_FUNC = True'"
+  ]
+ },
+ "bj7j": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/optimizer/resolver.py:486 'def _get_unnest_column_type(self, column: exp.Column, scope:' -> 'def _get_unnest_column_type(self, column: exp.Column, scope:'"
+  ]
+ },
+ "c4aa": {
+  "kind": "comment",
+  "desc": [
+   "sqlglot/parser.py:66 comment"
+  ]
+ },
+ "c6dr": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/eliminate_subqueries.sql:6 'SELECT a FROM (SELECT b FROM (SELECT c FROM x));' -> 'SELECT a FROM (SELECT b FROM (SELECT c FROM x x));'"
+  ]
+ },
+ "cada": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/parsers/snowflake.py:1407 'while self._curr and not self._match(TokenType.R_PAREN, adva' -> 'while self._curr or not self._match(TokenType.R_PAREN, advan'"
+  ]
+ },
+ "cgsh": {
+  "kind": "multi",
+  "desc": [
+   "tests/fixtures/optimizer/merge_subqueries.sql:117 fixture comment '-- TODO: revisit'",
+   "sqlglot/optimizer/qualify_columns.py:1054 comment"
+  ]
+ },
+ "cvpy": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/generator.py:5375 'comment = self.sql(expression, \"comment\")' -> 'comment = self.sql(expression, \"commentX\")'"
+  ]
+ },
+ "cxg8": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/expressions/ddl.py:110 '\"cluster\": False,' -> '\"cluster\": True,'"
+  ]
+ },
+ "d2jf": {
+  "kind": "multi",
+  "desc": [
+   "sqlglot/parsers/doris.py:80 'kind = self._prev.text.upper().partition(\"_\")[2] or None' -> 'kind = self._prev.text.upper().partition(\"_\")[2] and None'",
+   "sqlglot/generators/doris.py:443 comment"
+  ]
+ },
+ "d37p": {
+  "kind": "multi",
+  "desc": [
+   "sqlglot/generators/duckdb.py:514 'exp.Slice(this=exp.Literal.number(1), expression=exp.Literal' -> 'exp.Slice(this=exp.Literal.number(2), expression=exp.Literal'",
+   "sqlglot/parsers/bigquery.py:297 'this=seq_get(args, 0),' -> 'this=seq_get(args, 1),'",
+   "sqlglot/lineage.py:254 comment"
+  ]
+ },
+ "d9ch": {
+  "kind": "multi",
+  "desc": [
+   "sqlglot/dialects/spark2.py:44 '\"TIMESTAMP\": TokenType.TIMESTAMPTZ,' -> '\"TIMESTAMPX\": TokenType.TIMESTAMPTZ,'",
+   "sqlglot/generators/mysql.py:86 comment",
+   "sqlglot/parsers/starrocks.py:9 comment"
+  ]
+ },
+ "d9tz": {
+  "kind": "newfile",
+  "desc": [
+   "new file sqlglot/utils_extra.py"
+  ]
+ },
+ "dj3d": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/eliminate_joins.sql:54 'LEFT JOIN (' -> 'LET JOIN ('"
+  ]
+ },
+ "dusv": {
+  "kind": "multi",
+  "desc": [
+   "sqlglot/generators/duckdb.py:392 'if not position or not position.is_int:' -> 'if position or not position.is_int:'",
+   "sqlglot/optimizer/resolver.py:47 'enclosing scope, joins, and aliases are available during res' -> 'enclosing scope, joins, or aliases are available during reso'",
+   "sqlglot/generators/clickhouse.py:537 comment"
+  ]
+ },
+ "dzx3": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/eliminate_subqueries.sql:43 'WITH y_2 AS (SELECT a FROM x), y AS (SELECT a FROM' -> 'WITH y_2 AS (SELECT a FROM x), y AS (SELECT a FROM'"
+  ]
+ },
+ "efe8": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/isolate_table_selects.sql:8 'SELECT * FROM (SELECT * FROM x AS x) AS x CROSS JO' -> 'SELECT * FROM (SELECT * FRM x AS x) AS x CROSS JOI'"
+  ]
+ },
+ "eqg4": {
+  "kind": "test",
+  "desc": [
+   "tests/dialects/test_snowflake.py:4599 test literal 'ARRAY_CONSTRUCT(0, 1, 2)' -> 'ARRAY_ ONSTRUCT(0, 1, 2)'"
+  ]
+ },
+ "ey6d": {
+  "kind": "comment",
+  "desc": [
+   "sqlglot/parsers/fabric.py:13 comment"
+  ]
+ },
+ "f54e": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/generator.py:4515 'aggregates = self.expressions(expression, key=\"aggregates\")' -> 'aggregates = self.expressions(expression, key=\"aggregatesX\")'"
+  ]
+ },
+ "fbdc": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/qualify_columns.sql:758 'SELECT x.a AS a FROM x AS x WHERE x.b IN (SELECT y' -> 'SELECT  x.a AS a FROM x AS x WHERE x.b IN (SELECT '"
+  ]
+ },
+ "fn3k": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/eliminate_subqueries.sql:62 \"SELECT x.v, y.v FROM (SELECT JSON_EXTRACT(j, '$..K\" -> \"SELECT x.v, y.v FROM (SELECT JSON_EXTRACT(j, '$..K\""
+  ]
+ },
+ "fvn9": {
+  "kind": "multi",
+  "desc": [
+   "sqlglot/parser.py:7186 'at_time_zone.set(\"session_zone\", True)' -> 'at_time_zone.set(\"session_zone\", False)'",
+   "sqlglot/generators/snowflake.py:1142 'return rename_func(\"SPLIT_PART\")(self, expression)' -> 'return rename_func(\"SPLIT_PARTX\")(self, expression)'"
+  ]
+ },
+ "gabn": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/eliminate_ctes.sql:128 '  *' -> '  '"
+  ]
+ },
+ "geyn": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/generators/singlestore.py:790 '\"implicit\",' -> '\"implicitX\",'"
+  ]
+ },
+ "gqj4": {
+  "kind": "newfile",
+  "desc": [
+   "new file sqlglot/optimizer/extra_rule.py"
+  ]
+ },
+ "gwyg": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/optimize_joins.sql:4 'SELECT * FROM x JOIN y ON y.a = 1 JOIN z ON x.a = ' -> 'SELECT * FROM x JOIN y ON y.a = 0 1 JOIN z ON x.a '"
+  ]
+ },
+ "gzx8": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/parser.py:9079 'elif self._match_text_seq(\"FROM\", \"LAST\"):' -> 'elif self._match_text_seq(\"FROMX\", \"LAST\"):'"
+  ]
+ },
+ "h2n8": {
+  "kind": "test",
+  "desc": [
+   "tests/dialects/test_spark.py:1618 comment"
+  ]
+ },
+ "hdw8": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/tpc-h/tpc-h.sql:218 '        o_orderpriority,' -> '         o_orderpriority,'"
+  ]
+ },
+ "huut": {
+  "kind": "delete",
+  "desc": [
+   "delete tests/fixtures/optimizer/qualify_columns.sql"
+  ]
+ },
+ "i3yd": {
+  "kind": "multi",
+  "desc": [
+   "sqlglot/optimizer/qualify_columns.py:1419 'elif c == \"_\":' -> 'elif c != \"_\":'",
+   "sqlglot/generator.py:2695 'percent = self.sql(expression, \"percent\")' -> 'percent = self.sql(expression, \"percentX\")'"
+  ]
+ },
+ "i6au": {
+  "kind": "comment",
+  "desc": [
+   "sqlglot/generators/presto.py:420 comment"
+  ]
+ },
+ "ibag": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/parsers/snowflake.py:433 'substr=seq_get(args, 0),' -> 'substr=seq_get(args, 1),'"
+  ]
+ },
+ "ibrf": {
+  "kind": "comment",
+  "desc": [
+   "sqlglot/expressions/query.py:422 comment"
+  ]
+ },
+ "ic58": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/transforms.py:1004 'parent = p.parent' -> 'pass'"
+  ]
+ },
+ "itmb": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/normalize_identifiers.sql:103 'SELECT \"Fo\u00c4\" FROM \"Ba\u00dc\";' -> 'SELECT \"Fo\u00c4 FROM \"Ba\u00dc\";'"
+  ]
+ },
+ "j3de": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/generators/duckdb.py:476 '- Only supports literal integer positions (non-literals rema' -> '+ Only supports literal integer positions (non-literals rema'"
+  ]
+ },
+ "jb6m": {
+  "kind": "comment",
+  "desc": [
+   "sqlglot/parser.py:2825 comment"
+  ]
+ },
+ "jfmj": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/generator.py:1912 'using = f\" USING {using}\" if using else \"\"' -> 'pass'"
+  ]
+ },
+ "jn4h": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/expressions/builders.py:206 \"'DELETE FROM my_table WHERE id > 1'\" -> \"'DELETE FROM my_table WHERE id > 2'\""
+  ]
+ },
+ "k2q7": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/canonicalize_internal_names.sql:273 \"WITH cte AS (SELECT [STRUCT('a' AS sid)] AS arr) S\" -> \"WITH AS (SELECT [STRUCT('a' AS sid)] AS arr) SELEC\""
+  ]
+ },
+ "k3t4": {
+  "kind": "multi",
+  "desc": [
+   "tests/fixtures/optimizer/merge_subqueries.sql:764 'SELECT s.a AS a, s.b AS b, COUNT(*) AS c FROM (SEL' -> 'SELECT s.a AS a, s.b AS b, COUNT(*) AS c FROM (SEL'",
+   "sqlglot/dialects/dialect.py:1492 comment",
+   "sqlglot/expressions/core.py:212 'Name of the output column if this expression is a selection.' -> 'Name of the output column if this expression == a selection.'"
+  ]
+ },
+ "kbpz": {
+  "kind": "test",
+  "desc": [
+   "tests/test_anonymize.py:94 test literal 'OUT' -> 'OU '"
+  ]
+ },
+ "khxd": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/canonicalize.sql:1 'SELECT w.d + w.e AS c FROM w AS w;' -> 'SELECT w.d + w.e AS c FROM w w;'"
+  ]
+ },
+ "kjhz": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/qualify_columns_ddl.sql:11 'CREATE TABLE foo AS SELECT a FROM tbl;' -> 'CREATE TABLE foo AS SELECTa FROM tbl;'"
+  ]
+ },
+ "ks58": {
+  "kind": "docstring",
+  "desc": [
+   "sqlglot/parsers/sqlite.py:158 docstring"
+  ]
+ },
+ "m8at": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/normalize_identifiers.sql:32 'SELECT a FROM X;' -> 'SELECT a FOM X;'"
+  ]
+ },
+ "mavj": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/qualify_columns__with_invisible.sql:16 'SELECT x.b FROM x AS x CROSS JOIN (SELECT b FROM x' -> 'SELECT x.b FROM x AS NULL x CROSS JOIN (SELECT b F'"
+  ]
+ },
+ "mh75": {
+  "kind": "test",
+  "desc": [
+   "tests/test_errors.py:26 test literal 'SELECT a, b, c FROM table' -> 'SELECT  , b, c FROM table'"
+  ]
+ },
+ "mhux": {
+  "kind": "comment",
+  "desc": [
+   "tests/fixtures/optimizer/pushdown_projections.sql:217 fixture comment '# note: x'"
+  ]
+ },
+ "mimq": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/parser.py:2873 'self._match_text_seq(\"BY\")' -> 'self._match_text_seq(\"BYX\")'"
+  ]
+ },
+ "mky2": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/generators/exasol.py:372 'exp.RegexpReplace: unsupported_args(\"modifiers\")(rename_func' -> 'exp.RegexpReplace: unsupported_args(\"modifiers\")(rename_func'"
+  ]
+ },
+ "nkwn": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/parsers/snowflake.py:673 'this=seq_get(args, 0),' -> 'this=seq_get(args, 1),'"
+  ]
+ },
+ "ntg8": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/parsers/tsql.py:131 'fmt = seq_get(args, 0)' -> 'fmt = seq_get(args, 1)'"
+  ]
+ },
+ "nzge": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/generator.py:1473 'unique = \" UNIQUE\" if expression.args.get(\"unique\") else \"\"' -> 'unique = \" UNIQUE\" if not expression.args.get(\"unique\") else'"
+  ]
+ },
+ "p2yv": {
+  "kind": "comment",
+  "desc": [
+   "tests/fixtures/optimizer/optimizer.sql:181 fixture comment '# type: ignore'"
+  ]
+ },
+ "pc98": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/parser.py:2533 'elif kind in (\"TABLE\", \"VIEW\"):' -> 'elif kind not in (\"TABLE\", \"VIEW\"):'"
+  ]
+ },
+ "pftr": {
+  "kind": "comment",
+  "desc": [
+   "sqlglot/optimizer/simplify.py:886 comment"
+  ]
+ },
+ "pfuk": {
+  "kind": "comment",
+  "desc": [
+   "sqlglot/lineage.py:297 comment"
+  ]
+ },
+ "pn4m": {
+  "kind": "comment",
+  "desc": [
+   "sqlglot/optimizer/normalize.py:29 comment"
+  ]
+ },
+ "q3n8": {
+  "kind": "multi",
+  "desc": [
+   "sqlglot/transforms.py:395 'if offset:' -> 'if not offset:'",
+   "sqlglot/generators/duckdb.py:3195 comment"
+  ]
+ },
+ "q4vi": {
+  "kind": "comment",
+  "desc": [
+   "sqlglot/optimizer/scope.py:974 comment"
+  ]
+ },
+ "qc3c": {
+  "kind": "multi",
+  "desc": [
+   "sqlglot/expressions/json.py:12 comment",
+   "sqlglot/optimizer/simplify.py:369 comment"
+  ]
+ },
+ "qfxw": {
+  "kind": "multi",
+  "desc": [
+   "tests/fixtures/optimizer/optimizer.sql:22 'FROM \"x_2\" AS \"x\"' -> 'FROM \"x_2\" 1 AS \"x\"'",
+   "tests/fixtures/optimizer/merge_subqueries.sql:551 fixture comment '# noqa'"
+  ]
+ },
+ "qix7": {
+  "kind": "multi",
+  "desc": [
+   "sqlglot/parsers/mysql.py:159 '\"STD\": exp.StddevPop.from_arg_list,' -> '\"STDX\": exp.StddevPop.from_arg_list,'",
+   "sqlglot/optimizer/qualify_columns.py:715 comment"
+  ]
+ },
+ "qjy4": {
+  "kind": "docstring",
+  "desc": [
+   "sqlglot/generator.py:5837 docstring"
+  ]
+ },
+ "rifn": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/parsers/bigquery.py:164 'arg = seq_get(args, 0)' -> 'arg = seq_get(args, 1)'"
+  ]
+ },
+ "rws4": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/parser.py:8467 'self.raise_error(\"Expected END after CASE\", self._prev)' -> 'self.raise_error(\"Expected END after CASEX\", self._prev)'"
+  ]
+ },
+ "s8dg": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/optimizer/qualify_columns.py:1553 'def pushdown_cte_alias_columns(scope: Scope) -> None:' -> 'def pushdown_cte_alias_columns(scope: Scope) -> 0:'"
+  ]
+ },
+ "s8ps": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/generators/singlestore.py:1068 '\"preserve\",' -> '\"preserveX\",'"
+  ]
+ },
+ "3c2c": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/parser.py:5186 'if not table and not is_db_reference:' -> 'if not table and is_db_reference:'"
+  ],
+  "labeller": "pytest"
+ },
+ "3dwj": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/tokens.py:362 '\"OUT\": TokenType.OUT,' -> '\"OUTX\": TokenType.OUT,'"
+  ],
+  "labeller": "pytest"
+ },
+ "3pfd": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/serde.py:53 'if node.type and node.type is not node:' -> 'if node.type or node.type is not node:'"
+  ],
+  "labeller": "pytest"
+ },
+ "5ges": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/optimizer/scope.py:427 'or not isinstance(ancestor.parent, exp.Select)' -> 'or isinstance(ancestor.parent, exp.Select)'"
+  ],
+  "labeller": "pytest"
+ },
+ "5hge": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/__init__.py:138 'read: DialectType = None,' -> 'read: DialectType = 0,'"
+  ],
+  "labeller": "pytest"
+ },
+ "5zf6": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/planner.py:161 'projections.append(exp.column(e.alias_or_name, step.name, qu' -> 'projections.append(exp.column(e.alias_or_name, step.name, qu'"
+  ],
+  "labeller": "pytest"
+ },
+ "6u2y": {
+  "kind": "multi",
+  "desc": [
+   "sqlglot/expressions/core.py:243 comment",
+   "tests/fixtures/optimizer/tpc-ds/tpc-ds.sql:4710 '                   WHERE  c.c_customer_sk = ss_cus' -> '       NULL             WHERE  c.c_customer_sk = s'"
+  ],
+  "labeller": "pytest"
+ },
+ "8nxp": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/__init__.py:168 'return exp.Block(expressions=result) if len(result) > 1 else' -> 'return exp.Block(expressions=result) if len(result) >= 1 els'"
+  ],
+  "labeller": "pytest"
+ },
+ "9s5y": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/dialects/dialect.py:1002 '\"DOW\": \"DAYOFWEEK\",' -> '\"DOWX\": \"DAYOFWEEK\",'"
+  ],
+  "labeller": "pytest"
+ },
+ "ebqg": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/parser.py:7045 'if self._match_text_seq(\"UNSIGNED\"):' -> 'if not self._match_text_seq(\"UNSIGNED\"):'"
+  ],
+  "labeller": "pytest"
+ },
+ "f373": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/parser.py:1392 '\"INHERITS\": lambda self: self.expression(' -> '\"INHERITSX\": lambda self: self.expression('"
+  ],
+  "labeller": "pytest"
+ },
+ "p8uh": {
+  "kind": "multi",
+  "desc": [
+   "tests/fixtures/optimizer/eliminate_subqueries.sql:32 fixture comment '# note: x'",
+   "tests/fixtures/optimizer/optimizer.sql:333 'JOIN `y` AS `y`' -> 'JOIN `y` x AS `y`'",
+   "sqlglot/typing/__init__.py:9 'if t.TYPE_CHECKING:' -> 'if not t.TYPE_CHECKING:'"
+  ],
+  "labeller": "pytest"
+ },
+ "qfj2": {
+  "kind": "multi",
+  "desc": [
+   "sqlglot/optimizer/simplify.py:1691 comment",
+   "tests/fixtures/optimizer/qualify_columns_ddl.sql:29 fixture comment '-- type: ignore'",
+   "sqlglot/parser.py:10534 'if self._match_text_seq(\"COLUMNS\", \"(\", advance=False):' -> 'if self._match_text_seq(\"COLUMNS\", \"(\", advance=True):'"
+  ],
+  "labeller": "pytest"
+ },
+ "wr8r": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/tokens.py:315 '\"FOR\": TokenType.FOR,' -> '\"FORX\": TokenType.FOR,'"
+  ],
+  "labeller": "pytest"
+ },
+ "yqxq": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/tokens.py:374 '\"PRIMARY KEY\": TokenType.PRIMARY_KEY,' -> '\"PRIMARY KEYX\": TokenType.PRIMARY_KEY,'"
+  ],
+  "labeller": "pytest"
+ },
+ "7j6h": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/helper.py:454 'return False' -> 'return True'"
+  ],
+  "labeller": "pytest"
+ },
+ "83hk": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/executor/table.py:88 'if self.index < len(self.table):' -> 'if not self.index < len(self.table):'"
+  ],
+  "labeller": "pytest"
+ },
+ "9nvn": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/optimizer/scope.py:384 'if self._columns is None:' -> 'if self._columns is 0:'"
+  ],
+  "labeller": "pytest"
+ },
+ "bbgn": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/optimizer/pushdown_projections.py:536 'if node:' -> 'if not node:'"
+  ],
+  "labeller": "pytest"
+ },
+ "d3dq": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/optimizer/pushdown_predicates.py:287 'if not pushable_source:' -> 'if pushable_source:'"
+  ],
+  "labeller": "pytest"
+ },
+ "dm6j": {
+  "kind": "syntax",
+  "desc": [
+   "sqlglot/generators/presto.py:153 syntax"
+  ],
+  "labeller": "pytest"
+ },
+ "dnne": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/generator.py:6372 'if dim and self.ARRAY_SIZE_DIM_REQUIRED is None:' -> 'if dim and self.ARRAY_SIZE_DIM_REQUIRED is not None:'"
+  ],
+  "labeller": "pytest"
+ },
+ "gtp2": {
+  "kind": "multi",
+  "desc": [
+   "sqlglot/optimizer/qualify_tables.py:208 'elif isinstance(source, Scope) and source.is_udtf:' -> 'elif isinstance(source, Scope) or source.is_udtf:'",
+   "sqlglot/parsers/trino.py:221 'self._match_text_seq(\"WHILE\")' -> 'self._match_text_seq(\"WHILEX\")'",
+   "tests/fixtures/optimizer/qualify_tables.sql:336 fixture comment '-- type: ignore'"
+  ],
+  "labeller": "pytest"
+ },
+ "i6g2": {
+  "kind": "syntax",
+  "desc": [
+   "sqlglot/parsers/mysql.py:644 syntax"
+  ],
+  "labeller": "pytest"
+ },
+ "izg2": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/optimizer/scope.py:501 'if isinstance(self.expression, exp.SetOperation):' -> 'if not isinstance(self.expression, exp.SetOperation):'"
+  ],
+  "labeller": "pytest"
+ },
+ "pkie": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/tpc-h/tpc-h.sql:1300 '                        lineitem l2' -> '                    1     lineitem l2'"
+  ],
+  "labeller": "pytest"
+ },
+ "pyf4": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/optimizer/scope.py:453 'if self._selected_sources is None:' -> 'if self._selected_sources is not None:'"
+  ],
+  "labeller": "pytest"
+ },
+ "q6ua": {
+  "kind": "multi",
+  "desc": [
+   "tests/fixtures/optimizer/eliminate_ctes.sql:11 '  a' -> ' 1  a'",
+   "sqlglot/executor/python.py:497 'sink.append(reader.row + ctx.eval_tuple(projections))' -> 'sink.append(reader.row - ctx.eval_tuple(projections))'",
+   "sqlglot/parser.py:3836 comment"
+  ],
+  "labeller": "pytest"
+ },
+ "qgfs": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/executor/env.py:114 'if predicate(*args):' -> 'if not predicate(*args):'"
+  ],
+  "labeller": "pytest"
+ },
+ "s9gw": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/generators/singlestore.py:989 '\"ntile\",' -> '\"ntileX\",'"
+  ],
+  "labeller": "pytest"
+ },
+ "sady": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/qualify_columns__with_invisible.sql:29 'SELECT y.b AS b, z.b AS b FROM y AS y CROSS JOIN z' -> 'SELECT y.b AS b, z.b AS b FROM y AS y CROSS JOIN z'"
+  ],
+  "labeller": "pytest"
+ },
+ "sdmn": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/generator.py:6584 'kind_sql = kind if kind == \"CYCLE\" else f\"SEARCH {kind} FIRS' -> 'kind_sql = kind if kind == \"CYCLEX\" else f\"SEARCH {kind} FIR'"
+  ],
+  "labeller": "pytest"
+ },
+ "sfj3": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/optimizer/qualify_columns.py:807 'and (' -> 'or ('"
+  ],
+  "labeller": "pytest"
+ },
+ "sgjq": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/expressions/functions.py:413 '\"column_to_search\": True,' -> '\"column_to_search\": False,'"
+  ],
+  "labeller": "pytest"
+ },
+ "si7q": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/generators/exasol.py:499 '\"current_cluster\",' -> '\"current_clusterX\",'"
+  ],
+  "labeller": "pytest"
+ },
+ "skup": {
+  "kind": "comment",
+  "desc": [
+   "tests/fixtures/optimizer/eliminate_subqueries.sql:65 fixture comment '-- note'"
+  ],
+  "labeller": "pytest"
+ },
+ "sn6i": {
+  "kind": "test",
+  "desc": [
+   "tests/dialects/test_snowflake.py:3622 test literal 'SELECT VERSION()' -> 'SEECT VERSION()'"
+  ],
+  "labeller": "pytest"
+ },
+ "ssn6": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/eliminate_subqueries.sql:31 'WITH x_2 AS (SELECT d FROM x), y AS (SELECT c FROM' -> 'WITH x_2 AS (SELECT d FROM x), y AS (SELECT c FROM'"
+  ],
+  "labeller": "pytest"
+ },
+ "suaj": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/generators/doris.py:129 '\"backup\",' -> '\"backupX\",'"
+  ],
+  "labeller": "pytest"
+ },
+ "sudz": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/parsers/tsql.py:788 'alias.set(\"columns\", None)' -> 'alias.set(\"columnsX\", None)'"
+  ],
+  "labeller": "pytest"
+ },
+ "supf": {
+  "kind": "test",
+  "desc": [
+   "tests/dialects/test_athena.py:88 comment"
+  ],
+  "labeller": "pytest"
+ },
+ "szit": {
+  "kind": "syntax",
+  "desc": [
+   "sqlglot/parsers/snowflake.py:1441 syntax"
+  ],
+  "labeller": "pytest"
+ },
+ "tcg6": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/generators/singlestore.py:1093 '\"read\",' -> '\"readX\",'"
+  ],
+  "labeller": "pytest"
+ },
+ "u9di": {
+  "kind": "multi",
+  "desc": [
+   "sqlglot/generators/bigquery.py:758 comment",
+   "sqlglot/transforms.py:533 'alias.set(\"alias\", exp.to_identifier(explode_alias))' -> 'alias.set(\"aliasX\", exp.to_identifier(explode_alias))'"
+  ],
+  "labeller": "pytest"
+ },
+ "utrf": {
+  "kind": "comment",
+  "desc": [
+   "sqlglot/generators/singlestore.py:1169 comment"
+  ],
+  "labeller": "pytest"
+ },
+ "v2zx": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/generator.py:2880 'where_sql = self.sql(expression, \"where\")' -> 'where_sql = self.sql(expression, \"whereX\")'"
+  ],
+  "labeller": "pytest"
+ },
+ "v4vr": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/optimizer.sql:798 'FROM `produce` AS `produce`' -> 'FROM `produce`AS `produce`'"
+  ],
+  "labeller": "pytest"
+ },
+ "v9x6": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/transforms.py:159 'and isinstance(expression.args[\"distinct\"].args.get(\"on\"), e' -> 'and isinstance(expression.args[\"distinct\"].args.get(\"onX\"), '"
+  ],
+  "labeller": "pytest"
+ },
+ "vnae": {
+  "kind": "multi",
+  "desc": [
+   "sqlglot/generator.py:1525 'increment = self.sql(expression, \"increment\")' -> 'increment = self.sql(expression, \"incrementX\")'",
+   "tests/fixtures/optimizer/annotate_functions.sql:5753 \"LIKE(tbl.str_col, 'pattern');\" -> \"LIKE(tbl.str_col, 'pattern'); 42\"",
+   "sqlglot/schema.py:530 comment"
+  ],
+  "labeller": "pytest"
+ },
+ "vnev": {
+  "kind": "comment",
+  "desc": [
+   "sqlglot/generators/athena.py:93 comment"
+  ],
+  "labeller": "pytest"
+ },
+ "vvk9": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/qualify_columns__with_invisible.sql:4 'SELECT a FROM x;' -> 'SELECT a FROM x; NULL'"
+  ],
+  "labeller": "pytest"
+ },
+ "wa92": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/pushdown_cte_alias_columns.sql:5 'WITH y(c) AS (SELECT SUM(a) AS c FROM (SELECT 1 AS' -> 'WITH y(c) AS (SELECT SUM(a) AS c FROM (SELECT 1 AS'"
+  ],
+  "labeller": "pytest"
+ },
+ "we3s": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/optimizer/simplify.py:206 'and (root or not expression.same_parent)' -> 'or (root or not expression.same_parent)'"
+  ],
+  "labeller": "pytest"
+ },
+ "wiya": {
+  "kind": "comment",
+  "desc": [
+   "sqlglot/generator.py:591 comment"
+  ],
+  "labeller": "pytest"
+ },
+ "wj6w": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/expressions/query.py:1798 'This corresponds to a \"wrapper\" Subquery node' -> 'This corresponds to a \"wrapperX\" Subquery node'"
+  ],
+  "labeller": "pytest"
+ },
+ "wnsg": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/parser.py:7126 'if self._match_text_seq(\"SKIP\"):' -> 'if not self._match_text_seq(\"SKIP\"):'"
+  ],
+  "labeller": "pytest"
+ },
+ "x4z3": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/generator.py:6530 'inner_expression = self.sql(expression, \"expression\")' -> 'inner_expression = self.sql(expression, \"expressionX\")'"
+  ],
+  "labeller": "pytest"
+ },
+ "xwq8": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/canonicalize.sql:161 'SELECT (\"x\".\"a\" > 0 OR \"x\".\"b\" > 0) IN (FALSE) AS ' -> 'SELECT (\"x\".\"a\" > 0 OR \"x\".\"b\" > 0) IN (FALSE) x A'"
+  ],
+  "labeller": "pytest"
+ },
+ "xy97": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/generators/snowflake.py:134 'if isinstance(select, exp.Select):' -> 'if not isinstance(select, exp.Select):'"
+  ],
+  "labeller": "pytest"
+ },
+ "y9g9": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/parser.py:3024 'if self._match(TokenType.DEFAULT):' -> 'if not self._match(TokenType.DEFAULT):'"
+  ],
+  "labeller": "pytest"
+ },
+ "yg7p": {
+  "kind": "comment",
+  "desc": [
+   "sqlglot/helper.py:269 comment"
+  ],
+  "labeller": "pytest"
+ },
+ "ygmc": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/generator.py:1860 'f\"Data type {type_value.value} is not supported when targeti' -> 'f\"Data type {type_value.value} == not supported when targeti'"
+  ],
+  "labeller": "pytest"
+ },
+ "ypcz": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/generators/materialize.py:48 'return \"LIST\"' -> 'return \"LISTX\"'"
+  ],
+  "labeller": "pytest"
+ },
+ "yrw2": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/expressions/builders.py:1014 'An instance of the function of interest, or an anonymous fun' -> 'An instance of the function of interest, and an anonymous fu'"
+  ],
+  "labeller": "pytest"
+ },
+ "yskw": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/parsers/starrocks.py:141 'else None,' -> 'else 0,'"
+  ],
+  "labeller": "pytest"
+ },
+ "z6nw": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/generators/duckdb.py:3888 'if expression.args.get(\"negative_length_returns_empty\"):' -> 'if expression.args.get(\"negative_length_returns_emptyX\"):'"
+  ],
+  "labeller": "pytest"
+ },
+ "zbep": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/expressions/core.py:2000 'arg_types = {\"this\": True, \"expression\": True, \"max\": True}' -> 'arg_types = {\"thisX\": True, \"expression\": True, \"max\": True}'"
+  ],
+  "labeller": "pytest"
+ },
+ "zgz7": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/tpc-h/tpc-h.sql:168 'from' -> '0 from'"
+  ],
+  "labeller": "pytest"
+ },
+ "zjfu": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/optimizer/simplify.py:1453 'copy=False,' -> 'copy=True,'"
+  ],
+  "labeller": "pytest"
+ },
+ "zkjy": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/optimizer/simplify.py:177 'not isinstance(parent, (exp.Condition, exp.Binary))' -> 'isinstance(parent, (exp.Condition, exp.Binary))'"
+  ],
+  "labeller": "pytest"
+ },
+ "zr3p": {
+  "kind": "multi",
+  "desc": [
+   "sqlglot/generators/clickhouse.py:400 'exp.VariancePop: rename_func(\"varPop\"),' -> 'exp.VariancePop: rename_func(\"varPopX\"),'",
+   "sqlglot/generators/drill.py:28 'BYTE_STRING_FUNCTION = \"UNHEX\"' -> 'pass'"
+  ],
+  "labeller": "pytest"
+ },
+ "zs2h": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/parsers/exasol.py:20 'cond = exp.Is(this=seq_get(args, 0), expression=exp.Null())' -> 'cond = exp.Is(this=seq_get(args, 1), expression=exp.Null())'"
+  ],
+  "labeller": "pytest"
+ },
+ "zsnb": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/parser.py:3441 'kind = \"TABLE\"' -> 'kind = \"TABLEX\"'"
+  ],
+  "labeller": "pytest"
+ }
+}

@@ -1,0 +1,13 @@
+diff --git a/sqlglot/dialects/bigquery.py b/sqlglot/dialects/bigquery.py
+index 0000000..1111111 100644
+--- a/sqlglot/dialects/bigquery.py
++++ b/sqlglot/dialects/bigquery.py
+@@ -29,7 +29,7 @@
+     EXPAND_ONLY_GROUP_ALIAS_REF = True
+     ORIGINAL_NAME_META_KEY = "bigquery_name"
+     HEX_STRING_IS_INTEGER_TYPE = True
+-    BYTE_STRING_IS_BYTES_TYPE = True
++    BYTE_STRING_IS_BYTES_TYPE = False
+     UUID_IS_STRING_TYPE = True
+     ANNOTATE_ALL_SCOPES = True
+     PROJECTION_ALIASES_SHADOW_SOURCE_NAMES = True

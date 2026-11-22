@@ -1,0 +1,12 @@
+diff --git a/sqlglot/expressions/properties.py b/sqlglot/expressions/properties.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/properties.py
++++ b/sqlglot/expressions/properties.py
+@@ -307,6 +307,7 @@
+ 
+ 
+ class MaskingProperty(Property):
++    # Kept for backwards compatibility
+     arg_types = {}
+ 
+ 

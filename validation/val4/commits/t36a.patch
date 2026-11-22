@@ -1,0 +1,13 @@
+diff --git a/sqlglot/dialects/dialect.py b/sqlglot/dialects/dialect.py
+index 0000000..1111111 100644
+--- a/sqlglot/dialects/dialect.py
++++ b/sqlglot/dialects/dialect.py
+@@ -1418,7 +1418,7 @@
+     # Preserve unmarked slices and bounds that require runtime normalization or narrowing.
+     if (
+         expression.args.get("is_length") is False
+-        and expression.args.get("step") is None
++        and expression.args.get("step") == None
+         and start.is_int
+         and 0 <= start.to_py() <= 2**31 - 1
+         and end is not None

@@ -1,0 +1,13 @@
+diff --git a/sqlglot/dialects/snowflake.py b/sqlglot/dialects/snowflake.py
+index 0000000..1111111 100644
+--- a/sqlglot/dialects/snowflake.py
++++ b/sqlglot/dialects/snowflake.py
+@@ -31,7 +31,7 @@
+     }
+     SUPPORTS_POSITIONAL_COLUMN_REFS = True
+     TABLESAMPLE_SIZE_IS_PERCENT = True
+-    COPY_PARAMS_ARE_CSV = False
++    COPY_PARAMS_ARE_CSV = True
+     ARRAY_AGG_INCLUDES_NULLS = None
+     ARRAY_FUNCS_PROPAGATES_NULLS = True
+     ALTER_TABLE_ADD_REQUIRED_FOR_EACH_COLUMN = False

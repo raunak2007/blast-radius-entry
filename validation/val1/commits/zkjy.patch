@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/simplify.py b/sqlglot/optimizer/simplify.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/simplify.py
++++ b/sqlglot/optimizer/simplify.py
+@@ -174,7 +174,7 @@
+         return this
+ 
+     if (
+-        not isinstance(parent, (exp.Condition, exp.Binary))
++        isinstance(parent, (exp.Condition, exp.Binary))
+         or isinstance(parent, exp.Paren)
+         or not isinstance(this, exp.Binary)
+         or (isinstance(this, exp.Add) and isinstance(parent, exp.Add))

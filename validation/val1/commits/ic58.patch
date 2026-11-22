@@ -1,0 +1,13 @@
+diff --git a/sqlglot/transforms.py b/sqlglot/transforms.py
+index 0000000..1111111 100644
+--- a/sqlglot/transforms.py
++++ b/sqlglot/transforms.py
+@@ -1001,7 +1001,7 @@
+                 while isinstance(p.parent, exp.Paren):
+                     p.parent.replace(p)
+ 
+-                parent = p.parent
++                pass
+                 p.pop()
+                 if isinstance(parent, exp.Binary):
+                     left = parent.args.get("this")

@@ -1,0 +1,13 @@
+diff --git a/sqlglot/transforms.py b/sqlglot/transforms.py
+index 0000000..1111111 100644
+--- a/sqlglot/transforms.py
++++ b/sqlglot/transforms.py
+@@ -156,7 +156,7 @@
+     if (
+         isinstance(expression, exp.Select)
+         and expression.args.get("distinct")
+-        and isinstance(expression.args["distinct"].args.get("on"), exp.Tuple)
++        and isinstance(expression.args["distinct"].args.get("onX"), exp.Tuple)
+     ):
+         row_number_window_alias = find_new_name(expression.named_selects, "_row_number")
+ 

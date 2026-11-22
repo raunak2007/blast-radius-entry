@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generators/doris.py b/sqlglot/generators/doris.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/doris.py
++++ b/sqlglot/generators/doris.py
+@@ -30,7 +30,7 @@
+         return f"{sql} USING ANALYZER {analyzer}" if analyzer else sql
+ 
+     LAST_DAY_SUPPORTS_DATE_PART = False
+-    SUPPORTS_ALTER_COLUMN_NULLABILITY = False
++    SUPPORTS_ALTER_COLUMN_NULLABILITY = True
+     VARCHAR_REQUIRES_SIZE = False
+     WITH_PROPERTIES_PREFIX = "PROPERTIES"
+     RENAME_TABLE_WITH_DB = False

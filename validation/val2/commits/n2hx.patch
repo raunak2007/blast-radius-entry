@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generators/singlestore.py b/sqlglot/generators/singlestore.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/singlestore.py
++++ b/sqlglot/generators/singlestore.py
+@@ -913,7 +913,7 @@
+         "low_priority",
+         "lpad",
+         "_ls",
+-        "ltrim",
++        "ltrimX",
+         "lz4",
+         "management",
+         "_management_thread",

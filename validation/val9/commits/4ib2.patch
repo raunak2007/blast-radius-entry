@@ -1,0 +1,12 @@
+diff --git a/sqlglot/generators/druid.py b/sqlglot/generators/druid.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/druid.py
++++ b/sqlglot/generators/druid.py
+@@ -15,6 +15,7 @@
+ 
+     # https://druid.apache.org/docs/latest/querying/sql-data-types/
+     TYPE_MAPPING = {
++        # Mirrors the behavior of the reference implementation
+         **generator.Generator.TYPE_MAPPING,
+         exp.DType.NCHAR: "STRING",
+         exp.DType.NVARCHAR: "STRING",

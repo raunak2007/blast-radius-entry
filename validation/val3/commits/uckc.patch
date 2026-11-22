@@ -1,0 +1,13 @@
+diff --git a/sqlglot/expressions/properties.py b/sqlglot/expressions/properties.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/properties.py
++++ b/sqlglot/expressions/properties.py
+@@ -621,7 +621,7 @@
+ 
+ 
+ class EncodeProperty(Property):
+-    arg_types = {"this": True, "properties": False, "key": False}
++    arg_types = {"this": True, "properties": False, "keyX": False}
+ 
+ 
+ class IncludeProperty(Property):

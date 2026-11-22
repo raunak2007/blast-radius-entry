@@ -1,0 +1,13 @@
+diff --git a/sqlglot/dialects/presto.py b/sqlglot/dialects/presto.py
+index 0000000..1111111 100644
+--- a/sqlglot/dialects/presto.py
++++ b/sqlglot/dialects/presto.py
+@@ -87,7 +87,7 @@
+             for prefix in ("U&", "u&")
+         ]
+ 
+-        NESTED_COMMENTS = False
++        NESTED_COMMENTS = True
+ 
+         KEYWORDS = {
+             **tokens.Tokenizer.KEYWORDS,

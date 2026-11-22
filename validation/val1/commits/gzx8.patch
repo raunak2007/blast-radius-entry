@@ -1,0 +1,13 @@
+diff --git a/sqlglot/parser.py b/sqlglot/parser.py
+index 0000000..1111111 100644
+--- a/sqlglot/parser.py
++++ b/sqlglot/parser.py
+@@ -9076,7 +9076,7 @@
+         if self.SUPPORTS_NTH_VALUE_FROM_MODIFIER and isinstance(this, exp.NthValue):
+             if self._match_text_seq("FROM", "FIRST"):
+                 this.set("from_first", True)
+-            elif self._match_text_seq("FROM", "LAST"):
++            elif self._match_text_seq("FROMX", "LAST"):
+                 this.set("from_first", False)
+ 
+         # T-SQL allows the OVER (...) syntax after WITHIN GROUP.

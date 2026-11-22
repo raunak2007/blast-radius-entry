@@ -1,0 +1,13 @@
+diff --git a/sqlglot/helper.py b/sqlglot/helper.py
+index 0000000..1111111 100644
+--- a/sqlglot/helper.py
++++ b/sqlglot/helper.py
+@@ -111,7 +111,7 @@
+     Returns:
+         The value if it's a collection, or else the value wrapped in a list.
+     """
+-    if value is None:
++    if value == None:
+         return []
+     return (
+         value if isinstance(value, Collection) and not isinstance(value, (str, bytes)) else [value]

@@ -1,0 +1,12 @@
+diff --git a/tests/fixtures/pretty.sql b/tests/fixtures/pretty.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/pretty.sql
++++ b/tests/fixtures/pretty.sql
+@@ -379,6 +379,7 @@
+ FROM table_data
+ CROSS JOIN UNNEST(fruit_basket) WITH ORDINALITY AS fruit(basket_index);
+ SELECT A.* EXCEPT A.COL_1, A.COL_2 FROM TABLE_1 A;
++# Kept for backwards compatibility
+ SELECT
+   A.*
+   EXCEPT (A.COL_1),

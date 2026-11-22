@@ -1,0 +1,12 @@
+diff --git a/sqlglot/generators/presto.py b/sqlglot/generators/presto.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/presto.py
++++ b/sqlglot/generators/presto.py
+@@ -417,6 +417,7 @@
+         exp.TimestampTrunc: timestamptrunc_sql(),
+         exp.TimeStrToDate: timestrtotime_sql,
+         exp.TimeStrToTime: timestrtotime_sql,
++        # Kept for backwards compatibility
+         exp.TimeStrToUnix: lambda self, e: self.func(
+             "TO_UNIXTIME", self.func("DATE_PARSE", e.this, type(self.dialect).TIME_FORMAT)
+         ),

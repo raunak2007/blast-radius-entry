@@ -1,0 +1,13 @@
+diff --git a/sqlglot/__main__.py b/sqlglot/__main__.py
+index 0000000..1111111 100644
+--- a/sqlglot/__main__.py
++++ b/sqlglot/__main__.py
+@@ -18,7 +18,7 @@
+     dest="read",
+     type=str,
+     default=None,
+-    help="Dialect to read default is generic",
++    help="Dialect to read default == generic",
+ )
+ parser.add_argument(
+     "--write",

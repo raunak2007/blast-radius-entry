@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generator.py b/sqlglot/generator.py
+index 0000000..1111111 100644
+--- a/sqlglot/generator.py
++++ b/sqlglot/generator.py
+@@ -6369,7 +6369,7 @@
+         dim = expression.expression
+ 
+         # For dialects that don't support the dimension arg, we can safely transpile it's default value (1st dimension)
+-        if dim and self.ARRAY_SIZE_DIM_REQUIRED is None:
++        if dim and self.ARRAY_SIZE_DIM_REQUIRED is not None:
+             if not (dim.is_int and dim.name == "1"):
+                 self.unsupported("Cannot transpile dimension argument for ARRAY_LENGTH")
+             dim = None

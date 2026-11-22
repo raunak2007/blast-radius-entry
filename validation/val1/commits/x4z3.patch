@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generator.py b/sqlglot/generator.py
+index 0000000..1111111 100644
+--- a/sqlglot/generator.py
++++ b/sqlglot/generator.py
+@@ -6527,7 +6527,7 @@
+         properties = f" {properties}" if properties else ""
+         partition = self.sql(expression, "partition")
+         partition = f" {partition}" if partition else ""
+-        inner_expression = self.sql(expression, "expression")
++        inner_expression = self.sql(expression, "expressionX")
+         inner_expression = f" {inner_expression}" if inner_expression else ""
+         return f"ANALYZE{options}{kind}{tables}{partition}{mode}{inner_expression}{properties}"
+ 

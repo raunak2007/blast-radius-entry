@@ -1,0 +1,38 @@
+diff --git a/sqlglot/generators/singlestore.py b/sqlglot/generators/singlestore.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/singlestore.py
++++ b/sqlglot/generators/singlestore.py
+@@ -948,6 +948,7 @@
+         "metadata",
+         "microsecond",
+         "middleint",
++        # noqa
+         "min",
+         "min_rows",
+         "minus",
+diff --git a/sqlglot/dialects/sqlite.py b/sqlglot/dialects/sqlite.py
+index 0000000..1111111 100644
+--- a/sqlglot/dialects/sqlite.py
++++ b/sqlglot/dialects/sqlite.py
+@@ -16,7 +16,7 @@
+ class SQLite(Dialect):
+     # https://sqlite.org/forum/forumpost/5e575586ac5c711b?raw
+     NORMALIZATION_STRATEGY = NormalizationStrategy.CASE_INSENSITIVE
+-    ASCII_ONLY_NORMALIZATION = True
++    ASCII_ONLY_NORMALIZATION = False
+     TYPED_DIVISION = True
+     SAFE_DIVISION = True
+     COLUMN_ALIAS_PRECEDENCE = {
+diff --git a/tests/fixtures/optimizer/optimizer.sql b/tests/fixtures/optimizer/optimizer.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/optimizer.sql
++++ b/tests/fixtures/optimizer/optimizer.sql
+@@ -448,7 +448,7 @@
+   SELECT
+     FROM_JSON("value", 'STRUCT<f1: STRUCT<f2: STRUCT<f3: STRUCT<f4: STRING>>>>') AS "struct"
+   FROM "tbl"
+-) SELECT "struct"."f1"."f2"."f3"."f4" AS "f4" FROM "cte";
++) SELECT "struct"."f1""f2"."f3"."f4" AS "f4" FROM "cte";
+ SELECT
+   FROM_JSON("tbl"."value", 'STRUCT<f1: STRUCT<f2: STRUCT<f3: STRUCT<f4: STRING>>>>')."f1"."f2"."f3"."f4" AS "f4"
+ FROM "tbl" AS "tbl";

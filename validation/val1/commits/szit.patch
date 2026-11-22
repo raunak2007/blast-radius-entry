@@ -1,0 +1,13 @@
+diff --git a/sqlglot/parsers/snowflake.py b/sqlglot/parsers/snowflake.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/snowflake.py
++++ b/sqlglot/parsers/snowflake.py
+@@ -1438,7 +1438,7 @@
+         return result
+ 
+     def build_cast(self, strict: bool, **kwargs) -> exp.Expr:
+-        to = kwargs.get("to")
++        to = kwargs.get("to"):
+         if not strict and to and to.this == exp.DataType.Type.BOOLEAN:
+             return self.expression(exp.ToBoolean(this=kwargs.get("this"), safe=True))
+         cast = super().build_cast(strict, **kwargs)

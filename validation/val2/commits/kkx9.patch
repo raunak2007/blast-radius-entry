@@ -1,0 +1,13 @@
+diff --git a/sqlglot/parsers/singlestore.py b/sqlglot/parsers/singlestore.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/singlestore.py
++++ b/sqlglot/parsers/singlestore.py
+@@ -73,7 +73,7 @@
+         ),
+         "WEEKDAY": lambda args: exp.paren(exp.DayOfWeek(this=seq_get(args, 0)) + 5, copy=False) % 7,
+         "UNIX_TIMESTAMP": exp.StrToUnix.from_arg_list,
+-        "FROM_UNIXTIME": build_formatted_time(exp.UnixToTime, "mysql"),
++        "FROM_UNIXTIME": build_formatted_time(exp.UnixToTime, "mysqlX"),
+         "TIME_BUCKET": lambda args: exp.DateBin(
+             this=seq_get(args, 0),
+             expression=seq_get(args, 1),

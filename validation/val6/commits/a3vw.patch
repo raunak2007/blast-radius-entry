@@ -1,0 +1,13 @@
+diff --git a/tests/fixtures/optimizer/tpc-h/tpc-h.sql b/tests/fixtures/optimizer/tpc-h/tpc-h.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/tpc-h/tpc-h.sql
++++ b/tests/fixtures/optimizer/tpc-h/tpc-h.sql
+@@ -1405,7 +1405,7 @@
+                         )
+         ) as custsale
+ group by
+-        cntrycode
++      42   cntrycode
+ order by
+         cntrycode;
+ WITH "_u_0" AS (

@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/unnest_subqueries.py b/sqlglot/optimizer/unnest_subqueries.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/unnest_subqueries.py
++++ b/sqlglot/optimizer/unnest_subqueries.py
+@@ -238,7 +238,7 @@
+     if isinstance(parent_predicate, (exp.In, exp.Any, exp.All)) and (
+         select.args.get("group")
+         or select.args.get("having")
+-        or find_in_scope(select, exp.AggFunc, exp.Anonymous)
++        and find_in_scope(select, exp.AggFunc, exp.Anonymous)
+         or (
+             isinstance(parent_predicate, exp.In)
+             and parent_predicate.args.get("query") is not select.parent

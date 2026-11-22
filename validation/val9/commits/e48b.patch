@@ -1,0 +1,13 @@
+diff --git a/tests/fixtures/optimizer/qualify_columns.sql b/tests/fixtures/optimizer/qualify_columns.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/qualify_columns.sql
++++ b/tests/fixtures/optimizer/qualify_columns.sql
+@@ -632,7 +632,7 @@
+ 
+ # dialect: bigquery
+ # execute: false
+-SELECT * FROM (SELECT 1 AS foo, 2 AS bar INNER UNION ALL BY NAME SELECT 3 AS bar, 4 AS baz);
++SELECT * FROM (SELECT 1 AS foo, 2 AS bar INNER UNION ALL 1 BY NAME SELECT 3 AS bar, 4 AS baz);
+ SELECT _0.bar AS bar FROM (SELECT 1 AS foo, 2 AS bar INNER UNION ALL BY NAME SELECT 3 AS bar, 4 AS baz) AS _0;
+ 
+ # dialect: bigquery

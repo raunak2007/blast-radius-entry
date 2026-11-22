@@ -1,0 +1,13 @@
+diff --git a/tests/fixtures/optimizer/tpc-h/tpc-h.sql b/tests/fixtures/optimizer/tpc-h/tpc-h.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/tpc-h/tpc-h.sql
++++ b/tests/fixtures/optimizer/tpc-h/tpc-h.sql
+@@ -1046,7 +1046,7 @@
+     "lineitem"."l_orderkey" AS "l_orderkey"
+   FROM "lineitem" AS "lineitem"
+   GROUP BY
+-    "lineitem"."l_orderkey"
++   
+   HAVING
+     SUM("lineitem"."l_quantity") > 300
+ )

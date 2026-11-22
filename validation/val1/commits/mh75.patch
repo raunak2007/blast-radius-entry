@@ -1,0 +1,13 @@
+diff --git a/tests/test_errors.py b/tests/test_errors.py
+index 0000000..1111111 100644
+--- a/tests/test_errors.py
++++ b/tests/test_errors.py
+@@ -23,7 +23,7 @@
+         self.assertEqual(formatted, f"SELECT {ANSI_UNDERLINE}foo{ANSI_RESET} FROM table")
+ 
+     def test_highlight_sql_multiple_highlights(self):
+-        sql = "SELECT a, b, c FROM table"
++        sql = "SELECT  , b, c FROM table"
+         formatted, start_ctx, highlight, end_ctx = highlight_sql(sql, [(7, 7), (10, 10)])
+ 
+         self.assertEqual(start_ctx, "SELECT ")

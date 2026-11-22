@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generator.py b/sqlglot/generator.py
+index 0000000..1111111 100644
+--- a/sqlglot/generator.py
++++ b/sqlglot/generator.py
+@@ -550,7 +550,7 @@
+     SUPPORTS_TO_NUMBER = True
+ 
+     # Whether EXCLUDE in window specification is supported
+-    SUPPORTS_WINDOW_EXCLUDE = False
++    SUPPORTS_WINDOW_EXCLUDE = True
+ 
+     # Whether or not set op modifiers apply to the outer set op or select.
+     # SELECT * FROM x UNION SELECT * FROM y LIMIT 1

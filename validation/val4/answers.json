@@ -1,0 +1,163 @@
+{
+"commits": {
+"35sy": {
+"failing": [],
+"kind": "swap"
+},
+"7j6h": {
+"failing": [],
+"kind": "swap"
+},
+"8uxu": {
+"failing": [],
+"kind": "swap"
+},
+"9hmt": {
+"failing": [],
+"kind": "swap"
+},
+"9rqy": {
+"failing": [],
+"kind": "swap"
+},
+"9s46": {
+"failing": [],
+"kind": "swap"
+},
+"b8fv": {
+"failing": [],
+"kind": "swap"
+},
+"bhx2": {
+"failing": [],
+"kind": "swap"
+},
+"bhyp": {
+"failing": [],
+"kind": "swap"
+},
+"crf4": {
+"failing": [],
+"kind": "swap"
+},
+"d436": {
+"failing": [],
+"kind": "swap"
+},
+"e43w": {
+"failing": [],
+"kind": "swap"
+},
+"ejws": {
+"failing": [],
+"kind": "swap"
+},
+"fxmz": {
+"failing": [],
+"kind": "swap"
+},
+"gd7g": {
+"failing": [],
+"kind": "swap"
+},
+"i8q4": {
+"failing": [],
+"kind": "swap"
+},
+"inj2": {
+"failing": [],
+"kind": "swap"
+},
+"j4ry": {
+"failing": [
+1434
+],
+"kind": "swap"
+},
+"m6ug": {
+"failing": [],
+"kind": "swap"
+},
+"m9zm": {
+"failing": [],
+"kind": "swap"
+},
+"nhaz": {
+"failing": [],
+"kind": "swap"
+},
+"njau": {
+"failing": [],
+"kind": "swap"
+},
+"ny45": {
+"failing": [
+1437,
+1513
+],
+"kind": "swap"
+},
+"q9sz": {
+"failing": [],
+"kind": "swap"
+},
+"qdny": {
+"failing": [],
+"kind": "swap"
+},
+"qm88": {
+"failing": [],
+"kind": "swap"
+},
+"rgn3": {
+"failing": [],
+"kind": "swap"
+},
+"s5d9": {
+"failing": [],
+"kind": "swap"
+},
+"t36a": {
+"failing": [],
+"kind": "swap"
+},
+"uia5": {
+"failing": [],
+"kind": "swap"
+},
+"w6mh": {
+"failing": [],
+"kind": "swap"
+},
+"wnbu": {
+"failing": [],
+"kind": "swap"
+},
+"xqdt": {
+"failing": [],
+"kind": "swap"
+},
+"xspq": {
+"failing": [
+27,
+31,
+40,
+820
+],
+"kind": "swap"
+},
+"yrbp": {
+"failing": [
+1355,
+1440,
+1441,
+1454
+],
+"kind": "swap"
+},
+"zvak": {
+"failing": [],
+"kind": "swap"
+}
+}
+}

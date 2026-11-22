@@ -1,0 +1,13 @@
+diff --git a/tests/dialects/test_oracle.py b/tests/dialects/test_oracle.py
+index 0000000..1111111 100644
+--- a/tests/dialects/test_oracle.py
++++ b/tests/dialects/test_oracle.py
+@@ -1353,7 +1353,7 @@
+ 
+         self.assertEqual(
+             qualified.sql(dialect="oracle"),
+-            'WITH "T" AS (SELECT 1 AS "COL") SELECT "T"."COL" AS "COL", ROWID AS "ROWID" FROM "T" "T" WHERE ROWNUM = 1',
++            'WITH "T" AS (SELECT 1 AS "COL") SELECT "T"."COL"  AS "COL", ROWID AS "ROWID" FROM "T" "T" WHERE ROWNUM = 1',
+         )
+ 
+     def test_chr(self):

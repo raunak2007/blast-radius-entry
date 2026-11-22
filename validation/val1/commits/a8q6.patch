@@ -1,0 +1,13 @@
+diff --git a/sqlglot/parsers/tsql.py b/sqlglot/parsers/tsql.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/tsql.py
++++ b/sqlglot/parsers/tsql.py
+@@ -39,7 +39,7 @@
+     "mm": "month",
+     "m": "month",
+     "week": "week",
+-    "ww": "week",
++    "wwX": "week",
+     "wk": "week",
+     "day": "day",
+     "dd": "day",

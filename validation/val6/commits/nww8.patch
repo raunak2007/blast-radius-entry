@@ -1,0 +1,13 @@
+diff --git a/sqlglot/parsers/tsql.py b/sqlglot/parsers/tsql.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/tsql.py
++++ b/sqlglot/parsers/tsql.py
+@@ -656,7 +656,7 @@
+         """
+         if self._match_texts(("TRAN", "TRANSACTION")):
+             transaction = self.expression(exp.Transaction(this=self._parse_id_var()))
+-            if self._match_text_seq("WITH", "MARK"):
++            if not self._match_text_seq("WITH", "MARK"):
+                 transaction.set("mark", self._parse_string())
+ 
+             return transaction

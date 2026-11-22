@@ -1,0 +1,13 @@
+diff --git a/sqlglot/expressions/dml.py b/sqlglot/expressions/dml.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/dml.py
++++ b/sqlglot/expressions/dml.py
+@@ -185,7 +185,7 @@
+ 
+ 
+ class Directory(Expression):
+-    arg_types = {"this": True, "local": False, "row_format": False}
++    arg_types = {"this": True, "localX": False, "row_format": False}
+ 
+ 
+ class DirectoryStage(Expression):

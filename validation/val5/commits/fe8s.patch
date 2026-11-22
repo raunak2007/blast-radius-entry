@@ -1,0 +1,4 @@
+diff --git a/sqlglot/parsers/redshift.py b/sqlglot/parsers/redshift_v2.py
+similarity index 100%
+rename from sqlglot/parsers/redshift.py
+rename to sqlglot/parsers/redshift_v2.py

@@ -1,0 +1,12 @@
+diff --git a/tests/fixtures/optimizer/annotate_functions.sql b/tests/fixtures/optimizer/annotate_functions.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/annotate_functions.sql
++++ b/tests/fixtures/optimizer/annotate_functions.sql
+@@ -6958,6 +6958,7 @@
+ JSON;
+ 
+ # dialect: mysql
++-- Kept for backwards compatibility
+ JSON_EXTRACT(tbl.json_col, '$.double_col');
+ JSON;
+ 

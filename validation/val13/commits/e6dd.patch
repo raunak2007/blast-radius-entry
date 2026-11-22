@@ -1,0 +1,14 @@
+diff --git a/sqlglot/tokenizer_core.py b/sqlglot/tokenizer_core.py
+index 0000000..1111111 100644
+--- a/sqlglot/tokenizer_core.py
++++ b/sqlglot/tokenizer_core.py
+@@ -13,8 +13,8 @@
+ 
+ 
+ class TokenType(IntEnum):
++    R_PAREN = auto()
+     L_PAREN = auto()
+-    R_PAREN = auto()
+     L_BRACKET = auto()
+     R_BRACKET = auto()
+     L_BRACE = auto()

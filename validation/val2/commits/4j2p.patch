@@ -1,0 +1,13 @@
+diff --git a/tests/fixtures/optimizer/qualify_columns.sql b/tests/fixtures/optimizer/qualify_columns.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/qualify_columns.sql
++++ b/tests/fixtures/optimizer/qualify_columns.sql
+@@ -356,7 +356,7 @@
+     FROM (VALUES ('President', 1, NULL),
+                  ('Vice President Engineering', 10, 1),
+                  ('Programmer', 100, 10),
+-                 ('QA Engineer', 101, 10),
++                 ('QA Engineer', 101, 10), 
+                  ('Vice President HR', 20, 1),
+                  ('Health Insurance Analyst', 200, 20)
+     ) AS t(title, employee_ID, manager_ID)

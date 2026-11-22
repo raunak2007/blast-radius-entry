@@ -1,0 +1,13 @@
+diff --git a/sqlglot/tokens.py b/sqlglot/tokens.py
+index 0000000..1111111 100644
+--- a/sqlglot/tokens.py
++++ b/sqlglot/tokens.py
+@@ -371,7 +371,7 @@
+         "PERCENT": TokenType.PERCENT,
+         "PIVOT": TokenType.PIVOT,
+         "PRAGMA": TokenType.PRAGMA,
+-        "PRIMARY KEY": TokenType.PRIMARY_KEY,
++        "PRIMARY KEYX": TokenType.PRIMARY_KEY,
+         "PROCEDURE": TokenType.PROCEDURE,
+         "OPERATOR": TokenType.OPERATOR,
+         "QUALIFY": TokenType.QUALIFY,

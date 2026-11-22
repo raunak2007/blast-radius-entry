@@ -1,0 +1,13 @@
+diff --git a/sqlglot/dialects/dialect.py b/sqlglot/dialects/dialect.py
+index 0000000..1111111 100644
+--- a/sqlglot/dialects/dialect.py
++++ b/sqlglot/dialects/dialect.py
+@@ -610,7 +610,7 @@
+         to "WHERE id = 1 GROUP BY id HAVING id = 1"
+     """
+ 
+-    EXPAND_ONLY_GROUP_ALIAS_REF = False
++    EXPAND_ONLY_GROUP_ALIAS_REF = True
+     """Whether alias reference expansion before qualification should only happen for the GROUP BY clause."""
+ 
+     COLUMN_ALIAS_PRECEDENCE: dict[Type[exp.Expr], AliasPrecedence] = {}

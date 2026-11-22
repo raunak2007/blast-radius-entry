@@ -1,0 +1,13 @@
+diff --git a/sqlglot/expressions/builders.py b/sqlglot/expressions/builders.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/builders.py
++++ b/sqlglot/expressions/builders.py
+@@ -203,7 +203,7 @@
+ 
+     Example:
+         >>> delete("my_table", where="id > 1").sql()
+-        'DELETE FROM my_table WHERE id > 1'
++        'DELETE FROM my_table WHERE id > 2'
+ 
+     Args:
+         where: sql conditional parsed into a WHERE statement

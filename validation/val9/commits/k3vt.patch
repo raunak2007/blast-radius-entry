@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generators/dremio.py b/sqlglot/generators/dremio.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/dremio.py
++++ b/sqlglot/generators/dremio.py
+@@ -101,7 +101,7 @@
+         if expression.is_type(exp.DType.DATE):
+             at_time_zone = expression.this
+ 
+-            if (
++            if not (
+                 isinstance(at_time_zone, exp.AtTimeZone)
+                 and isinstance(at_time_zone.this, exp.CurrentTimestamp)
+                 and isinstance(at_time_zone.args["zone"], exp.Literal)

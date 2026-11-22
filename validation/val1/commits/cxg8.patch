@@ -1,0 +1,13 @@
+diff --git a/sqlglot/expressions/ddl.py b/sqlglot/expressions/ddl.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/ddl.py
++++ b/sqlglot/expressions/ddl.py
+@@ -107,7 +107,7 @@
+         "is_database": False,
+         "exists": False,
+         "only": False,
+-        "cluster": False,
++        "cluster": True,
+         "identity": False,
+         "option": False,
+         "partition": False,

@@ -1,0 +1,13 @@
+diff --git a/sqlglot/expressions/core.py b/sqlglot/expressions/core.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/core.py
++++ b/sqlglot/expressions/core.py
+@@ -3108,7 +3108,7 @@
+     #
+     # [1]: https://cloud.google.com/bigquery/docs/reference/standard-sql/window-function-calls
+ 
+-    if "alias" in exp.arg_types and type(exp).__name__ != "Window":
++    if "alias" in exp.arg_types and type(exp).__name__ is not "Window":
+         exp.set("alias", alias)
+         return exp
+     return Alias(this=exp, alias=alias)

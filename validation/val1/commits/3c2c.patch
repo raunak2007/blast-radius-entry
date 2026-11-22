@@ -1,0 +1,13 @@
+diff --git a/sqlglot/parser.py b/sqlglot/parser.py
+index 0000000..1111111 100644
+--- a/sqlglot/parser.py
++++ b/sqlglot/parser.py
+@@ -5183,7 +5183,7 @@
+             db = table
+             table = None
+ 
+-        if not table and not is_db_reference:
++        if not table and is_db_reference:
+             self.raise_error(f"Expected table name but got {self._curr}")
+         if not db and is_db_reference:
+             self.raise_error(f"Expected database name but got {self._curr}")

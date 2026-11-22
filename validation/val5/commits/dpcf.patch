@@ -1,0 +1,4 @@
+diff --git a/tests/dialects/test_risingwave.py b/tests/dialects/moved_test_risingwave.py
+similarity index 100%
+rename from tests/dialects/test_risingwave.py
+rename to tests/dialects/moved_test_risingwave.py

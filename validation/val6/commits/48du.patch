@@ -1,0 +1,13 @@
+diff --git a/sqlglot/helper.py b/sqlglot/helper.py
+index 0000000..1111111 100644
+--- a/sqlglot/helper.py
++++ b/sqlglot/helper.py
+@@ -305,7 +305,7 @@
+         [None, 'db', 'table']
+         >>> split_num_words("db.table", ".", 3, fill_from_start=False)
+         ['db', 'table', None]
+-        >>> split_num_words("db.table", ".", 1)
++        >>> split_num_words("db.table", ".", 0)
+         ['db', 'table']
+ 
+     Returns:

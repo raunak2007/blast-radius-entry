@@ -1,0 +1,254 @@
+{
+ "35sy": {
+  "kind": "swap",
+  "desc": [
+   "sqlglot/generator.py:1535 'if cache is None:' -> 'if cache == None:'"
+  ],
+  "expensive": false
+ },
+ "7j6h": {
+  "kind": "swap",
+  "desc": [
+   "sqlglot/typing/hive.py:15 'expression.args.get(\"decimals\") is not None' -> 'expression.args.get(\"decimals\") != None'"
+  ],
+  "expensive": false
+ },
+ "8uxu": {
+  "kind": "swap",
+  "desc": [
+   "sqlglot/optimizer/resolver.py:309 'if self._source_columns is None:' -> 'if self._source_columns == None:'"
+  ],
+  "expensive": true
+ },
+ "9hmt": {
+  "kind": "swap",
+  "desc": [
+   "sqlglot/optimizer/simplify.py:1035 'if left.meta_get(\"nonnull\") is True and right.meta_get(\"nonn' -> 'if left.meta_get(\"nonnull\") is True and right.meta_get(\"nonn'"
+  ],
+  "expensive": true
+ },
+ "9rqy": {
+  "kind": "swap",
+  "desc": [
+   "sqlglot/optimizer/simplify.py:1743 'if node is not None:' -> 'if node != None:'"
+  ],
+  "expensive": true
+ },
+ "9s46": {
+  "kind": "swap",
+  "desc": [
+   "sqlglot/executor/env.py:217 'return (row for row in zip(*args) if all(v is not None for v' -> 'return (row for row in zip(*args) if all(v != None for v in '"
+  ],
+  "expensive": false
+ },
+ "b8fv": {
+  "kind": "swap",
+  "desc": [
+   "sqlglot/optimizer/simplify.py:1343 'return exp.Literal.number(num_a - num_b) if a.parent is b.pa' -> 'return exp.Literal.number(num_a - num_b) if a.parent == b.pa'"
+  ],
+  "expensive": true
+ },
+ "bhx2": {
+  "kind": "swap",
+  "desc": [
+   "sqlglot/optimizer/qualify_columns.py:279 'if using is None and join.method == \"NATURAL\":' -> 'if using == None and join.method == \"NATURAL\":'"
+  ],
+  "expensive": false
+ },
+ "bhyp": {
+  "kind": "swap",
+  "desc": [
+   "sqlglot/optimizer/pushdown_projections.py:443 'if journal is not None and with_node is not None:' -> 'if journal != None and with_node is not None:'"
+  ],
+  "expensive": false
+ },
+ "crf4": {
+  "kind": "swap",
+  "desc": [
+   "sqlglot/optimizer/eliminate_joins.py:84 'if on is not None:' -> 'if on != None:'"
+  ],
+  "expensive": true
+ },
+ "d436": {
+  "kind": "swap",
+  "desc": [
+   "sqlglot/optimizer/annotate_types.py:949 'if result_type is None:' -> 'if result_type == None:'"
+  ],
+  "expensive": true
+ },
+ "e43w": {
+  "kind": "swap",
+  "desc": [
+   "sqlglot/dialects/dialect.py:1223 'if strategy is NormalizationStrategy.CASE_SENSITIVE:' -> 'if strategy == NormalizationStrategy.CASE_SENSITIVE:'"
+  ],
+  "expensive": true
+ },
+ "ejws": {
+  "kind": "swap",
+  "desc": [
+   "sqlglot/jsonpath.py:174 'start = 0 if prev_index < 0 else tokens[prev_index].end + 1' -> 'start = 0 if prev_index <= 0 else tokens[prev_index].end + 1'"
+  ],
+  "expensive": true
+ },
+ "fxmz": {
+  "kind": "swap",
+  "desc": [
+   "sqlglot/generators/singlestore.py:140 'if e.unit is not None' -> 'if e.unit != None'"
+  ],
+  "expensive": false
+ },
+ "gd7g": {
+  "kind": "swap",
+  "desc": [
+   "sqlglot/generator.py:2806 'if new_field_exprs is not None:' -> 'if new_field_exprs != None:'"
+  ],
+  "expensive": false
+ },
+ "i8q4": {
+  "kind": "swap",
+  "desc": [
+   "sqlglot/expressions/core.py:1273 'elif parent and arg_key and new_node is not node:' -> 'elif parent and arg_key and new_node != node:'"
+  ],
+  "expensive": true
+ },
+ "inj2": {
+  "kind": "swap",
+  "desc": [
+   "sqlglot/generators/tsql.py:446 'if expression.args.get(\"fractions\") is None:' -> 'if expression.args.get(\"fractions\") == None:'"
+  ],
+  "expensive": false
+ },
+ "j4ry": {
+  "kind": "swap",
+  "desc": [
+   "sqlglot/optimizer/simplify.py:1043 'return left if (av < bv if or_ else av >= bv) else right' -> 'return left if (av <= bv if or_ else av >= bv) else right'"
+  ],
+  "expensive": true
+ },
+ "m6ug": {
+  "kind": "swap",
+  "desc": [
+   "sqlglot/expressions/builders.py:681 'is_list_arg = type(v) is list' -> 'is_list_arg = type(v) == list'"
+  ],
+  "expensive": true
+ },
+ "m9zm": {
+  "kind": "swap",
+  "desc": [
+   "sqlglot/optimizer/pushdown_projections.py:496 'if journal is not None:' -> 'if journal != None:'"
+  ],
+  "expensive": true
+ },
+ "nhaz": {
+  "kind": "swap",
+  "desc": [
+   "sqlglot/lineage.py:504 'if _cache is not None:' -> 'if _cache != None:'"
+  ],
+  "expensive": false
+ },
+ "njau": {
+  "kind": "swap",
+  "desc": [
+   "sqlglot/generators/presto.py:91 'if schema is expression:' -> 'if schema == expression:'"
+  ],
+  "expensive": false
+ },
+ "ny45": {
+  "kind": "swap",
+  "desc": [
+   "sqlglot/parsers/starrocks.py:106 'if len(names) > 1 and not all(names):' -> 'if len(names) >= 1 and not all(names):'"
+  ],
+  "expensive": false
+ },
+ "q9sz": {
+  "kind": "swap",
+  "desc": [
+   "sqlglot/generators/snowflake.py:190 'if asc is None and nulls_first == exp.false():' -> 'if asc == None and nulls_first == exp.false():'"
+  ],
+  "expensive": false
+ },
+ "qdny": {
+  "kind": "swap",
+  "desc": [
+   "sqlglot/generators/duckdb.py:4317 'self.unsupported(\"RESPECT NULLS is not supported for non-win' -> 'self.unsupported(\"RESPECT NULLS == not supported for non-win'"
+  ],
+  "expensive": false
+ },
+ "qm88": {
+  "kind": "swap",
+  "desc": [
+   "sqlglot/executor/table.py:109 'if columns is not None' -> 'if columns != None'"
+  ],
+  "expensive": true
+ },
+ "rgn3": {
+  "kind": "swap",
+  "desc": [
+   "sqlglot/generators/bigquery.py:230 'or (sort is not None and order is None)' -> 'or (sort is not None and order == None)'"
+  ],
+  "expensive": false
+ },
+ "s5d9": {
+  "kind": "swap",
+  "desc": [
+   "sqlglot/optimizer/resolver.py:117 'if self._outer_resolvers is None:' -> 'if self._outer_resolvers == None:'"
+  ],
+  "expensive": false
+ },
+ "t36a": {
+  "kind": "swap",
+  "desc": [
+   "sqlglot/dialects/dialect.py:1421 'and expression.args.get(\"step\") is None' -> 'and expression.args.get(\"step\") == None'"
+  ],
+  "expensive": false
+ },
+ "uia5": {
+  "kind": "swap",
+  "desc": [
+   "sqlglot/optimizer/unnest_subqueries.py:285 'if isinstance(on_clause_ancestor, exp.Join) and on_clause_jo' -> 'if isinstance(on_clause_ancestor, exp.Join) and on_clause_jo'"
+  ],
+  "expensive": true
+ },
+ "w6mh": {
+  "kind": "swap",
+  "desc": [
+   "sqlglot/optimizer/unnest_subqueries.py:100 'or parent_select is not predicate.parent_select' -> 'or parent_select != predicate.parent_select'"
+  ],
+  "expensive": true
+ },
+ "wnbu": {
+  "kind": "swap",
+  "desc": [
+   "sqlglot/expressions/core.py:877 'if vt is list:' -> 'if vt == list:'"
+  ],
+  "expensive": true
+ },
+ "xqdt": {
+  "kind": "swap",
+  "desc": [
+   "sqlglot/optimizer/merge_subqueries.py:780 'if exp.column_table_names(where.this) <= sources:' -> 'if exp.column_table_names(where.this) < sources:'"
+  ],
+  "expensive": true
+ },
+ "xspq": {
+  "kind": "swap",
+  "desc": [
+   "sqlglot/tokenizer_core.py:1213 'return (value, end) if end - start >= min_digits else (-1, e' -> 'return (value, end) if end - start > min_digits else (-1, en'"
+  ],
+  "expensive": false
+ },
+ "yrbp": {
+  "kind": "swap",
+  "desc": [
+   "sqlglot/optimizer/unnest_subqueries.py:451 'use_struct = len(array_keys) > 1' -> 'use_struct = len(array_keys) >= 1'"
+  ],
+  "expensive": true
+ },
+ "zvak": {
+  "kind": "swap",
+  "desc": [
+   "sqlglot/parsers/sqlite.py:12 'if len(args) <= 1:' -> 'if len(args) < 1:'"
+  ],
+  "expensive": false
+ }
+}

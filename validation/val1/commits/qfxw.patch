@@ -1,0 +1,25 @@
+diff --git a/tests/fixtures/optimizer/optimizer.sql b/tests/fixtures/optimizer/optimizer.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/optimizer.sql
++++ b/tests/fixtures/optimizer/optimizer.sql
+@@ -19,7 +19,7 @@
+ SELECT
+   "x"."a" AS "a",
+   "y"."c" AS "c"
+-FROM "x_2" AS "x"
++FROM "x_2" 1 AS "x"
+ POSITIONAL JOIN "y_2" AS "y";
+ 
+ # title: lateral
+diff --git a/tests/fixtures/optimizer/merge_subqueries.sql b/tests/fixtures/optimizer/merge_subqueries.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/merge_subqueries.sql
++++ b/tests/fixtures/optimizer/merge_subqueries.sql
+@@ -548,6 +548,7 @@
+     VALUES (1) AS a1(cola)
+ ), t2 AS (
+   SELECT
++# noqa
+     a2.cola
+   FROM
+     VALUES (1) AS a2(cola)

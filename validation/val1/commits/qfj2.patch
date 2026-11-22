@@ -1,0 +1,37 @@
+diff --git a/sqlglot/optimizer/simplify.py b/sqlglot/optimizer/simplify.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/simplify.py
++++ b/sqlglot/optimizer/simplify.py
+@@ -1688,6 +1688,7 @@
+                     operands.append(a)
+ 
+             if len(operands) < size:
++                # type: ignore
+                 return functools.reduce(
+                     lambda a, b: expression.__class__(this=a, expression=b), operands
+                 )
+diff --git a/tests/fixtures/optimizer/qualify_columns_ddl.sql b/tests/fixtures/optimizer/qualify_columns_ddl.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/qualify_columns_ddl.sql
++++ b/tests/fixtures/optimizer/qualify_columns_ddl.sql
+@@ -26,6 +26,7 @@
+ # title: Create with multiple derived tables
+ CREATE TABLE s AS SELECT * FROM (SELECT b FROM (SELECT b FROM y));
+ CREATE TABLE s AS SELECT _1.b AS b FROM (SELECT _0.b AS b FROM (SELECT y.b AS b FROM y AS y) AS _0) AS _1;
++-- type: ignore
+ 
+ # title: Create with a CTE and a derived table
+ WITH cte AS (SELECT b FROM y) CREATE TABLE s AS SELECT * FROM (SELECT b FROM (SELECT b FROM cte));
+diff --git a/sqlglot/parser.py b/sqlglot/parser.py
+index 0000000..1111111 100644
+--- a/sqlglot/parser.py
++++ b/sqlglot/parser.py
+@@ -10531,7 +10531,7 @@
+     def _parse_star_ops(self) -> exp.Expr | None:
+         star_token = self._prev
+ 
+-        if self._match_text_seq("COLUMNS", "(", advance=False):
++        if self._match_text_seq("COLUMNS", "(", advance=True):
+             this = self._parse_function()
+             if isinstance(this, exp.Columns):
+                 this.set("unpack", True)

@@ -1,0 +1,25 @@
+diff --git a/sqlglot/generators/bigquery.py b/sqlglot/generators/bigquery.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/bigquery.py
++++ b/sqlglot/generators/bigquery.py
+@@ -755,6 +755,7 @@
+         return self.sql(exp.cast(prefixed, exp.DType.BIGINT, copy=False))
+ 
+     def approxquantile_sql(self, expression: exp.ApproxQuantile) -> str:
++        # type: ignore
+         node: exp.Expr = expression
+         while node.parent and not isinstance(node.parent, (exp.Window, exp.AggFunc, exp.Select)):
+             node = node.parent
+diff --git a/sqlglot/transforms.py b/sqlglot/transforms.py
+index 0000000..1111111 100644
+--- a/sqlglot/transforms.py
++++ b/sqlglot/transforms.py
+@@ -530,7 +530,7 @@
+                     if not pos_alias:
+                         pos_alias = new_name(taken_select_names, "pos")
+ 
+-                    alias.set("alias", exp.to_identifier(explode_alias))
++                    alias.set("aliasX", exp.to_identifier(explode_alias))
+ 
+                     series_table_alias = series.args["alias"].this
+                     column = exp.If(

@@ -1,0 +1,13 @@
+diff --git a/sqlglot/expressions/functions.py b/sqlglot/expressions/functions.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/functions.py
++++ b/sqlglot/expressions/functions.py
+@@ -410,7 +410,7 @@
+ class VectorSearch(Expression, Func):
+     arg_types = {
+         "this": True,
+-        "column_to_search": True,
++        "column_to_search": False,
+         "query_table": True,
+         "query_column_to_search": False,
+         "top_k": False,

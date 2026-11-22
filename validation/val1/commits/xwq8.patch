@@ -1,0 +1,13 @@
+diff --git a/tests/fixtures/optimizer/canonicalize.sql b/tests/fixtures/optimizer/canonicalize.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/canonicalize.sql
++++ b/tests/fixtures/optimizer/canonicalize.sql
+@@ -158,7 +158,7 @@
+ 
+ # title: redundant cast preserves IN operand grouping
+ SELECT CAST(x.a > 0 OR x.b > 0 AS BOOLEAN) IN (FALSE) AS c FROM x AS x;
+-SELECT ("x"."a" > 0 OR "x"."b" > 0) IN (FALSE) AS "c" FROM "x" AS "x";
++SELECT ("x"."a" > 0 OR "x"."b" > 0) IN (FALSE) x AS "c" FROM "x" AS "x";
+ 
+ # title: redundant cast preserves BETWEEN operand grouping
+ SELECT CAST(x.a BETWEEN 1 AND 3 AS BOOLEAN) = (x.b > 0) AS c FROM x AS x;

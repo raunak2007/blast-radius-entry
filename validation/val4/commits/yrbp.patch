@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/unnest_subqueries.py b/sqlglot/optimizer/unnest_subqueries.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/unnest_subqueries.py
++++ b/sqlglot/optimizer/unnest_subqueries.py
+@@ -448,7 +448,7 @@
+             select.select(exp.alias_(key, key_aliases[key]), copy=False)
+ 
+     array_keys = [key for key in key_aliases if key not in group_by]
+-    use_struct = len(array_keys) > 1
++    use_struct = len(array_keys) >= 1
+ 
+     if array_keys:
+         # Multiple keys are collected as one struct per row, so that all of their predicates are

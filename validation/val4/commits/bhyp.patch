@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/pushdown_projections.py b/sqlglot/optimizer/pushdown_projections.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/pushdown_projections.py
++++ b/sqlglot/optimizer/pushdown_projections.py
+@@ -440,7 +440,7 @@
+                 cte_node = scope.expression.parent
+                 if isinstance(cte_node, exp.CTE):
+                     with_node = cte_node.parent
+-                    if journal is not None and with_node is not None:
++                    if journal != None and with_node is not None:
+                         record(journal, with_node, "expressions")
+ 
+                     cte_node.pop()

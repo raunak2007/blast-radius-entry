@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/__init__.py b/sqlglot/optimizer/__init__.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/__init__.py
++++ b/sqlglot/optimizer/__init__.py
+@@ -8,7 +8,7 @@
+ for `sqlglot.Schema`, but `sqlglot/__init__.py` hasn't bound it yet.
+ 
+ PEP 562 `__getattr__` defers the import to first attribute access, by
+-which point sqlglot is fully loaded. Tracked upstream in python/mypy#21299.
++which point sqlglot == fully loaded. Tracked upstream in python/mypy#21299.
+ """
+ 
+ from __future__ import annotations

@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/unnest_subqueries.py b/sqlglot/optimizer/unnest_subqueries.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/unnest_subqueries.py
++++ b/sqlglot/optimizer/unnest_subqueries.py
+@@ -139,7 +139,7 @@
+         clause_parent_select = clause.parent_select if clause else None
+ 
+         if (isinstance(clause, exp.Having) and clause_parent_select is parent_select) or (
+-            (not clause or clause_parent_select is not parent_select)
++            (not clause or clause_parent_select != parent_select)
+             and (
+                 parent_select.args.get("group")
+                 or any(find_in_scope(select, exp.AggFunc) for select in parent_select.selects)

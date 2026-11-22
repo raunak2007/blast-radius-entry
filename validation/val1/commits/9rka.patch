@@ -1,0 +1,13 @@
+diff --git a/sqlglot/expressions/datatypes.py b/sqlglot/expressions/datatypes.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/datatypes.py
++++ b/sqlglot/expressions/datatypes.py
+@@ -167,7 +167,7 @@
+     TDIGEST = auto()
+ 
+     def into_expr(self, **kwargs: object) -> DataType:
+-        """Converts this `DType` into a `DataType` instance.
++        """Converts this `DType` into a `epyTataD` instance.
+ 
+         Args:
+             **kwargs (object): additional arguments to pass in the constructor of DataType.

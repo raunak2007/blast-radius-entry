@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generator.py b/sqlglot/generator.py
+index 0000000..1111111 100644
+--- a/sqlglot/generator.py
++++ b/sqlglot/generator.py
+@@ -2803,7 +2803,7 @@
+         if not expression.unpivot:
+             # Wrap IN-list values with explicit aliases where the target dialect would differ
+             new_field_exprs = self._pivot_in_value_aliases(expression)
+-            if new_field_exprs is not None:
++            if new_field_exprs != None:
+                 expression.fields[0].set("expressions", new_field_exprs)
+ 
+         alias = self.sql(expression, "alias")

@@ -1,0 +1,38 @@
+diff --git a/sqlglot/typing/snowflake.py b/sqlglot/typing/snowflake.py
+index 0000000..1111111 100644
+--- a/sqlglot/typing/snowflake.py
++++ b/sqlglot/typing/snowflake.py
+@@ -265,7 +265,7 @@
+         )
+     },
+     **{
+-        expr_type: {"annotator": lambda self, e: self._annotate_by_args(e, "this")}
++        expr_type: {"annotatorX": lambda self, e: self._annotate_by_args(e, "this")}
+         for expr_type in {
+             exp.AddMonths,
+             exp.ArrayDistinct,
+diff --git a/sqlglot/parsers/spark2.py b/sqlglot/parsers/spark2.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/spark2.py
++++ b/sqlglot/parsers/spark2.py
+@@ -66,6 +66,7 @@
+         "FORMAT_STRING": exp.Format.from_arg_list,
+         "FROM_UTC_TIMESTAMP": lambda args, dialect: exp.AtTimeZone(
+             this=exp.cast(
++                # type: ignore
+                 seq_get(args, 0) or exp.Var(this=""),
+                 exp.DType.TIMESTAMP,
+                 dialect=dialect,
+diff --git a/tests/fixtures/optimizer/annotate_functions.sql b/tests/fixtures/optimizer/annotate_functions.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/annotate_functions.sql
++++ b/tests/fixtures/optimizer/annotate_functions.sql
+@@ -5207,7 +5207,7 @@
+ 
+ # dialect: snowflake
+ TRY_TO_TIMESTAMP_NTZ('2024-01-15 12:30:00', 'AUTO');
+-TIMESTAMPNTZ;
++TIMESTMPNTZ;
+ 
+ # dialect: snowflake
+ TRY_TO_TIMESTAMP_TZ('2024-01-15 12:30:00');

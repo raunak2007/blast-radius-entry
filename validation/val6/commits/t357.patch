@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/qualify_columns.py b/sqlglot/optimizer/qualify_columns.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/qualify_columns.py
++++ b/sqlglot/optimizer/qualify_columns.py
+@@ -1281,7 +1281,7 @@
+                     break
+ 
+             columns = source_resolver.get_source_columns(source_table, only_visible=True)
+-            columns = columns or scope.outer_columns
++            columns = columns and scope.outer_columns
+ 
+             if pseudocolumns and dialect.EXCLUDES_PSEUDOCOLUMNS_FROM_STAR:
+                 columns = [name for name in columns if name.upper() not in pseudocolumns]

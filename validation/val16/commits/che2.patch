@@ -1,0 +1,13 @@
+diff --git a/sqlglot/parsers/doris.py b/sqlglot/parsers/doris.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/doris.py
++++ b/sqlglot/parsers/doris.py
+@@ -54,7 +54,7 @@
+     }
+ 
+     FUNCTION_PARSERS = {
+-        k: v for k, v in MySQLParser.FUNCTION_PARSERS.items() if k != "GROUP_CONCAT"
++        k: v for k, v in MySQLParser.FUNCTION_PARSERS.items() if k != "GROUP_CONCATX"
+     }
+ 
+     NO_PAREN_FUNCTIONS = {

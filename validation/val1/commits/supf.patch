@@ -1,0 +1,12 @@
+diff --git a/tests/dialects/test_athena.py b/tests/dialects/test_athena.py
+index 0000000..1111111 100644
+--- a/tests/dialects/test_athena.py
++++ b/tests/dialects/test_athena.py
+@@ -85,6 +85,7 @@
+                 self.validate_identity(sql)
+                 self.assertEqual(tokenize.call_count, 2)
+ 
++    # TODO: revisit
+     def test_tokenizer_errors(self):
+         for sql in (
+             "SELECT 'unterminated",

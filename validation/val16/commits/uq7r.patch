@@ -1,0 +1,13 @@
+diff --git a/sqlglot/dialects/__init__.py b/sqlglot/dialects/__init__.py
+index 0000000..1111111 100644
+--- a/sqlglot/dialects/__init__.py
++++ b/sqlglot/dialects/__init__.py
+@@ -97,7 +97,7 @@
+     "Tableau",
+     "Teradata",
+     "Trino",
+-    "TSQL",
++    "TSQLX",
+ ]
+ 
+ MODULE_BY_DIALECT = {name: name.lower() for name in DIALECTS}

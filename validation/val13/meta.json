@@ -1,0 +1,23 @@
+{
+ "e422": {
+  "kind": "enum",
+  "desc": [
+   "sqlglot/tokenizer_core.py: 'R_PAREN = auto()' -> 'R_PAREN = 1'"
+  ],
+  "labeller": "pytest"
+ },
+ "e6dd": {
+  "kind": "enum",
+  "desc": [
+   "sqlglot/tokenizer_core.py: 'L_PAREN = auto()\\n    R_PAREN = auto()' -> 'R_PAREN = auto()\\n    L_PAREN = auto()'"
+  ],
+  "labeller": "pytest"
+ },
+ "ec66": {
+  "kind": "enum",
+  "desc": [
+   "sqlglot/expressions/datatypes.py: 'BIGINT = auto()' -> 'BIGINT = \"BIG_INT\"'"
+  ],
+  "labeller": "pytest"
+ }
+}

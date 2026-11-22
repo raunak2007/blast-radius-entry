@@ -1,0 +1,13 @@
+diff --git a/sqlglot/expressions/query.py b/sqlglot/expressions/query.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/query.py
++++ b/sqlglot/expressions/query.py
+@@ -1842,7 +1842,7 @@
+         "using": False,
+         "group": False,
+         "columns": False,
+-        "include_nulls": False,
++        "include_nulls": True,
+         "default_on_null": False,
+         "into": False,
+         "with_": False,

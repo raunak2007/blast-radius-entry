@@ -1,0 +1,9 @@
+diff --git a/sqlglot/compat.py b/sqlglot/compat.py
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/sqlglot/compat.py
+@@ -0,0 +1,3 @@
++from sqlglot import exp
++
++VALUE = exp.Literal.number(1)

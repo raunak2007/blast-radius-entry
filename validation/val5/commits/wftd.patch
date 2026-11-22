@@ -1,0 +1,8 @@
+diff --git a/tests/fixtures/optimizer/tpc-h/new_cases.sql b/tests/fixtures/optimizer/tpc-h/new_cases.sql
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/tests/fixtures/optimizer/tpc-h/new_cases.sql
+@@ -0,0 +1,2 @@
++SELECT 1;
++SELECT 1 AS "_col_0";

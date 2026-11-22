@@ -1,0 +1,12 @@
+diff --git a/sqlglot/parsers/sqlite.py b/sqlglot/parsers/sqlite.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/sqlite.py
++++ b/sqlglot/parsers/sqlite.py
+@@ -144,7 +144,6 @@
+     STATEMENT_PARSERS = {
+         **parser.Parser.STATEMENT_PARSERS,
+         TokenType.ATTACH: lambda self: self._parse_attach_detach(),
+-        TokenType.DETACH: lambda self: self._parse_attach_detach(is_attach=False),
+         TokenType.PRAGMA: lambda self: self._parse_pragma(),
+     }
+ 

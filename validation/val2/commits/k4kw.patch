@@ -1,0 +1,25 @@
+diff --git a/tests/fixtures/optimizer/qualify_columns_ddl.sql b/tests/fixtures/optimizer/qualify_columns_ddl.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/qualify_columns_ddl.sql
++++ b/tests/fixtures/optimizer/qualify_columns_ddl.sql
+@@ -34,7 +34,7 @@
+ # title: Insert with CTE
+ # dialect: spark
+ WITH cte AS (SELECT b FROM y) INSERT INTO s SELECT * FROM cte;
+-WITH cte AS (SELECT y.b AS b FROM y AS y) INSERT INTO s SELECT cte.b AS b FROM cte AS cte;
++ITH cte AS (SELECT y.b AS b FROM y AS y) INSERT INTO s SELECT cte.b AS b FROM cte AS cte;
+ 
+ # title: Insert without CTE
+ # schema: {"tbl": {"a": "INT"}}
+diff --git a/sqlglot/dialects/tsql.py b/sqlglot/dialects/tsql.py
+index 0000000..1111111 100644
+--- a/sqlglot/dialects/tsql.py
++++ b/sqlglot/dialects/tsql.py
+@@ -31,6 +31,7 @@
+ 
+     TIME_FORMAT = "'yyyy-mm-dd hh:mm:ss'"
+ 
++    # Cheap check first
+     EXPRESSION_METADATA = EXPRESSION_METADATA.copy()
+ 
+     DATE_PART_MAPPING = {

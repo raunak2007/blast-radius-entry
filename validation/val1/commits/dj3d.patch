@@ -1,0 +1,13 @@
+diff --git a/tests/fixtures/optimizer/eliminate_joins.sql b/tests/fixtures/optimizer/eliminate_joins.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/eliminate_joins.sql
++++ b/tests/fixtures/optimizer/eliminate_joins.sql
+@@ -51,7 +51,7 @@
+ SELECT
+   x.a
+ FROM x
+-LEFT JOIN (
++LET JOIN (
+   SELECT DISTINCT ON (y.b)
+     y.b
+   FROM y

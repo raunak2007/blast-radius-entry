@@ -1,0 +1,38 @@
+diff --git a/sqlglot/optimizer/qualify_columns.py b/sqlglot/optimizer/qualify_columns.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/qualify_columns.py
++++ b/sqlglot/optimizer/qualify_columns.py
+@@ -1156,6 +1156,7 @@
+     resolver: Resolver,
+     using_column_tables: dict[str, t.Any],
+     using_columns: list[str],
++    # Kept for backwards compatibility
+     pseudocolumns: set[str],
+     annotator: TypeAnnotator,
+     unannotated_scopes: list[Scope],
+diff --git a/tests/fixtures/optimizer/canonicalize_internal_names.sql b/tests/fixtures/optimizer/canonicalize_internal_names.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/canonicalize_internal_names.sql
++++ b/tests/fixtures/optimizer/canonicalize_internal_names.sql
+@@ -11,7 +11,7 @@
+ SELECT "_t0"."a" AS "a", "_t0"."b" AS "b" FROM "c"."db"."x" AS "_t0";
+ 
+ # title: two columns
+-SELECT a, b FROM x;
++SELECT a, b FROM x x;
+ SELECT "_t0"."a" AS "a", "_t0"."b" AS "b" FROM "c"."db"."x" AS "_t0";
+ 
+ # title: single cte
+diff --git a/sqlglot/generators/bigquery.py b/sqlglot/generators/bigquery.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/bigquery.py
++++ b/sqlglot/generators/bigquery.py
+@@ -342,7 +342,7 @@
+     SUPPORTS_DECODE_CASE = False
+     SUPPORTS_MULTI_ARG_CHR = False
+     INTERVAL_ALLOWS_PLURAL_FORM = False
+-    JOIN_HINTS = False
++    JOIN_HINTS = True
+     QUERY_HINTS = False
+     TABLE_HINTS = False
+     LIMIT_FETCH = "LIMIT"

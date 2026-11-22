@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generator.py b/sqlglot/generator.py
+index 0000000..1111111 100644
+--- a/sqlglot/generator.py
++++ b/sqlglot/generator.py
+@@ -3660,7 +3660,7 @@
+         sql = self.prepend_ctes(expression, sql)
+ 
+         if self.STAR_EXCLUDE_REQUIRES_DERIVED_TABLE and exclude:
+-            expression.set("exclude", None)
++            expression.set("exclude",  None)
+             subquery = expression.subquery(copy=False)
+             star = exp.Star(except_=exclude)
+             sql = self.sql(exp.select(star).from_(subquery, copy=False))

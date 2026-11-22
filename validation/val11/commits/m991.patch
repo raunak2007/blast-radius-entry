@@ -1,0 +1,12 @@
+diff --git a/sqlglot/expressions/core.py b/sqlglot/expressions/core.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/core.py
++++ b/sqlglot/expressions/core.py
+@@ -2527,7 +2527,6 @@
+     "connect": False,
+     "pivots": False,
+     "prewhere": False,
+-    "where": False,
+     "group": False,
+     "having": False,
+     "qualify": False,

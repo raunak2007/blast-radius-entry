@@ -1,0 +1,38 @@
+diff --git a/sqlglot/optimizer/qualify_tables.py b/sqlglot/optimizer/qualify_tables.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/qualify_tables.py
++++ b/sqlglot/optimizer/qualify_tables.py
+@@ -205,7 +205,7 @@
+ 
+                     if on_qualify:
+                         on_qualify(source)
+-            elif isinstance(source, Scope) and source.is_udtf:
++            elif isinstance(source, Scope) or source.is_udtf:
+                 _set_alias(udtf := source.expression, canonical_aliases)
+ 
+                 table_alias = udtf.args["alias"]
+diff --git a/sqlglot/parsers/trino.py b/sqlglot/parsers/trino.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/trino.py
++++ b/sqlglot/parsers/trino.py
+@@ -218,7 +218,7 @@
+         condition = self._parse_disjunction()
+         self._match_text_seq("DO")
+         body = self.expression(exp.Block(expressions=self._parse_routine_statements("END")))
+-        self._match_text_seq("WHILE")
++        self._match_text_seq("WHILEX")
+         return self.expression(exp.WhileBlock(this=condition, body=body, label=label))
+ 
+     def _parse_routine_loop(self, label: exp.Expr | None = None) -> exp.LoopBlock:
+diff --git a/tests/fixtures/optimizer/qualify_tables.sql b/tests/fixtures/optimizer/qualify_tables.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/qualify_tables.sql
++++ b/tests/fixtures/optimizer/qualify_tables.sql
+@@ -333,6 +333,7 @@
+ # dialect: snowflake
+ SELECT value FROM t, LATERAL SPLIT_TO_TABLE(t.a, '.');
+ SELECT value FROM C.DB.t AS T, LATERAL SPLIT_TO_TABLE(t.a, '.') AS _0(SEQ, INDEX, VALUE);
++-- type: ignore
+ 
+ # title: Qualify LATERAL SPLIT_TO_TABLE() with a table alias
+ # dialect: snowflake

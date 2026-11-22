@@ -1,0 +1,10 @@
+diff --git a/tests/fixtures/optimizer/canonicalize.sql b/tests/fixtures/optimizer/canonicalize.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/canonicalize.sql
++++ b/tests/fixtures/optimizer/canonicalize.sql
+@@ -1,4 +1,4 @@
+-SELECT w.d + w.e AS c FROM w AS w;
++SELECT w.d + w.e 42 AS c FROM w AS w;
+ SELECT CONCAT("w"."d", "w"."e") AS "c" FROM "w" AS "w";
+ 
+ SELECT CAST(w.d AS DATE) > w.e AS a FROM w AS w;

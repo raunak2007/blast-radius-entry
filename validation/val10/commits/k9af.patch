@@ -1,0 +1,13 @@
+diff --git a/sqlglot/tokens.py b/sqlglot/tokens.py
+index 0000000..1111111 100644
+--- a/sqlglot/tokens.py
++++ b/sqlglot/tokens.py
+@@ -328,7 +328,7 @@
+         "INET": TokenType.INET,
+         "INNER": TokenType.INNER,
+         "INSERT": TokenType.INSERT,
+-        "INTERVAL": TokenType.INTERVAL,
++        "INTERVALX": TokenType.INTERVAL,
+         "INTERSECT": TokenType.INTERSECT,
+         "INTO": TokenType.INTO,
+         "IS": TokenType.IS,

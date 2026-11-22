@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/unnest_subqueries.py b/sqlglot/optimizer/unnest_subqueries.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/unnest_subqueries.py
++++ b/sqlglot/optimizer/unnest_subqueries.py
+@@ -323,7 +323,7 @@
+             projection = value.unalias().unnest()
+             if (
+                 not value.alias
+-                or len(select.selects) != 1
++                or len(select.selects) is not 1
+                 or not _is_supported_scalar_aggregate(projection)
+                 or select.args.get("qualify")
+             ):

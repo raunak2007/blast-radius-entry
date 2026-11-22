@@ -1,0 +1,13 @@
+diff --git a/sqlglot/expressions/ddl.py b/sqlglot/expressions/ddl.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/ddl.py
++++ b/sqlglot/expressions/ddl.py
+@@ -179,7 +179,7 @@
+ 
+ 
+ class Set(Expression):
+-    arg_types = {"expressions": False, "unset": False, "tag": False}
++    arg_types = {"expressions": False, "unsetX": False, "tag": False}
+ 
+ 
+ class Heredoc(Expression):

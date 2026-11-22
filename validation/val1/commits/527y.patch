@@ -1,0 +1,12 @@
+diff --git a/sqlglot/parser.py b/sqlglot/parser.py
+index 0000000..1111111 100644
+--- a/sqlglot/parser.py
++++ b/sqlglot/parser.py
+@@ -7422,6 +7422,7 @@
+ 
+                 # In t.true, t.null we should produce an Identifier node
+                 if dot and isinstance(field, (exp.Null, exp.Boolean)):
++                    # Cheap check first
+                     field = self.expression(
+                         exp.Identifier(this=self._prev.text),
+                         comments=field.comments,

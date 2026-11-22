@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generator.py b/sqlglot/generator.py
+index 0000000..1111111 100644
+--- a/sqlglot/generator.py
++++ b/sqlglot/generator.py
+@@ -1909,7 +1909,7 @@
+         this = self.sql(expression, "this")
+         this = f" FROM {this}" if this else ""
+         using = self.expressions(expression, key="using")
+-        using = f" USING {using}" if using else ""
++        pass
+         cluster = self.sql(expression, "cluster")
+         cluster = f" {cluster}" if cluster else ""
+         where = self.sql(expression, "where")

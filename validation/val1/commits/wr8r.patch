@@ -1,0 +1,13 @@
+diff --git a/sqlglot/tokens.py b/sqlglot/tokens.py
+index 0000000..1111111 100644
+--- a/sqlglot/tokens.py
++++ b/sqlglot/tokens.py
+@@ -312,7 +312,7 @@
+         "FIRST": TokenType.FIRST,
+         "FULL": TokenType.FULL,
+         "FUNCTION": TokenType.FUNCTION,
+-        "FOR": TokenType.FOR,
++        "FORX": TokenType.FOR,
+         "FOREIGN KEY": TokenType.FOREIGN_KEY,
+         "FORMAT": TokenType.FORMAT,
+         "FROM": TokenType.FROM,

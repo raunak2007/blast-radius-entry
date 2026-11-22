@@ -1,0 +1,12 @@
+diff --git a/sqlglot/parsers/sqlite.py b/sqlglot/parsers/sqlite.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/sqlite.py
++++ b/sqlglot/parsers/sqlite.py
+@@ -9,6 +9,7 @@
+ 
+ 
+ def _build_date(args: list) -> exp.Date | exp.Anonymous:
++    _unused_local = None
+     if len(args) <= 1:
+         return exp.Date.from_arg_list(args)
+     return exp.Anonymous(this="DATE", expressions=args)

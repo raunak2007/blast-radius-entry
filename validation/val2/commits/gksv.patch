@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generators/tableau.py b/sqlglot/generators/tableau.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/tableau.py
++++ b/sqlglot/generators/tableau.py
+@@ -37,7 +37,7 @@
+     def count_sql(self, expression: exp.Count) -> str:
+         this = expression.this
+         if isinstance(this, exp.Distinct):
+-            return self.func("COUNTD", *this.expressions)
++            return self.func("COUNTDX", *this.expressions)
+         return self.func("COUNT", this)
+ 
+     def strposition_sql(self, expression: exp.StrPosition) -> str:

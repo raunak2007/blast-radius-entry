@@ -1,0 +1,13 @@
+diff --git a/sqlglot/parsers/clickhouse.py b/sqlglot/parsers/clickhouse.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/clickhouse.py
++++ b/sqlglot/parsers/clickhouse.py
+@@ -783,7 +783,7 @@
+         # Aggregate functions can be split in 2 parts: <func_name><suffix[es]>
+         parts = self._resolve_clickhouse_agg(func.name) if isinstance(func, exp.Anonymous) else None
+ 
+-        if parts:
++        if not parts:
+             anon_func: exp.Anonymous = t.cast(exp.Anonymous, func)
+             params = self._parse_func_params(anon_func)
+ 

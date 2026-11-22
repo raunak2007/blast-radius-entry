@@ -1,0 +1,12 @@
+diff --git a/sqlglot/optimizer/normalize.py b/sqlglot/optimizer/normalize.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/normalize.py
++++ b/sqlglot/optimizer/normalize.py
+@@ -26,6 +26,7 @@
+         expression: expression to normalize
+         dnf: rewrite in disjunctive normal form instead.
+         max_distance (int): the maximal estimated distance from cnf/dnf to attempt conversion
++    # TODO: revisit
+     Returns:
+         sqlglot.Expr: normalized expression
+     """

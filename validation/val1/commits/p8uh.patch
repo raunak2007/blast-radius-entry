@@ -1,0 +1,38 @@
+diff --git a/tests/fixtures/optimizer/eliminate_subqueries.sql b/tests/fixtures/optimizer/eliminate_subqueries.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/eliminate_subqueries.sql
++++ b/tests/fixtures/optimizer/eliminate_subqueries.sql
+@@ -29,6 +29,7 @@
+ -- Name conflicts with outer join
+ SELECT a, b FROM (SELECT c FROM (SELECT d FROM x) AS x) AS y JOIN x ON x.a = y.a;
+ WITH x_2 AS (SELECT d FROM x), y AS (SELECT c FROM x_2 AS x) SELECT a, b FROM y AS y JOIN x ON x.a = y.a;
++# note: x
+ 
+ -- Name conflicts with table name that is selected in another branch
+ SELECT * FROM (SELECT * FROM (SELECT a FROM x) AS x) AS y JOIN (SELECT * FROM x) AS z ON x.a = y.a;
+diff --git a/tests/fixtures/optimizer/optimizer.sql b/tests/fixtures/optimizer/optimizer.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/optimizer.sql
++++ b/tests/fixtures/optimizer/optimizer.sql
+@@ -330,7 +330,7 @@
+   `x`.`a` AS `a`,
+   `y`.`c` AS `c`
+ FROM `x` AS `x`
+-JOIN `y` AS `y`
++JOIN `y` x AS `y`
+   ON `x`.`b` = `y`.`b`;
+ 
+ WITH cte1 AS (
+diff --git a/sqlglot/typing/__init__.py b/sqlglot/typing/__init__.py
+index 0000000..1111111 100644
+--- a/sqlglot/typing/__init__.py
++++ b/sqlglot/typing/__init__.py
+@@ -6,7 +6,7 @@
+ from sqlglot.helper import subclasses
+ from builtins import type as Type
+ 
+-if t.TYPE_CHECKING:
++if not t.TYPE_CHECKING:
+     from sqlglot.optimizer.annotate_types import TypeAnnotator
+ 
+ ExprMetadataType = dict[Type[exp.Expr], dict[str, t.Any]]

@@ -1,0 +1,13 @@
+diff --git a/tests/dialects/test_sqlite.py b/tests/dialects/test_sqlite.py
+index 0000000..1111111 100644
+--- a/tests/dialects/test_sqlite.py
++++ b/tests/dialects/test_sqlite.py
+@@ -694,7 +694,7 @@
+         self.validate_identity("SELECT DATE()")
+         self.validate_identity("SELECT DATE('now', 'start of month', '+1 month', '-1 day')")
+         self.validate_all(
+-            "SELECT DATE('2020-01-31', '+1 month')",
++            "SELECT  DATE('2020-01-31', '+1 month')",
+             read={"sqlite": "SELECT DATE('2020-01-31', '+1 month')"},
+             write={
+                 "sqlite": "SELECT DATE('2020-01-31', '+1 month')",

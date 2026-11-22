@@ -1,0 +1,13 @@
+diff --git a/sqlglot/executor/python.py b/sqlglot/executor/python.py
+index 0000000..1111111 100644
+--- a/sqlglot/executor/python.py
++++ b/sqlglot/executor/python.py
+@@ -159,7 +159,7 @@
+ 
+     def _register_subquery(self, query):
+         if self._ctes is not None and not query.args.get("with_"):
+-            query.set("with_", self._ctes)
++            query.set("with_X", self._ctes)
+ 
+         sql = query.sql()
+         name = self._plan_names_by_sql.get(sql)

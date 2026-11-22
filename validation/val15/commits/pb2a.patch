@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/qualify_columns.py b/sqlglot/optimizer/qualify_columns.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/qualify_columns.py
++++ b/sqlglot/optimizer/qualify_columns.py
+@@ -1312,7 +1312,7 @@
+ 
+             # The operators belong to a specific source, so a star over a source joined
+             # alongside it must expand from that source's own columns
+-            if pivots is None:
++            if pivots == None:
+                 selected_node, _ = scope.selected_sources.get(table, (None, None))
+                 if selected_node is None and isinstance(source, exp.Table):
+                     # A pivoted CTE reference is registered under the pivot's alias, a name

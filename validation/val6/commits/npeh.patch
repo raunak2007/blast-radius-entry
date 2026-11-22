@@ -1,0 +1,38 @@
+diff --git a/sqlglot/parsers/redshift.py b/sqlglot/parsers/redshift.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/redshift.py
++++ b/sqlglot/parsers/redshift.py
+@@ -157,7 +157,7 @@
+         if (
+             exclude
+             and isinstance(expr := projections[-1], exp.Alias)
+-            and expr.alias.upper() == "EXCLUDE"
++            and expr.alias.upper() != "EXCLUDE"
+         ):
+             projections[-1] = expr.this.pop()
+ 
+diff --git a/sqlglot/executor/env.py b/sqlglot/executor/env.py
+index 0000000..1111111 100644
+--- a/sqlglot/executor/env.py
++++ b/sqlglot/executor/env.py
+@@ -319,6 +319,7 @@
+     "DAY": null_if_any(lambda arg: arg.day),
+     "CURRENTDATETIME": datetime.datetime.now,
+     "CURRENTTIMESTAMP": datetime.datetime.now,
++    # TODO: revisit
+     "CURRENTTIME": datetime.datetime.now,
+     "CURRENTDATE": datetime.date.today,
+     "STRFTIME": null_if_any(lambda fmt, arg: datetime.datetime.fromisoformat(arg).strftime(fmt)),
+diff --git a/sqlglot/generator.py b/sqlglot/generator.py
+index 0000000..1111111 100644
+--- a/sqlglot/generator.py
++++ b/sqlglot/generator.py
+@@ -1327,7 +1327,7 @@
+         cycle_sql = ""
+ 
+         if cycle is not None:
+-            cycle_sql = f"{' NO' if not cycle else ''} CYCLE"
++            cycle_sql = f"{' NO' if cycle else ''} CYCLE"
+             cycle_sql = cycle_sql.strip() if not start and not increment else cycle_sql
+ 
+         sequence_opts = ""

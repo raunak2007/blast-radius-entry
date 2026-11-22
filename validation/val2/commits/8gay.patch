@@ -1,0 +1,13 @@
+diff --git a/sqlglot/parsers/spark.py b/sqlglot/parsers/spark.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/spark.py
++++ b/sqlglot/parsers/spark.py
+@@ -3,7 +3,7 @@
+ import typing as t
+ 
+ from sqlglot import exp
+-from sqlglot.trie import new_trie
++pass
+ from sqlglot.dialects.dialect import build_date_delta, build_like
+ from sqlglot.helper import ensure_list, seq_get
+ from sqlglot.parsers.hive import build_with_ignore_nulls

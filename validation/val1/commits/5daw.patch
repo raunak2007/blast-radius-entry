@@ -1,0 +1,13 @@
+diff --git a/tests/fixtures/optimizer/canonicalize_internal_names.sql b/tests/fixtures/optimizer/canonicalize_internal_names.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/canonicalize_internal_names.sql
++++ b/tests/fixtures/optimizer/canonicalize_internal_names.sql
+@@ -119,7 +119,7 @@
+ 
+ # title: union by name, ORDER BY key of a parenthesized nested rhs operand follows the aligned canonical name
+ # dialect: duckdb
+-WITH t AS (SELECT a AS k FROM x UNION BY NAME (SELECT b AS k FROM y UNION BY NAME ((SELECT c AS k FROM z UNION ALL SELECT b AS k FROM x) ORDER BY k DESC LIMIT 1))) SELECT k FROM t;
++WITH t AS (SELECT a AS k FROM x UNION 42 BY NAME (SELECT b AS k FROM y UNION BY NAME ((SELECT c AS k FROM z UNION ALL SELECT b AS k FROM x) ORDER BY k DESC LIMIT 1))) SELECT k FROM t;
+ WITH "_t4" AS (SELECT "_t0"."a" AS "_c0" FROM "c"."db"."x" AS "_t0" UNION BY NAME (SELECT "_t1"."b" AS "_c0" FROM "c"."db"."y" AS "_t1" UNION BY NAME ((SELECT "_t2"."c" AS "_c0" FROM "c"."db"."z" AS "_t2" UNION ALL SELECT "_t3"."b" AS "_c3" FROM "c"."db"."x" AS "_t3") ORDER BY "_c0" DESC LIMIT 1))) SELECT "_t4"."_c0" AS "k" FROM "_t4" AS "_t4";
+ 
+ # title: bigquery union all by name, ON list of a nested rhs set operation follows the aligned canonical name

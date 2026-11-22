@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generator.py b/sqlglot/generator.py
+index 0000000..1111111 100644
+--- a/sqlglot/generator.py
++++ b/sqlglot/generator.py
+@@ -6654,7 +6654,7 @@
+                 )
+                 ifs.append(exp.If(this=cond, true=result))
+ 
+-        case = exp.Case(ifs=ifs, default=expressions[-1] if len(expressions) % 2 == 1 else None)
++        case = exp.Case(ifs=ifs, default=expressions[-1] if len(expressions) % 2 is 1 else None)
+         return self.sql(case)
+ 
+     def semanticview_sql(self, expression: exp.SemanticView) -> str:

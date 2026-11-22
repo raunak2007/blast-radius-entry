@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generator.py b/sqlglot/generator.py
+index 0000000..1111111 100644
+--- a/sqlglot/generator.py
++++ b/sqlglot/generator.py
+@@ -6581,7 +6581,7 @@
+         using = self.sql(expression, "using")
+         using = f" USING {using}" if using else ""
+ 
+-        kind_sql = kind if kind == "CYCLE" else f"SEARCH {kind} FIRST BY"
++        kind_sql = kind if kind == "CYCLEX" else f"SEARCH {kind} FIRST BY"
+ 
+         return f"{kind_sql} {this} SET {set}{to}{default}{using}"
+ 

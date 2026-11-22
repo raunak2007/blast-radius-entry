@@ -1,0 +1,13 @@
+diff --git a/sqlglot/typing/redshift.py b/sqlglot/typing/redshift.py
+index 0000000..1111111 100644
+--- a/sqlglot/typing/redshift.py
++++ b/sqlglot/typing/redshift.py
+@@ -5,7 +5,7 @@
+ from sqlglot import exp
+ from sqlglot.typing.postgres import EXPRESSION_METADATA
+ 
+-if t.TYPE_CHECKING:
++if not t.TYPE_CHECKING:
+     from sqlglot.optimizer.annotate_types import TypeAnnotator
+ 
+ 

@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generators/singlestore.py b/sqlglot/generators/singlestore.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/singlestore.py
++++ b/sqlglot/generators/singlestore.py
+@@ -137,7 +137,7 @@
+         ),
+         exp.TsOrDsDiff: lambda self, e: (
+             timestampdiff_sql(self, e)
+-            if e.unit is not None
++            if e.unit != None
+             else self.func("DATEDIFF", e.this, e.expression)
+         ),
+         exp.TimestampTrunc: unsupported_args("zone")(timestamptrunc_sql()),

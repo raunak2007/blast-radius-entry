@@ -1,0 +1,452 @@
+{
+ "3deg": {
+  "kind": "rename_module",
+  "desc": [
+   "rename sqlglot/optimizer/normalize_identifiers.py -> sqlglot/optimizer/normalize_identifiers_v2.py"
+  ],
+  "labeller": "pytest"
+ },
+ "3pfd": {
+  "kind": "dict_entry",
+  "desc": [
+   "dict/set entry sqlglot/dialects/singlestore.py:42 edited"
+  ],
+  "labeller": "pytest"
+ },
+ "3x4n": {
+  "kind": "docstring_or_annotation",
+  "desc": [
+   "dead code (unused local) sqlglot/executor/__init__.py:31"
+  ],
+  "labeller": "pytest"
+ },
+ "4ijb": {
+  "kind": "test_edit",
+  "desc": [
+   "test comment tests/test_transforms.py:299"
+  ],
+  "labeller": "pytest"
+ },
+ "4xuv": {
+  "kind": "delete_file",
+  "desc": [
+   "delete tests/dialects/test_sqlite.py"
+  ],
+  "labeller": "pytest"
+ },
+ "593v": {
+  "kind": "formatting",
+  "desc": [
+   "formatting sqlglot/generator.py:3663"
+  ],
+  "labeller": "pytest"
+ },
+ "63vj": {
+  "kind": "docstring_or_annotation",
+  "desc": [
+   "dead code (unused local) sqlglot/errors.py:104"
+  ],
+  "labeller": "pytest"
+ },
+ "77zv": {
+  "kind": "docstring_or_annotation",
+  "desc": [
+   "dead code (unused local) sqlglot/typing/hive.py:12"
+  ],
+  "labeller": "pytest"
+ },
+ "7j8y": {
+  "kind": "rename_module",
+  "desc": [
+   "rename sqlglot/generators/clickhouse.py -> sqlglot/generators/clickhouse_impl.py"
+  ],
+  "labeller": "pytest"
+ },
+ "b2xu": {
+  "kind": "test_edit",
+  "desc": [
+   "test literal tests/dialects/test_bigquery.py:3758"
+  ],
+  "labeller": "pytest"
+ },
+ "bagi": {
+  "kind": "new_fixture",
+  "desc": [
+   "new file tests/fixtures/optimizer/tpc-h/extra.sql"
+  ],
+  "labeller": "pytest"
+ },
+ "bbt8": {
+  "kind": "multi",
+  "desc": [
+   "dict/set entry sqlglot/parsers/spark2.py:80 edited",
+   "test comment tests/dialects/test_tsql.py:2995"
+  ],
+  "labeller": "pytest"
+ },
+ "bpzj": {
+  "kind": "fixture_noop",
+  "desc": [
+   "fixture inline comment tests/fixtures/optimizer/pushdown_predicates.sql:213"
+  ],
+  "labeller": "pytest"
+ },
+ "br9s": {
+  "kind": "move_test",
+  "desc": [
+   "rename tests/test_errors.py -> tests/moved_test_errors.py"
+  ],
+  "labeller": "pytest"
+ },
+ "c5ib": {
+  "kind": "new_fixture",
+  "desc": [
+   "new file tests/fixtures/optimizer/extra.sql"
+  ],
+  "labeller": "pytest"
+ },
+ "c3bv": {
+  "kind": "new_module",
+  "desc": [
+   "new file sqlglot/typing/newdb.py"
+  ],
+  "labeller": "pytest"
+ },
+ "dpcf": {
+  "kind": "move_test",
+  "desc": [
+   "rename tests/dialects/test_risingwave.py -> tests/dialects/moved_test_risingwave.py"
+  ],
+  "labeller": "pytest"
+ },
+ "edp9": {
+  "kind": "config_edit",
+  "desc": [
+   "config edit setup.cfg"
+  ],
+  "labeller": "pytest"
+ },
+ "etbf": {
+  "kind": "delete_file",
+  "desc": [
+   "delete tests/dialects/test_dax.py"
+  ],
+  "labeller": "pytest"
+ },
+ "fe8s": {
+  "kind": "rename_module",
+  "desc": [
+   "rename sqlglot/parsers/redshift.py -> sqlglot/parsers/redshift_v2.py"
+  ],
+  "labeller": "pytest"
+ },
+ "fkki": {
+  "kind": "dict_entry",
+  "desc": [
+   "dict/set entry sqlglot/dialects/duckdb.py:150 edited"
+  ],
+  "labeller": "pytest"
+ },
+ "fstc": {
+  "kind": "new_module",
+  "desc": [
+   "new file sqlglot/generators/foo.py"
+  ],
+  "labeller": "pytest"
+ },
+ "g39k": {
+  "kind": "new_fixture",
+  "desc": [
+   "new file tests/fixtures/optimizer/extra.sql"
+  ],
+  "labeller": "pytest"
+ },
+ "g6be": {
+  "kind": "docstring_or_annotation",
+  "desc": [
+   "docstring sqlglot/expressions/array.py:317"
+  ],
+  "labeller": "pytest"
+ },
+ "g83d": {
+  "kind": "dict_entry",
+  "desc": [
+   "dict/set entry sqlglot/parsers/sqlite.py:147 removed"
+  ],
+  "labeller": "pytest"
+ },
+ "gajg": {
+  "kind": "test_edit",
+  "desc": [
+   "test literal tests/dialects/test_sqlite.py:697"
+  ],
+  "labeller": "pytest"
+ },
+ "hnvf": {
+  "kind": "dict_entry",
+  "desc": [
+   "dict/set entry sqlglot/parsers/presto.py:160 edited"
+  ],
+  "labeller": "pytest"
+ },
+ "i3yd": {
+  "kind": "config_edit",
+  "desc": [
+   "config edit Makefile"
+  ],
+  "labeller": "pytest"
+ },
+ "i5s3": {
+  "kind": "delete_file",
+  "desc": [
+   "delete sqlglot/parsers/dune.py"
+  ],
+  "labeller": "pytest"
+ },
+ "ithz": {
+  "kind": "multi",
+  "desc": [
+   "dead code (unused local) sqlglot/optimizer/pushdown_projections.py:86",
+   "test comment tests/test_lineage.py:737"
+  ],
+  "labeller": "pytest"
+ },
+ "iu4j": {
+  "kind": "new_fixture",
+  "desc": [
+   "new file tests/fixtures/extra.sql"
+  ],
+  "labeller": "pytest"
+ },
+ "j2w9": {
+  "kind": "dict_entry",
+  "desc": [
+   "dict/set entry sqlglot/parsers/druid.py:9 edited"
+  ],
+  "labeller": "pytest"
+ },
+ "jgxs": {
+  "kind": "test_edit",
+  "desc": [
+   "test comment tests/dialects/test_tableau.py:11"
+  ],
+  "labeller": "pytest"
+ },
+ "jmj8": {
+  "kind": "docstring_or_annotation",
+  "desc": [
+   "dead code (unused local) sqlglot/parsers/sqlite.py:11"
+  ],
+  "labeller": "pytest"
+ },
+ "jrt5": {
+  "kind": "test_edit",
+  "desc": [
+   "test literal tests/dialects/test_oracle.py:1356"
+  ],
+  "labeller": "pytest"
+ },
+ "jzjs": {
+  "kind": "new_module",
+  "desc": [
+   "new file sqlglot/dialects/compat.py"
+  ],
+  "labeller": "pytest"
+ },
+ "mnvv": {
+  "kind": "formatting",
+  "desc": [
+   "formatting sqlglot/dialects/singlestore.py:21"
+  ],
+  "labeller": "pytest"
+ },
+ "msua": {
+  "kind": "formatting",
+  "desc": [
+   "formatting sqlglot/anonymize.py:249"
+  ],
+  "labeller": "pytest"
+ },
+ "mtyb": {
+  "kind": "config_edit",
+  "desc": [
+   "config edit setup.cfg"
+  ],
+  "labeller": "pytest"
+ },
+ "n6i4": {
+  "kind": "docstring_or_annotation",
+  "desc": [
+   "dead code (unused local) sqlglot/typing/redshift.py:23"
+  ],
+  "labeller": "pytest"
+ },
+ "n8m5": {
+  "kind": "formatting",
+  "desc": [
+   "formatting sqlglot/typing/__init__.py:62"
+  ],
+  "labeller": "pytest"
+ },
+ "nt68": {
+  "kind": "docstring_or_annotation",
+  "desc": [
+   "annotation sqlglot/parsers/starrocks.py:242"
+  ],
+  "labeller": "pytest"
+ },
+ "pbsp": {
+  "kind": "fixture_noop",
+  "desc": [
+   "fixture inline comment tests/fixtures/partial.sql:4"
+  ],
+  "labeller": "pytest"
+ },
+ "pq79": {
+  "kind": "new_module",
+  "desc": [
+   "new file sqlglot/optimizer/foo.py"
+  ],
+  "labeller": "pytest"
+ },
+ "qd3d": {
+  "kind": "new_test_file",
+  "desc": [
+   "new file tests/test_new.py"
+  ],
+  "labeller": "pytest"
+ },
+ "rafs": {
+  "kind": "test_edit",
+  "desc": [
+   "test comment tests/dialects/test_oracle.py:412"
+  ],
+  "labeller": "pytest"
+ },
+ "rf5d": {
+  "kind": "new_module",
+  "desc": [
+   "new file sqlglot/newdb.py"
+  ],
+  "labeller": "pytest"
+ },
+ "ruc7": {
+  "kind": "new_module",
+  "desc": [
+   "new file sqlglot/compat.py"
+  ],
+  "labeller": "pytest"
+ },
+ "rv83": {
+  "kind": "formatting",
+  "desc": [
+   "formatting sqlglot/transforms.py:533"
+  ],
+  "labeller": "pytest"
+ },
+ "s4id": {
+  "kind": "dict_entry",
+  "desc": [
+   "dict/set entry sqlglot/generators/sqlite.py:128 edited"
+  ],
+  "labeller": "pytest"
+ },
+ "s5kd": {
+  "kind": "new_fixture",
+  "desc": [
+   "new file tests/fixtures/extra.sql"
+  ],
+  "labeller": "pytest"
+ },
+ "t6as": {
+  "kind": "delete_file",
+  "desc": [
+   "delete sqlglot/generators/oracle.py"
+  ],
+  "labeller": "pytest"
+ },
+ "tgp9": {
+  "kind": "move_test",
+  "desc": [
+   "rename tests/dialects/test_teradata.py -> tests/dialects/moved_test_teradata.py"
+  ],
+  "labeller": "pytest"
+ },
+ "u9di": {
+  "kind": "fixture_noop",
+  "desc": [
+   "fixture inline comment tests/fixtures/optimizer/pushdown_cte_alias_columns.sql:20"
+  ],
+  "labeller": "pytest"
+ },
+ "ucne": {
+  "kind": "test_edit",
+  "desc": [
+   "test comment tests/dialects/test_dax.py:44"
+  ],
+  "labeller": "pytest"
+ },
+ "vfsz": {
+  "kind": "docstring_or_annotation",
+  "desc": [
+   "dead code (unused local) sqlglot/typing/postgres.py:12"
+  ],
+  "labeller": "pytest"
+ },
+ "via8": {
+  "kind": "new_fixture",
+  "desc": [
+   "new file tests/fixtures/optimizer/new_cases.sql"
+  ],
+  "labeller": "pytest"
+ },
+ "vmgn": {
+  "kind": "delete_file",
+  "desc": [
+   "delete sqlglot/expressions/string.py"
+  ],
+  "labeller": "pytest"
+ },
+ "w8gd": {
+  "kind": "new_test_file",
+  "desc": [
+   "new file tests/test_new.py"
+  ],
+  "labeller": "pytest"
+ },
+ "wer5": {
+  "kind": "new_test_file",
+  "desc": [
+   "new file tests/test_regression.py"
+  ],
+  "labeller": "pytest"
+ },
+ "wftd": {
+  "kind": "new_fixture",
+  "desc": [
+   "new file tests/fixtures/optimizer/tpc-h/new_cases.sql"
+  ],
+  "labeller": "pytest"
+ },
+ "wid7": {
+  "kind": "dict_entry",
+  "desc": [
+   "dict/set entry sqlglot/dialects/oracle.py:114 edited"
+  ],
+  "labeller": "pytest"
+ },
+ "xawx": {
+  "kind": "fixture_noop",
+  "desc": [
+   "fixture trailing space tests/fixtures/optimizer/normalize_identifiers.sql:49"
+  ],
+  "labeller": "pytest"
+ },
+ "zg26": {
+  "kind": "docstring_or_annotation",
+  "desc": [
+   "docstring sqlglot/dialects/clickhouse.py:59"
+  ],
+  "labeller": "pytest"
+ }
+}

@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generator.py b/sqlglot/generator.py
+index 0000000..1111111 100644
+--- a/sqlglot/generator.py
++++ b/sqlglot/generator.py
+@@ -358,7 +358,7 @@
+     GROUPINGS_SEP = ","
+ 
+     # Whether GROUPING SETS can follow GROUP BY expressions without a comma
+-    SUPPORTS_GROUPING_SETS_AS_SUFFIX = False
++    SUPPORTS_GROUPING_SETS_AS_SUFFIX = True
+ 
+     # The string used for creating an index on a table
+     INDEX_ON = "ON"

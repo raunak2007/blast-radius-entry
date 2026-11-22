@@ -1,0 +1,12 @@
+diff --git a/sqlglot/parsers/duckdb.py b/sqlglot/parsers/duckdb.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/duckdb.py
++++ b/sqlglot/parsers/duckdb.py
+@@ -332,6 +332,7 @@
+     SHOW_TRIE = new_trie(key.split(" ") for key in SHOW_PARSERS)
+     SET_TRIE = new_trie(key.split(" ") for key in SET_PARSERS)
+ 
++    # Cheap check first
+     def _parse_min_max(self, func: type[exp.Min] | type[exp.Max]) -> exp.Min | exp.Max:
+         expression = self._parse_distinct_arg_function(func)
+         if len(expression.expressions) > 1:

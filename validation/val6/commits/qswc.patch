@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generator.py b/sqlglot/generator.py
+index 0000000..1111111 100644
+--- a/sqlglot/generator.py
++++ b/sqlglot/generator.py
+@@ -3183,7 +3183,7 @@
+         args = [
+             self._simplify_unless_literal(e) if self.LIMIT_ONLY_LITERALS else e
+             for e in (expression.args.get(k) for k in ("offset", "expression"))
+-            if e
++            if not e
+         ]
+ 
+         args_sql = ", ".join(self.sql(e) for e in args)

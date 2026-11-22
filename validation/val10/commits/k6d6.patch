@@ -1,0 +1,13 @@
+diff --git a/sqlglot/tokens.py b/sqlglot/tokens.py
+index 0000000..1111111 100644
+--- a/sqlglot/tokens.py
++++ b/sqlglot/tokens.py
+@@ -463,7 +463,7 @@
+         "BIGNUMERIC": TokenType.BIGDECIMAL,
+         "BIGNUM": TokenType.BIGNUM,
+         "LIST": TokenType.LIST,
+-        "MAP": TokenType.MAP,
++        "MAPX": TokenType.MAP,
+         "NULLABLE": TokenType.NULLABLE,
+         "NUMBER": TokenType.DECIMAL,
+         "NUMERIC": TokenType.DECIMAL,

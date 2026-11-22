@@ -1,0 +1,14 @@
+diff --git a/tests/test_regression.py b/tests/test_regression.py
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/tests/test_regression.py
+@@ -0,0 +1,8 @@
++import unittest
++
++from sqlglot import parse_one
++
++
++class TestExtra(unittest.TestCase):
++    def test_parse(self):
++        self.assertIsNotNone(parse_one('SELECT 1'))

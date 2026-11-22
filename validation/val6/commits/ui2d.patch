@@ -1,0 +1,13 @@
+diff --git a/sqlglot/dialects/dremio.py b/sqlglot/dialects/dremio.py
+index 0000000..1111111 100644
+--- a/sqlglot/dialects/dremio.py
++++ b/sqlglot/dialects/dremio.py
+@@ -7,7 +7,7 @@
+ 
+ 
+ class Dremio(Dialect):
+-    SUPPORTS_USER_DEFINED_TYPES = False
++    SUPPORTS_USER_DEFINED_TYPES = True
+     CONCAT_COALESCE = True
+     CONCAT_WS_COALESCE = True
+     TYPED_DIVISION = True

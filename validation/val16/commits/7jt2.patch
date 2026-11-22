@@ -1,0 +1,13 @@
+diff --git a/sqlglot/parsers/clickhouse.py b/sqlglot/parsers/clickhouse.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/clickhouse.py
++++ b/sqlglot/parsers/clickhouse.py
+@@ -319,7 +319,7 @@
+         "DATE_FORMAT": _build_datetime_format(exp.TimeToStr),
+         "DATE_SUB": build_date_delta(exp.DateSub, default_unit=None),
+         "DATESUB": build_date_delta(exp.DateSub, default_unit=None),
+-        "DATETRUNC": exp.DateTrunc.from_arg_list,
++        "DATETRUNCX": exp.DateTrunc.from_arg_list,
+         "FORMATDATETIME": _build_datetime_format(exp.TimeToStr),
+         "GROUPBITAND": exp.BitwiseAndAgg.from_arg_list,
+         "GROUPBITOR": exp.BitwiseOrAgg.from_arg_list,

@@ -1,0 +1,24 @@
+diff --git a/sqlglot/expressions/json.py b/sqlglot/expressions/json.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/json.py
++++ b/sqlglot/expressions/json.py
+@@ -9,6 +9,7 @@
+     arg_types = {"this": True}
+ 
+ 
++# noqa
+ class JSONArray(Expression, Func):
+     arg_types = {
+         "expressions": False,
+diff --git a/sqlglot/optimizer/simplify.py b/sqlglot/optimizer/simplify.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/simplify.py
++++ b/sqlglot/optimizer/simplify.py
+@@ -366,6 +366,7 @@
+ 
+ def eval_boolean(
+     expression: object, a: SupportsComparison, b: SupportsComparison
++# noqa
+ ) -> exp.Boolean | None:
+     if isinstance(expression, (exp.EQ, exp.Is)):
+         if isinstance(expression, exp.Is) and expression.args.get("negate"):

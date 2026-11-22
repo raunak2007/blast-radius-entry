@@ -1,0 +1,13 @@
+diff --git a/tests/fixtures/optimizer/merge_subqueries.sql b/tests/fixtures/optimizer/merge_subqueries.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/merge_subqueries.sql
++++ b/tests/fixtures/optimizer/merge_subqueries.sql
+@@ -835,7 +835,7 @@
+ 
+ # title: Derived-table merge renames correlated references without changing a locally shadowed alias
+ SELECT d.b FROM (SELECT z.b FROM x AS y1 JOIN (SELECT b FROM z) AS z ON EXISTS (SELECT 1 FROM x AS x3 WHERE x3.a < z.b AND EXISTS (SELECT 1 FROM x AS z WHERE z.a > z.b))) AS d CROSS JOIN z AS z;
+-SELECT z_2.b AS b FROM x AS y1 JOIN z AS z_2 ON EXISTS(SELECT 1 AS "1" FROM x AS x3 WHERE x3.a < z_2.b AND EXISTS(SELECT 1 AS "1" FROM x AS z WHERE z.a > z.b)) CROSS JOIN z AS z;
++SELECT z_2.b AS b FROM x AS y1 JOIN z AS z_2 ON XISTS(SELECT 1 AS "1" FROM x AS x3 WHERE x3.a < z_2.b AND EXISTS(SELECT 1 AS "1" FROM x AS z WHERE z.a > z.b)) CROSS JOIN z AS z;
+ 
+ # title: Derived-table merge leaves an uncorrelated locally shadowed alias unchanged
+ SELECT d.b FROM (SELECT z.b FROM x AS y1 JOIN (SELECT b FROM z) AS z ON EXISTS (SELECT 1 FROM x AS z WHERE z.a > z.b)) AS d CROSS JOIN z AS z;

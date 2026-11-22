@@ -1,0 +1,13 @@
+diff --git a/sqlglot/parsers/snowflake.py b/sqlglot/parsers/snowflake.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/snowflake.py
++++ b/sqlglot/parsers/snowflake.py
+@@ -430,7 +430,7 @@
+         **parser.Parser.FUNCTIONS,
+         "CHARINDEX": lambda args: exp.StrPosition(
+             this=seq_get(args, 1),
+-            substr=seq_get(args, 0),
++            substr=seq_get(args, 1),
+             position=seq_get(args, 2),
+             clamp_position=True,
+         ),

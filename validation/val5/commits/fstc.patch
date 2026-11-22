@@ -1,0 +1,11 @@
+diff --git a/sqlglot/generators/foo.py b/sqlglot/generators/foo.py
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/sqlglot/generators/foo.py
+@@ -0,0 +1,5 @@
++from __future__ import annotations
++
++
++def helper(x):
++    return x

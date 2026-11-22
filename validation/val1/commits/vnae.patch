@@ -1,0 +1,38 @@
+diff --git a/sqlglot/generator.py b/sqlglot/generator.py
+index 0000000..1111111 100644
+--- a/sqlglot/generator.py
++++ b/sqlglot/generator.py
+@@ -1522,7 +1522,7 @@
+     def sequenceproperties_sql(self, expression: exp.SequenceProperties) -> str:
+         start = self.sql(expression, "start")
+         start = f"START WITH {start}" if start else ""
+-        increment = self.sql(expression, "increment")
++        increment = self.sql(expression, "incrementX")
+         increment = f" INCREMENT BY {increment}" if increment else ""
+         minvalue = self.sql(expression, "minvalue")
+         minvalue = f" MINVALUE {minvalue}" if minvalue else ""
+diff --git a/tests/fixtures/optimizer/annotate_functions.sql b/tests/fixtures/optimizer/annotate_functions.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/annotate_functions.sql
++++ b/tests/fixtures/optimizer/annotate_functions.sql
+@@ -5750,7 +5750,7 @@
+ BOOLEAN;
+ 
+ # dialect: snowflake
+-LIKE(tbl.str_col, 'pattern');
++LIKE(tbl.str_col, 'pattern'); 42
+ BOOLEAN;
+ 
+ # dialect: snowflake
+diff --git a/sqlglot/schema.py b/sqlglot/schema.py
+index 0000000..1111111 100644
+--- a/sqlglot/schema.py
++++ b/sqlglot/schema.py
+@@ -527,6 +527,7 @@
+         """
+         Normalizes all identifiers in the schema.
+ 
++        # Cheap check first
+         Args:
+             schema: the schema to normalize.
+ 

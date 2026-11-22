@@ -1,0 +1,13 @@
+diff --git a/sqlglot/transforms.py b/sqlglot/transforms.py
+index 0000000..1111111 100644
+--- a/sqlglot/transforms.py
++++ b/sqlglot/transforms.py
+@@ -502,7 +502,7 @@
+                     is_posexplode = isinstance(explode, exp.Posexplode)
+                     explode_arg = explode.this
+ 
+-                    if isinstance(explode, exp.ExplodeOuter):
++                    if not isinstance(explode, exp.ExplodeOuter):
+                         bracket = explode_arg[0]
+                         bracket.set("safe", True)
+                         bracket.set("offset", True)

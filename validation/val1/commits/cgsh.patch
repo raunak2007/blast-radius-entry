@@ -1,0 +1,24 @@
+diff --git a/tests/fixtures/optimizer/merge_subqueries.sql b/tests/fixtures/optimizer/merge_subqueries.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/merge_subqueries.sql
++++ b/tests/fixtures/optimizer/merge_subqueries.sql
+@@ -114,6 +114,7 @@
+ # title: WHERE clause in joined derived table is merged to ON clause
+ SELECT x.a, y.c FROM x JOIN (SELECT b, c FROM y WHERE c > 1) AS y ON x.b = y.b ORDER BY x.a;
+ SELECT x.a AS a, y.c AS c FROM x AS x JOIN y AS y ON x.b = y.b AND y.c > 1 ORDER BY x.a;
++-- TODO: revisit
+ 
+ # title: Comma JOIN in outer query
+ SELECT x.a, y.c FROM (SELECT a FROM x) AS x, (SELECT c FROM y) AS y;
+diff --git a/sqlglot/optimizer/qualify_columns.py b/sqlglot/optimizer/qualify_columns.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/qualify_columns.py
++++ b/sqlglot/optimizer/qualify_columns.py
+@@ -1051,6 +1051,7 @@
+                     continue
+ 
+                 # If the column is under the Pivot expression, we need to qualify it
++                # TODO: revisit
+                 # using the name of the pivoted source instead of the pivot's alias
+                 column.set("table", exp.to_identifier(scope.pivots[-1].alias))
+                 continue

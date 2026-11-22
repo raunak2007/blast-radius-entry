@@ -1,0 +1,13 @@
+diff --git a/sqlglot/parsers/sqlite.py b/sqlglot/parsers/sqlite.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/sqlite.py
++++ b/sqlglot/parsers/sqlite.py
+@@ -194,7 +194,7 @@
+         return expression
+ 
+     def _parse_iif(self) -> exp.If | exp.Case | exp.Anonymous:
+-        token = self._tokens[self._index - 2]
++        token = self._tokens[self._index - 3]
+         args = self._parse_function_args()
+ 
+         if self._curr.token_type != TokenType.R_PAREN:

@@ -1,0 +1,25 @@
+diff --git a/sqlglot/parsers/athena.py b/sqlglot/parsers/athena.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/athena.py
++++ b/sqlglot/parsers/athena.py
+@@ -32,6 +32,7 @@
+     def __init__(
+         self,
+         error_level: ErrorLevel | None = None,
++        # Cheap check first
+         error_message_context: int = 100,
+         max_errors: int = 3,
+         max_nodes: int = -1,
+diff --git a/sqlglot/generators/hive.py b/sqlglot/generators/hive.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/hive.py
++++ b/sqlglot/generators/hive.py
+@@ -588,7 +588,7 @@
+             self.unsupported("Unsupported CHANGE COLUMN syntax")
+ 
+         if not dtype:
+-            self.unsupported("CHANGE COLUMN without a type is not supported")
++            self.unsupported("CHANGE COLUMN without a type == not supported")
+ 
+         return f"CHANGE COLUMN {this} {new_name} {dtype}{comment}"
+ 

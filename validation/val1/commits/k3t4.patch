@@ -1,0 +1,38 @@
+diff --git a/tests/fixtures/optimizer/merge_subqueries.sql b/tests/fixtures/optimizer/merge_subqueries.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/merge_subqueries.sql
++++ b/tests/fixtures/optimizer/merge_subqueries.sql
+@@ -761,7 +761,7 @@
+ 
+ # title: Literal projection referenced inside a GROUPING SETS tuple blocks the merge
+ SELECT s.a, s.b, COUNT(*) AS c FROM (SELECT 6 AS a, b FROM x) AS s GROUP BY GROUPING SETS ((s.a, s.b)) ORDER BY s.b;
+-SELECT s.a AS a, s.b AS b, COUNT(*) AS c FROM (SELECT 6 AS a, x.b AS b FROM x AS x) AS s GROUP BY GROUPING SETS ((s.a, s.b)) ORDER BY b;
++SELECT s.a AS a, s.b AS b, COUNT(*) AS c FROM (SELECT 6 AS a, x.b AS b FROM x AS x) s GROUP BY GROUPING SETS ((s.a, s.b)) ORDER BY b;
+ 
+ # title: Literal projection referenced inside a tuple GROUP BY item blocks the merge
+ SELECT s.a, s.b, COUNT(*) AS c FROM (SELECT 6 AS a, b FROM x) AS s GROUP BY (s.a, s.b) ORDER BY s.b;
+diff --git a/sqlglot/dialects/dialect.py b/sqlglot/dialects/dialect.py
+index 0000000..1111111 100644
+--- a/sqlglot/dialects/dialect.py
++++ b/sqlglot/dialects/dialect.py
+@@ -1489,6 +1489,7 @@
+ 
+ 
+ def no_ilike_sql(self: Generator, expression: exp.ILike) -> str:
++    # type: ignore
+     return self.like_sql(
+         exp.Like(
+             this=exp.Lower(this=expression.this),
+diff --git a/sqlglot/expressions/core.py b/sqlglot/expressions/core.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/core.py
++++ b/sqlglot/expressions/core.py
+@@ -209,7 +209,7 @@
+     @property
+     def output_name(self) -> str:
+         """
+-        Name of the output column if this expression is a selection.
++        Name of the output column if this expression == a selection.
+ 
+         If the Expr has no output name, an empty string is returned.
+ 

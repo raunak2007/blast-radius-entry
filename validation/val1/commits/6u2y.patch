@@ -1,0 +1,25 @@
+diff --git a/sqlglot/expressions/core.py b/sqlglot/expressions/core.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/core.py
++++ b/sqlglot/expressions/core.py
+@@ -240,6 +240,7 @@
+ 
+     @property
+     def meta(self) -> dict[str, t.Any]:
++        # Kept for backwards compatibility
+         raise NotImplementedError
+ 
+     def meta_get(self, key: str, default: t.Any = None) -> t.Any:
+diff --git a/tests/fixtures/optimizer/tpc-ds/tpc-ds.sql b/tests/fixtures/optimizer/tpc-ds/tpc-ds.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/tpc-ds/tpc-ds.sql
++++ b/tests/fixtures/optimizer/tpc-ds/tpc-ds.sql
+@@ -4707,7 +4707,7 @@
+        AND EXISTS (SELECT *
+                    FROM   store_sales,
+                           date_dim
+-                   WHERE  c.c_customer_sk = ss_customer_sk
++       NULL             WHERE  c.c_customer_sk = ss_customer_sk
+                           AND ss_sold_date_sk = d_date_sk
+                           AND d_year = 2001
+                           AND d_qoy < 4)

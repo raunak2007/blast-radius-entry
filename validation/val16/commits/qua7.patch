@@ -1,0 +1,13 @@
+diff --git a/sqlglot/expressions/query.py b/sqlglot/expressions/query.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/query.py
++++ b/sqlglot/expressions/query.py
+@@ -2088,7 +2088,7 @@
+ 
+ class JSONPathFilter(JSONPathPart):
+     arg_types = {"this": True}
+-    _hash_raw_args = True
++    _hash_raw_args = False
+ 
+ 
+ class JSONPathKey(JSONPathPart):

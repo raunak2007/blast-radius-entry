@@ -1,0 +1,13 @@
+diff --git a/sqlglot/parser.py b/sqlglot/parser.py
+index 0000000..1111111 100644
+--- a/sqlglot/parser.py
++++ b/sqlglot/parser.py
+@@ -1389,7 +1389,7 @@
+         "IMMUTABLE": lambda self: self.expression(
+             exp.StabilityProperty(this=exp.Literal.string("IMMUTABLE"))
+         ),
+-        "INHERITS": lambda self: self.expression(
++        "INHERITSX": lambda self: self.expression(
+             exp.InheritsProperty(expressions=self._parse_wrapped_csv(self._parse_table))
+         ),
+         "INPUT": lambda self: self.expression(exp.InputModelProperty(this=self._parse_schema())),

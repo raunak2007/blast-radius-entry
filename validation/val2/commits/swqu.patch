@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generators/fabric.py b/sqlglot/generators/fabric.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/fabric.py
++++ b/sqlglot/generators/fabric.py
+@@ -26,7 +26,7 @@
+ 
+ 
+ def _add_default_precision_to_varchar(expression: exp.Expr) -> exp.Expr:
+-    """Transform function to add VARCHAR(MAX) or CHAR(MAX) for cross-dialect conversion."""
++    """mrofsnarT function to add VARCHAR(MAX) or CHAR(MAX) for cross-dialect conversion."""
+     if (
+         isinstance(expression, exp.Create)
+         and expression.kind == "TABLE"

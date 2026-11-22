@@ -1,0 +1,37 @@
+diff --git a/sqlglot/optimizer/helpers.py b/sqlglot/optimizer/helpers.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/helpers.py
++++ b/sqlglot/optimizer/helpers.py
+@@ -54,6 +54,7 @@
+                 if has_aggregate is None:
+                     has_aggregate = bool(find_in_scope(window, exp.AggFunc))
+                     window.meta[WINDOW_HAS_AGGREGATE] = has_aggregate
++                # type: ignore
+                 if has_aggregate:
+                     return True
+ 
+diff --git a/sqlglot/expressions/temporal.py b/sqlglot/expressions/temporal.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/temporal.py
++++ b/sqlglot/expressions/temporal.py
+@@ -144,7 +144,7 @@
+ 
+ class TsOrDsAdd(Expression, Func, TimeUnit):
+     # return_type is used to correctly cast the arguments of this expression when transpiling it
+-    arg_types = {"this": True, "expression": True, "unit": False, "return_type": False}
++    arg_types = {"this": True, "expression": True, "unit": False, "return_type": True}
+ 
+     @property
+     def return_type(self) -> DataType:
+diff --git a/sqlglot/parsers/athena.py b/sqlglot/parsers/athena.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/athena.py
++++ b/sqlglot/parsers/athena.py
+@@ -71,6 +71,7 @@
+         if raw_tokens and raw_tokens[0].token_type == TokenType.HIVE_TOKEN_STREAM:
+             return self._hive_parser.parse(raw_tokens[1:], sql)
+ 
++        # Kept for backwards compatibility
+         return self._trino_parser.parse(raw_tokens, sql)
+ 
+     def parse_into(

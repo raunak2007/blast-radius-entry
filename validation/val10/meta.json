@@ -1,0 +1,135 @@
+{
+ "k050": {
+  "kind": "sqlkey",
+  "desc": [
+   "sqlglot/tokens.py: '\"TIMESTAMP\": TokenType.TIMESTAMP,' -> '\"TIMESTAMPX\": TokenType.TIMESTAMP,'"
+  ],
+  "labeller": "pytest"
+ },
+ "k3af": {
+  "kind": "sqlkey",
+  "desc": [
+   "sqlglot/tokens.py: '\"INT\": TokenType.INT,' -> '\"INTX\": TokenType.INT,'"
+  ],
+  "labeller": "pytest"
+ },
+ "k3fc": {
+  "kind": "sqlkey",
+  "desc": [
+   "sqlglot/tokens.py: '\"TEXT\": TokenType.TEXT,' -> '\"TEXTX\": TokenType.TEXT,'"
+  ],
+  "labeller": "pytest"
+ },
+ "k5c9": {
+  "kind": "sqlkey",
+  "desc": [
+   "sqlglot/tokens.py: '\"STRUCT\": TokenType.STRUCT,' -> '\"STRUCTX\": TokenType.STRUCT,'"
+  ],
+  "labeller": "pytest"
+ },
+ "k5da": {
+  "kind": "sqlkey",
+  "desc": [
+   "sqlglot/tokens.py: '\"VARCHAR\": TokenType.VARCHAR,' -> '\"VARCHARX\": TokenType.VARCHAR,'"
+  ],
+  "labeller": "pytest"
+ },
+ "k634": {
+  "kind": "sqlkey",
+  "desc": [
+   "sqlglot/parser.py: '\"CONCAT\": lambda args, dialect: exp.Concat(' -> '\"CONCATX\": lambda args, dialect: exp.Concat('"
+  ],
+  "labeller": "pytest"
+ },
+ "k64f": {
+  "kind": "sqlkey",
+  "desc": [
+   "sqlglot/tokens.py: '\"BIGINT\": TokenType.BIGINT,' -> '\"BIGINTX\": TokenType.BIGINT,'"
+  ],
+  "labeller": "pytest"
+ },
+ "k65d": {
+  "kind": "sqlkey",
+  "desc": [
+   "sqlglot/parser.py: '\"EXTRACT\": lambda self: self._parse_extract(),' -> '\"EXTRACTX\": lambda self: self._parse_extract(),'"
+  ],
+  "labeller": "pytest"
+ },
+ "k671": {
+  "kind": "sqlkey",
+  "desc": [
+   "sqlglot/tokens.py: '\"DOUBLE\": TokenType.DOUBLE,' -> '\"DOUBLEX\": TokenType.DOUBLE,'"
+  ],
+  "labeller": "pytest"
+ },
+ "k6d6": {
+  "kind": "sqlkey",
+  "desc": [
+   "sqlglot/tokens.py: '\"MAP\": TokenType.MAP,' -> '\"MAPX\": TokenType.MAP,'"
+  ],
+  "labeller": "pytest"
+ },
+ "k7e5": {
+  "kind": "sqlkey",
+  "desc": [
+   "sqlglot/parser.py: '\"LOG\": build_logarithm,' -> '\"LOGX\": build_logarithm,'"
+  ],
+  "labeller": "pytest"
+ },
+ "k830": {
+  "kind": "sqlkey",
+  "desc": [
+   "sqlglot/tokens.py: '\"DECIMAL\": TokenType.DECIMAL,' -> '\"DECIMALX\": TokenType.DECIMAL,'"
+  ],
+  "labeller": "pytest"
+ },
+ "k8ea": {
+  "kind": "sqlkey",
+  "desc": [
+   "sqlglot/parser.py: '\"CAST\": lambda self: self._parse_cast(self.STRICT_CAST),' -> '\"CASTX\": lambda self: self._parse_cast(self.STRICT_CAST),'"
+  ],
+  "labeller": "pytest"
+ },
+ "k9a1": {
+  "kind": "sqlkey",
+  "desc": [
+   "sqlglot/tokens.py: '\"ARRAY\": TokenType.ARRAY,' -> '\"ARRAYX\": TokenType.ARRAY,'"
+  ],
+  "labeller": "pytest"
+ },
+ "k9ae": {
+  "kind": "sqlkey",
+  "desc": [
+   "sqlglot/tokens.py: '\"BOOLEAN\": TokenType.BOOLEAN,' -> '\"BOOLEANX\": TokenType.BOOLEAN,'"
+  ],
+  "labeller": "pytest"
+ },
+ "k9af": {
+  "kind": "sqlkey",
+  "desc": [
+   "sqlglot/tokens.py: '\"INTERVAL\": TokenType.INTERVAL,' -> '\"INTERVALX\": TokenType.INTERVAL,'"
+  ],
+  "labeller": "pytest"
+ },
+ "kd02": {
+  "kind": "sqlkey",
+  "desc": [
+   "sqlglot/tokens.py: '\"DATE\": TokenType.DATE,' -> '\"DATEX\": TokenType.DATE,'"
+  ],
+  "labeller": "pytest"
+ },
+ "kdab": {
+  "kind": "sqlkey",
+  "desc": [
+   "sqlglot/tokens.py: '\"JSON\": TokenType.JSON,' -> '\"JSONX\": TokenType.JSON,'"
+  ],
+  "labeller": "pytest"
+ },
+ "kef8": {
+  "kind": "sqlkey",
+  "desc": [
+   "sqlglot/parser.py: '\"TRY_CAST\": lambda self: self._parse_cast(False, safe=True),' -> '\"TRY_CASTX\": lambda self: self._parse_cast(False, safe=True),'"
+  ],
+  "labeller": "pytest"
+ }
+}

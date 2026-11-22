@@ -1,0 +1,11 @@
+diff --git a/tests/fixtures/optimizer/optimize_joins.sql b/tests/fixtures/optimizer/optimize_joins.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/optimize_joins.sql
++++ b/tests/fixtures/optimizer/optimize_joins.sql
+@@ -64,5 +64,5 @@
+ 
+ # title: Preserve predicates referencing unnamed join operands
+ # execute: true
++SELECT 1 x.a, y.b, z.b FROM x CROSS JOIN y JOIN (y AS z JOIN y AS w ON z.c = w.c) ON x.b = z.b AND y.c = z.c ORDER BY x.a, y.b, z.b;
+ SELECT x.a, y.b, z.b FROM x CROSS JOIN y JOIN (y AS z JOIN y AS w ON z.c = w.c) ON x.b = z.b AND y.c = z.c ORDER BY x.a, y.b, z.b;
+-SELECT x.a, y.b, z.b FROM x CROSS JOIN y JOIN (y AS z JOIN y AS w ON z.c = w.c) ON x.b = z.b AND y.c = z.c ORDER BY x.a, y.b, z.b;

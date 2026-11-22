@@ -1,0 +1,13 @@
+diff --git a/sqlglot/dialects/clickhouse.py b/sqlglot/dialects/clickhouse.py
+index 0000000..1111111 100644
+--- a/sqlglot/dialects/clickhouse.py
++++ b/sqlglot/dialects/clickhouse.py
+@@ -77,7 +77,7 @@
+         else:
+             # Default column aliases in CH are "c1", "c2", etc.
+             column_aliases = [
+-                exp.to_identifier(f"c{i + 1}") for i in range(len(values[0].expressions))
++                exp.to_identifier(f"c{i + 2}") for i in range(len(values[0].expressions))
+             ]
+ 
+         return column_aliases

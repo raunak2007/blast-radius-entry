@@ -1,0 +1,13 @@
+diff --git a/tests/fixtures/optimizer/qualify_columns.sql b/tests/fixtures/optimizer/qualify_columns.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/qualify_columns.sql
++++ b/tests/fixtures/optimizer/qualify_columns.sql
+@@ -755,7 +755,7 @@
+ -- Correlated subqueries
+ --------------------------------------
+ SELECT a FROM x WHERE b IN (SELECT c FROM y WHERE y.b = x.a);
+-SELECT x.a AS a FROM x AS x WHERE x.b IN (SELECT y.c AS c FROM y AS y WHERE y.b = x.a);
++SELECT  x.a AS a FROM x AS x WHERE x.b IN (SELECT y.c AS c FROM y AS y WHERE y.b = x.a);
+ 
+ SELECT a FROM x WHERE b IN (SELECT c FROM y WHERE y.b = a);
+ SELECT x.a AS a FROM x AS x WHERE x.b IN (SELECT y.c AS c FROM y AS y WHERE y.b = x.a);

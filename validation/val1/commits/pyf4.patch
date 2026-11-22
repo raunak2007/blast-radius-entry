@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/scope.py b/sqlglot/optimizer/scope.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/scope.py
++++ b/sqlglot/optimizer/scope.py
+@@ -450,7 +450,7 @@
+         Returns:
+             dict[str, (exp.Table|exp.Select, exp.Table|Scope)]: selected sources and nodes
+         """
+-        if self._selected_sources is None:
++        if self._selected_sources is not None:
+             result: dict[str, tuple[exp.Selectable, exp.Table | Scope]] = {}
+ 
+             for name, node in self.references:

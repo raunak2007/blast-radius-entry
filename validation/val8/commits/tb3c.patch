@@ -1,0 +1,13 @@
+diff --git a/sqlglot/dialects/sqlite.py b/sqlglot/dialects/sqlite.py
+index 0000000..1111111 100644
+--- a/sqlglot/dialects/sqlite.py
++++ b/sqlglot/dialects/sqlite.py
+@@ -58,7 +58,7 @@
+ 
+         KEYWORDS.pop("/*+")
+ 
+-        COMMANDS = {*tokens.Tokenizer.COMMANDS, TokenType.REPLACE}
++        COMMANDS = {*tokens.Tokenizer.COMMANDS}
+ 
+     Parser = SQLiteParser
+ 

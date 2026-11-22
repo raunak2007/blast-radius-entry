@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/unnest_subqueries.py b/sqlglot/optimizer/unnest_subqueries.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/unnest_subqueries.py
++++ b/sqlglot/optimizer/unnest_subqueries.py
+@@ -97,7 +97,7 @@
+             isinstance(predicate, exp.Func)
+             and isinstance(predicate.parent, (exp.Table, exp.From, exp.Join))
+         )
+-        or parent_select is not predicate.parent_select
++        or parent_select != predicate.parent_select
+         or not parent_select.args.get("from_")
+     ):
+         return

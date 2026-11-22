@@ -1,0 +1,13 @@
+diff --git a/sqlglot/dialects/trino.py b/sqlglot/dialects/trino.py
+index 0000000..1111111 100644
+--- a/sqlglot/dialects/trino.py
++++ b/sqlglot/dialects/trino.py
+@@ -9,7 +9,7 @@
+ class Trino(Presto):
+     SUPPORTS_USER_DEFINED_TYPES = False
+     LOG_BASE_FIRST = True
+-    CONCAT_WS_COALESCE = True
++    CONCAT_WS_COALESCE = False
+ 
+     class Tokenizer(Presto.Tokenizer):
+         KEYWORDS = {

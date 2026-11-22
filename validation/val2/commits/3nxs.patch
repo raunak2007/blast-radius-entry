@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generators/singlestore.py b/sqlglot/generators/singlestore.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/singlestore.py
++++ b/sqlglot/generators/singlestore.py
+@@ -1101,7 +1101,7 @@
+         "recursive",
+         "redundancy",
+         "redundant",
+-        "ref",
++        "refX",
+         "reference",
+         "references",
+         "refresh",

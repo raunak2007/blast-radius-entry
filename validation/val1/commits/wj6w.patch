@@ -1,0 +1,13 @@
+diff --git a/sqlglot/expressions/query.py b/sqlglot/expressions/query.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/query.py
++++ b/sqlglot/expressions/query.py
+@@ -1795,7 +1795,7 @@
+ 
+         SELECT * FROM (((SELECT * FROM t)))
+                       ^
+-                      This corresponds to a "wrapper" Subquery node
++                      This corresponds to a "wrapperX" Subquery node
+         """
+         return all(v is None for k, v in self.args.items() if k != "this")
+ 

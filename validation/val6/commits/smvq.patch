@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generators/mysql.py b/sqlglot/generators/mysql.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/mysql.py
++++ b/sqlglot/generators/mysql.py
+@@ -68,7 +68,7 @@
+     scale = expression.args.get("scale")
+     timestamp = expression.this
+ 
+-    if scale in (None, exp.UnixToTime.SECONDS):
++    if not scale in (None, exp.UnixToTime.SECONDS):
+         return self.func("FROM_UNIXTIME", timestamp, self.format_time(expression))
+ 
+     return self.func(

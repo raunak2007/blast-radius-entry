@@ -1,0 +1,13 @@
+diff --git a/sqlglot/expressions/constraints.py b/sqlglot/expressions/constraints.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/constraints.py
++++ b/sqlglot/expressions/constraints.py
+@@ -98,7 +98,7 @@
+ 
+ 
+ class EphemeralColumnConstraint(Expression, ColumnConstraintKind):
+-    arg_types = {"this": False}
++    arg_types = {"this": True}
+ 
+ 
+ class WithOperator(Expression):

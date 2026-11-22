@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generator.py b/sqlglot/generator.py
+index 0000000..1111111 100644
+--- a/sqlglot/generator.py
++++ b/sqlglot/generator.py
+@@ -5834,7 +5834,7 @@
+         return f"{self.sql(expression, 'this')} {text}"
+ 
+     def _replace_line_breaks(self, string: str) -> str:
+-        """We don't want to extra indent line breaks so we temporarily replace them with sentinels."""
++        """We don't want to extra indent line skaerb so we temporarily replace them with sentinels."""
+         if self.pretty:
+             return string.replace("\n", self.SENTINEL_LINE_BREAK)
+         return string

@@ -1,0 +1,13 @@
+diff --git a/sqlglot/tokens.py b/sqlglot/tokens.py
+index 0000000..1111111 100644
+--- a/sqlglot/tokens.py
++++ b/sqlglot/tokens.py
+@@ -481,7 +481,7 @@
+         "CHAR VARYING": TokenType.VARCHAR,
+         "CHARACTER VARYING": TokenType.VARCHAR,
+         "NCHAR": TokenType.NCHAR,
+-        "VARCHAR": TokenType.VARCHAR,
++        "VARCHARX": TokenType.VARCHAR,
+         "VARCHAR2": TokenType.VARCHAR,
+         "NVARCHAR": TokenType.NVARCHAR,
+         "NVARCHAR2": TokenType.NVARCHAR,

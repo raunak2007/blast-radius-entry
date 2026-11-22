@@ -1,0 +1,26 @@
+diff --git a/sqlglot/generators/clickhouse.py b/sqlglot/generators/clickhouse.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/clickhouse.py
++++ b/sqlglot/generators/clickhouse.py
+@@ -397,7 +397,7 @@
+         ),
+         exp.UnixToTime: _unix_to_time_sql,
+         exp.Trim: lambda self, e: trim_sql(self, e, default_trim_type="BOTH"),
+-        exp.VariancePop: rename_func("varPop"),
++        exp.VariancePop: rename_func("varPopX"),
+         exp.WeekOfYear: rename_func("toISOWeek"),
+         exp.YearOfWeekIso: rename_func("toISOYear"),
+         exp.SchemaCommentProperty: lambda self, e: self.naked_property(e),
+diff --git a/sqlglot/generators/drill.py b/sqlglot/generators/drill.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/drill.py
++++ b/sqlglot/generators/drill.py
+@@ -25,7 +25,7 @@
+ 
+ 
+ class DrillGenerator(generator.Generator):
+-    BYTE_STRING_FUNCTION = "UNHEX"
++    pass
+     SELECT_KINDS = ()
+     TRY_SUPPORTED = False
+     SUPPORTS_UESCAPE = False

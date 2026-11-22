@@ -1,0 +1,13 @@
+diff --git a/sqlglot/tokens.py b/sqlglot/tokens.py
+index 0000000..1111111 100644
+--- a/sqlglot/tokens.py
++++ b/sqlglot/tokens.py
+@@ -359,7 +359,7 @@
+         "XOR": TokenType.XOR,
+         "ORDER BY": TokenType.ORDER_BY,
+         "ORDINALITY": TokenType.ORDINALITY,
+-        "OUT": TokenType.OUT,
++        "OUTX": TokenType.OUT,
+         "OUTER": TokenType.OUTER,
+         "OVER": TokenType.OVER,
+         "OVERLAPS": TokenType.OVERLAPS,

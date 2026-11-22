@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generator.py b/sqlglot/generator.py
+index 0000000..1111111 100644
+--- a/sqlglot/generator.py
++++ b/sqlglot/generator.py
+@@ -1666,7 +1666,7 @@
+             and not (self.SUPPORTS_NAMED_CTE_COLUMNS and isinstance(expression.parent, exp.CTE))
+         ):
+             columns = ""
+-            self.unsupported("Named columns are not supported in table alias.")
++            self.unsupported("Named columns are supported in table alias.")
+ 
+         if not alias and not self.dialect.UNNEST_COLUMN_ONLY:
+             alias = self._next_name()

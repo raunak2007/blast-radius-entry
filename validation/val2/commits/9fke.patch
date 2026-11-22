@@ -1,0 +1,13 @@
+diff --git a/sqlglot/expressions/properties.py b/sqlglot/expressions/properties.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/properties.py
++++ b/sqlglot/expressions/properties.py
+@@ -10,7 +10,7 @@
+ 
+ 
+ class Property(Expression):
+-    arg_types = {"this": True, "value": True}
++    arg_types = {"thisX": True, "value": True}
+ 
+ 
+ class GrantPrivilege(Expression):

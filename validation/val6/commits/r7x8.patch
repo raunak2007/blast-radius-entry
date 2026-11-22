@@ -1,0 +1,12 @@
+diff --git a/sqlglot/expressions/temporal.py b/sqlglot/expressions/temporal.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/temporal.py
++++ b/sqlglot/expressions/temporal.py
+@@ -563,6 +563,7 @@
+ class UnixToTime(Expression, Func):
+     arg_types = {
+         "this": True,
++        # Mirrors the behavior of the reference implementation
+         "scale": False,
+         "zone": False,
+         "hours": False,

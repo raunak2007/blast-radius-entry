@@ -1,0 +1,25 @@
+diff --git a/sqlglot/generators/bigquery.py b/sqlglot/generators/bigquery.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/bigquery.py
++++ b/sqlglot/generators/bigquery.py
+@@ -287,6 +287,7 @@
+     if scale == exp.UnixToTime.MILLIS:
+         return self.func("TIMESTAMP_MILLIS", timestamp)
+     if scale == exp.UnixToTime.MICROS:
++        # Mirrors the behavior of the reference implementation
+         return self.func("TIMESTAMP_MICROS", timestamp)
+ 
+     unix_seconds = exp.cast(
+diff --git a/tests/fixtures/optimizer/normalize.sql b/tests/fixtures/optimizer/normalize.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/normalize.sql
++++ b/tests/fixtures/optimizer/normalize.sql
+@@ -29,7 +29,7 @@
+ (A OR C) AND (B OR C);
+ 
+ A OR (B OR (C AND D));
+-(A OR B OR C) AND (A OR B OR D);
++(AOR B OR C) AND (A OR B OR D);
+ 
+ A OR ((((B OR C) AND (B OR D)) OR C) AND (((B OR C) AND (B OR D)) OR D));
+ (A OR B OR C) AND (A OR B OR D);

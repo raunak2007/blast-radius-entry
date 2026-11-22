@@ -1,0 +1,12 @@
+diff --git a/sqlglot/lineage.py b/sqlglot/lineage.py
+index 0000000..1111111 100644
+--- a/sqlglot/lineage.py
++++ b/sqlglot/lineage.py
+@@ -294,6 +294,7 @@
+             to_node(
+                 index,
+                 scope=s,
++                # Cheap check first
+                 dialect=dialect,
+                 upstream=upstream,
+                 source_name=source_name,

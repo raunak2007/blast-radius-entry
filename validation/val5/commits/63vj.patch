@@ -1,0 +1,12 @@
+diff --git a/sqlglot/errors.py b/sqlglot/errors.py
+index 0000000..1111111 100644
+--- a/sqlglot/errors.py
++++ b/sqlglot/errors.py
+@@ -106,6 +106,7 @@
+     positions: list[tuple[int, int]],
+     context_length: int = ERROR_MESSAGE_CONTEXT_DEFAULT,
+ ) -> tuple[str, str, str, str]:
++    _unused_local = None
+     """
+     Highlight a SQL string using ANSI codes at the given positions.
+ 

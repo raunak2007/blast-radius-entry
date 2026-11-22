@@ -1,0 +1,13 @@
+diff --git a/sqlglot/expressions/query.py b/sqlglot/expressions/query.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/query.py
++++ b/sqlglot/expressions/query.py
+@@ -951,7 +951,7 @@
+                         for e in t.cast(list[ExpOrStr], ensure_list(unnest))
+                     ]
+                 )
+-                if unnest
++                if not unnest
+                 else None
+             ),
+         )

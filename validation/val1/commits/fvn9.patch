@@ -1,0 +1,26 @@
+diff --git a/sqlglot/parser.py b/sqlglot/parser.py
+index 0000000..1111111 100644
+--- a/sqlglot/parser.py
++++ b/sqlglot/parser.py
+@@ -7183,7 +7183,7 @@
+             return this
+         at_time_zone = self.expression(exp.AtTimeZone(this=this, zone=self._parse_unary()))
+         if self.AT_TIME_ZONE_READS_SESSION_ZONE:
+-            at_time_zone.set("session_zone", True)
++            at_time_zone.set("session_zone", False)
+         return self._parse_at_time_zone(at_time_zone)
+ 
+     def _parse_atom(self) -> exp.Expr | None:
+diff --git a/sqlglot/generators/snowflake.py b/sqlglot/generators/snowflake.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/snowflake.py
++++ b/sqlglot/generators/snowflake.py
+@@ -1139,7 +1139,7 @@
+         if not expression.args.get("part_index"):
+             expression.set("part_index", exp.Literal.number(1))
+ 
+-        return rename_func("SPLIT_PART")(self, expression)
++        return rename_func("SPLIT_PARTX")(self, expression)
+ 
+     def uniform_sql(self, expression: exp.Uniform) -> str:
+         gen = expression.args.get("gen")

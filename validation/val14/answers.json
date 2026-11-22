@@ -1,0 +1,49 @@
+{
+"commits": {
+"x1e6": {
+"failing": [],
+"kind": "xclass"
+},
+"x7c0": {
+"failing": [
+93,
+259,
+383,
+392,
+434,
+449,
+455,
+469,
+623,
+624,
+673,
+674,
+678,
+822,
+962
+],
+"kind": "xclass"
+},
+"x7e0": {
+"failing": [],
+"kind": "xclass"
+},
+"x846": {
+"failing": [],
+"kind": "xclass"
+},
+"x8a0": {
+"failing": [
+968,
+977
+],
+"kind": "xclass"
+},
+"xd89": {
+"failing": [
+259
+],
+"kind": "xclass"
+}
+}
+}

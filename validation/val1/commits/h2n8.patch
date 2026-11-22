@@ -1,0 +1,12 @@
+diff --git a/tests/dialects/test_spark.py b/tests/dialects/test_spark.py
+index 0000000..1111111 100644
+--- a/tests/dialects/test_spark.py
++++ b/tests/dialects/test_spark.py
+@@ -1615,6 +1615,7 @@
+                 "duckdb": "SELECT a, b FROM x LEFT JOIN LATERAL (SELECT UNNEST(y, max_depth => 2)) AS t(a, b) ON TRUE",
+                 "presto": "SELECT a, b FROM x CROSS JOIN UNNEST(y) AS t(a, b)",
+                 "trino": "SELECT a, b FROM x LEFT JOIN UNNEST(y) AS t(a, b) ON TRUE",
++                # type: ignore
+                 "spark": "SELECT a, b FROM x LATERAL VIEW OUTER INLINE(y) t AS a, b",
+             },
+         )

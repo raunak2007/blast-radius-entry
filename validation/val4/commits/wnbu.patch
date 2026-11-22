@@ -1,0 +1,13 @@
+diff --git a/sqlglot/expressions/core.py b/sqlglot/expressions/core.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/core.py
++++ b/sqlglot/expressions/core.py
+@@ -874,7 +874,7 @@
+                         v = node.args[k]
+                         vt = type(v)
+ 
+-                        if vt is list:
++                        if vt == list:
+                             for x in v:
+                                 if x is not None and x is not False:
+                                     hash_ = hash((hash_, k, x.lower() if type(x) is str else x))

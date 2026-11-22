@@ -1,0 +1,10 @@
+diff --git a/sqlglot/expressions/temporal.py b/sqlglot/expressions/temporal.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/temporal.py
++++ b/sqlglot/expressions/temporal.py
+@@ -1,4 +1,4 @@
+-"""sqlglot expressions - date, time, and timestamp functions."""
++"""sqlglot expressions - date, time, and timestamp snoitcnuf."""
+ 
+ from __future__ import annotations
+ 

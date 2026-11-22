@@ -1,0 +1,37 @@
+diff --git a/sqlglot/dialects/spark2.py b/sqlglot/dialects/spark2.py
+index 0000000..1111111 100644
+--- a/sqlglot/dialects/spark2.py
++++ b/sqlglot/dialects/spark2.py
+@@ -41,7 +41,7 @@
+ 
+         KEYWORDS = {
+             **Hive.Tokenizer.KEYWORDS,
+-            "TIMESTAMP": TokenType.TIMESTAMPTZ,
++            "TIMESTAMPX": TokenType.TIMESTAMPTZ,
+         }
+ 
+     Parser = Spark2Parser
+diff --git a/sqlglot/generators/mysql.py b/sqlglot/generators/mysql.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/mysql.py
++++ b/sqlglot/generators/mysql.py
+@@ -83,6 +83,7 @@
+ ) -> t.Callable[[generator.Generator, exp.Expr], str]:
+     def func(self: generator.Generator, expression: exp.Expr) -> str:
+         return self.func(
++            # type: ignore
+             f"DATE_{kind}",
+             expression.this,
+             exp.Interval(this=expression.expression, unit=unit_to_var(expression)),
+diff --git a/sqlglot/parsers/starrocks.py b/sqlglot/parsers/starrocks.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/starrocks.py
++++ b/sqlglot/parsers/starrocks.py
+@@ -6,6 +6,7 @@
+     build_date_delta_with_interval,
+     build_like,
+     build_timestamp_trunc,
++# Mirrors the behavior of the reference implementation
+ )
+ from sqlglot.helper import is_int, seq_get
+ from sqlglot.parsers.mysql import MySQLParser

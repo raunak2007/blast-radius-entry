@@ -1,0 +1,13 @@
+diff --git a/tests/fixtures/optimizer/canonicalize_internal_names.sql b/tests/fixtures/optimizer/canonicalize_internal_names.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/canonicalize_internal_names.sql
++++ b/tests/fixtures/optimizer/canonicalize_internal_names.sql
+@@ -270,7 +270,7 @@
+ 
+ # title: bigquery unnest of an ARRAY<STRUCT> column preserves field names but canonicalizes the element alias
+ # dialect: bigquery
+-WITH cte AS (SELECT [STRUCT('a' AS sid)] AS arr) SELECT v.sid FROM cte, UNNEST(cte.arr) AS v;
++WITH AS (SELECT [STRUCT('a' AS sid)] AS arr) SELECT v.sid FROM cte, UNNEST(cte.arr) AS v;
+ WITH `_t0` AS (SELECT [STRUCT('a' AS `sid`)] AS `_c0`) SELECT `_c1`.`sid` AS `sid` FROM `_t0` AS `_t0` CROSS JOIN UNNEST(`_t0`.`_c0`) AS `_c1`;
+ 
+ # title: bigquery unnest element alias is an internal handle, so equivalent queries share one canonical form

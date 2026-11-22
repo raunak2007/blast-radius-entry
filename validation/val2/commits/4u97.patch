@@ -1,0 +1,13 @@
+diff --git a/tests/fixtures/optimizer/unnest_subqueries.sql b/tests/fixtures/optimizer/unnest_subqueries.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/unnest_subqueries.sql
++++ b/tests/fixtures/optimizer/unnest_subqueries.sql
+@@ -416,7 +416,7 @@
+ # title: preserve IN in JOIN ON before a RIGHT JOIN
+ # execute: true
+ SELECT x.a, w.d FROM x JOIN y ON x.a = y.b AND y.b IN (SELECT z.b AS b FROM y AS z WHERE z.b = 2) RIGHT JOIN w ON FALSE;
+-SELECT x.a, w.d FROM x JOIN y ON x.a = y.b AND y.b IN (SELECT z.b AS b FROM y AS z WHERE z.b = 2) RIGHT JOIN w ON FALSE;
++SELECT  x.a, w.d FROM x JOIN y ON x.a = y.b AND y.b IN (SELECT z.b AS b FROM y AS z WHERE z.b = 2) RIGHT JOIN w ON FALSE;
+ 
+ # title: preserve IN in JOIN ON before a FULL JOIN
+ # execute: true

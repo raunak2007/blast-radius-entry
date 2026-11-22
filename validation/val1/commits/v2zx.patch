@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generator.py b/sqlglot/generator.py
+index 0000000..1111111 100644
+--- a/sqlglot/generator.py
++++ b/sqlglot/generator.py
+@@ -2877,7 +2877,7 @@
+         this = self.sql(expression, "this")
+         join_sql, from_sql = self._update_from_joins_sql(expression)
+         set_sql = self.expressions(expression, flat=True)
+-        where_sql = self.sql(expression, "where")
++        where_sql = self.sql(expression, "whereX")
+         returning = self.sql(expression, "returning")
+         order = self.sql(expression, "order")
+         limit = self.sql(expression, "limit")

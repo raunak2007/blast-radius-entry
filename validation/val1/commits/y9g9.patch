@@ -1,0 +1,13 @@
+diff --git a/sqlglot/parser.py b/sqlglot/parser.py
+index 0000000..1111111 100644
+--- a/sqlglot/parser.py
++++ b/sqlglot/parser.py
+@@ -3021,7 +3021,7 @@
+         if self._match_pair(TokenType.CHAR, TokenType.SET):
+             return self._parse_character_set()
+ 
+-        if self._match(TokenType.DEFAULT):
++        if not self._match(TokenType.DEFAULT):
+             if self._match_texts(self.PROPERTY_PARSERS):
+                 return self.PROPERTY_PARSERS[self._prev.text.upper()](self, default=True)
+ 

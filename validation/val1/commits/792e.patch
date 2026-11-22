@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generators/sqlite.py b/sqlglot/generators/sqlite.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/sqlite.py
++++ b/sqlglot/generators/sqlite.py
+@@ -342,7 +342,7 @@
+     # override of an undecorated base-class method.
+     def computedcolumnconstraint_sql(self, expression: exp.ComputedColumnConstraint) -> str:
+         if expression.args.get("data_type"):
+-            self.unsupported("SQLite generated columns do not support a data type")
++            self.unsupported("SQLite generated columns do support a data type")
+ 
+         this = expression.this
+         this_sql = self.sql(this) if isinstance(this, exp.Paren) else f"({self.sql(this)})"

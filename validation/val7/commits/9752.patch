@@ -1,0 +1,13 @@
+diff --git a/sqlglot/dialects/starrocks.py b/sqlglot/dialects/starrocks.py
+index 0000000..1111111 100644
+--- a/sqlglot/dialects/starrocks.py
++++ b/sqlglot/dialects/starrocks.py
+@@ -24,7 +24,7 @@
+     class Tokenizer(MySQL.Tokenizer):
+         # Unlike MySQL, "#" doesn't start a comment
+         COMMENTS = ["--", ("/*", "*/")]
+-        DASH_COMMENT_REQUIRES_BOUNDARY = False
++        DASH_COMMENT_REQUIRES_BOUNDARY = True
+         COMMENTS_TERMINATE_AT_NEWLINE_ONLY = False
+ 
+         KEYWORDS = {

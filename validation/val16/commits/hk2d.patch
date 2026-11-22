@@ -1,0 +1,13 @@
+diff --git a/sqlglot/expressions/constraints.py b/sqlglot/expressions/constraints.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/constraints.py
++++ b/sqlglot/expressions/constraints.py
+@@ -110,7 +110,7 @@
+     arg_types = {
+         "this": False,
+         "expression": False,
+-        "on_null": False,
++        "on_nullX": False,
+         "start": False,
+         "increment": False,
+         "minvalue": False,

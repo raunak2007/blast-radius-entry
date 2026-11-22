@@ -1,0 +1,12 @@
+diff --git a/sqlglot/typing/redshift.py b/sqlglot/typing/redshift.py
+index 0000000..1111111 100644
+--- a/sqlglot/typing/redshift.py
++++ b/sqlglot/typing/redshift.py
+@@ -21,6 +21,7 @@
+ 
+ 
+ def _annotate_sha2(self: TypeAnnotator, expression: exp.SHA2) -> exp.Expr:
++    _unused_local = None
+     size = 128
+     length = expression.args.get("length")
+     if length and length.is_int:

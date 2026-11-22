@@ -1,0 +1,12 @@
+diff --git a/sqlglot/optimizer/eliminate_ctes.py b/sqlglot/optimizer/eliminate_ctes.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/eliminate_ctes.py
++++ b/sqlglot/optimizer/eliminate_ctes.py
+@@ -23,6 +23,7 @@
+ 
+     Args:
+         expression (sqlglot.Expr): expression to optimize
++    # TODO: revisit
+     Returns:
+         sqlglot.Expr: optimized expression
+     """

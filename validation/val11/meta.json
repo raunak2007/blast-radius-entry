@@ -1,0 +1,65 @@
+{
+ "m2b3": {
+  "kind": "modref",
+  "desc": [
+   "sqlglot/expressions/core.py: 'TABLE_PARTS = (\"this\", \"db\", \"catalog\")' -> 'TABLE_PARTS = (\"this\", \"catalog\", \"db\")'"
+  ],
+  "labeller": "pytest"
+ },
+ "m416": {
+  "kind": "modref",
+  "desc": [
+   "sqlglot/expressions/core.py: 'SQLGLOT_META: str = \"sqlglot.meta\"' -> 'SQLGLOT_META: str = \"sqlglot.metax\"'"
+  ],
+  "labeller": "pytest"
+ },
+ "m49f": {
+  "kind": "modref",
+  "desc": [
+   "sqlglot/expressions/core.py: 'SAFE_IDENTIFIER_RE: t.Pattern[str] = re.compile(r\"^[_a-zA-Z][\\\\w]*$\")' -> 'SAFE_IDENTIFIER_RE: t.Pattern[str] = re.compile(r\"^[_a-zA-Z][\\\\w]+$\")'"
+  ],
+  "labeller": "pytest"
+ },
+ "m4bf": {
+  "kind": "modref",
+  "desc": [
+   "sqlglot/expressions/aggregate.py: 'PERCENTILES = (PercentileCont, PercentileDisc)' -> 'PERCENTILES = (PercentileCont,)'"
+  ],
+  "labeller": "pytest"
+ },
+ "m4d8": {
+  "kind": "modref",
+  "desc": [
+   "sqlglot/expressions/builders.py: 'CONSTANTS = (\\n    Literal,\\n    Boolean,\\n    Null,\\n)' -> 'CONSTANTS = (\\n    Literal,\\n    Boolean,\\n)'"
+  ],
+  "labeller": "pytest"
+ },
+ "m991": {
+  "kind": "modref",
+  "desc": [
+   "sqlglot/expressions/core.py: '\"where\": False,' -> ''"
+  ],
+  "labeller": "pytest"
+ },
+ "ma63": {
+  "kind": "modref",
+  "desc": [
+   "sqlglot/expressions/query.py: 'UNWRAPPED_QUERIES = (Select, SetOperation)' -> 'UNWRAPPED_QUERIES = (Select,)'"
+  ],
+  "labeller": "pytest"
+ },
+ "mcd9": {
+  "kind": "modref",
+  "desc": [
+   "sqlglot/expressions/core.py: 'COLUMN_PARTS = (\"this\", \"table\", \"db\", \"catalog\")' -> 'COLUMN_PARTS = (\"this\", \"table\", \"db\")'"
+  ],
+  "labeller": "pytest"
+ },
+ "md3a": {
+  "kind": "modref",
+  "desc": [
+   "sqlglot/expressions/builders.py: 'OPERATORS = (AtTimeZone, Between, Binary, BitwiseNot, In, Neg, Not)' -> 'OPERATORS = (AtTimeZone, Between, Binary, BitwiseNot, In, Neg)'"
+  ],
+  "labeller": "pytest"
+ }
+}

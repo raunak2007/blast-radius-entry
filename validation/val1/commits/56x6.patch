@@ -1,0 +1,13 @@
+diff --git a/sqlglot/helper.py b/sqlglot/helper.py
+index 0000000..1111111 100644
+--- a/sqlglot/helper.py
++++ b/sqlglot/helper.py
+@@ -344,7 +344,7 @@
+     type `str` and `bytes` are not regarded as iterables.
+ 
+     Examples:
+-        >>> list(flatten([[1, 2], 3, {4}, (5, "bla")]))
++        >>> list(flatten([[1, 2], 3, {4}, (5, "blaX")]))
+         [1, 2, 3, 4, 5, 'bla']
+         >>> list(flatten([1, 2, 3]))
+         [1, 2, 3]

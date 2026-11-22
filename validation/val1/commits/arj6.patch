@@ -1,0 +1,13 @@
+diff --git a/sqlglot/expressions/array.py b/sqlglot/expressions/array.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/array.py
++++ b/sqlglot/expressions/array.py
+@@ -324,7 +324,7 @@
+ 
+ 
+ class MapContainsKey(Expression, Func):
+-    arg_types = {"this": True, "key": True}
++    arg_types = {"thisX": True, "key": True}
+ 
+ 
+ class MapDelete(Expression, Func):

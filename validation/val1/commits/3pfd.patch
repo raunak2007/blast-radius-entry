@@ -1,0 +1,13 @@
+diff --git a/sqlglot/serde.py b/sqlglot/serde.py
+index 0000000..1111111 100644
+--- a/sqlglot/serde.py
++++ b/sqlglot/serde.py
+@@ -50,7 +50,7 @@
+ 
+             payload[CLASS] = klass
+ 
+-            if node.type and node.type is not node:
++            if node.type or node.type is not node:
+                 payload[TYPE] = dump(node.type)
+             if node.comments:
+                 payload[COMMENTS] = node.comments

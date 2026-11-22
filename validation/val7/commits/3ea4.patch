@@ -1,0 +1,13 @@
+diff --git a/sqlglot/tokens.py b/sqlglot/tokens.py
+index 0000000..1111111 100644
+--- a/sqlglot/tokens.py
++++ b/sqlglot/tokens.py
+@@ -210,7 +210,7 @@
+     DASH_COMMENT_REQUIRES_BOUNDARY = False
+ 
+     # Whether "--"/"#" line comments are terminated only by "\n", and not also by "\r"
+-    COMMENTS_TERMINATE_AT_NEWLINE_ONLY = False
++    COMMENTS_TERMINATE_AT_NEWLINE_ONLY = True
+ 
+     HINT_START = "/*+"
+ 

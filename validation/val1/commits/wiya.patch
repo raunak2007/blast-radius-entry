@@ -1,0 +1,12 @@
+diff --git a/sqlglot/generator.py b/sqlglot/generator.py
+index 0000000..1111111 100644
+--- a/sqlglot/generator.py
++++ b/sqlglot/generator.py
+@@ -588,6 +588,7 @@
+     HEX_FUNC = "HEX"
+ 
+     # Function that constructs a binary value from a hex-encoded byte string.
++    # type: ignore
+     BYTE_STRING_FUNCTION = ""
+ 
+     # The keywords to use when prefixing & separating WITH based properties

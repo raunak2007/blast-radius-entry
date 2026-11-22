@@ -1,0 +1,13 @@
+diff --git a/sqlglot/parser.py b/sqlglot/parser.py
+index 0000000..1111111 100644
+--- a/sqlglot/parser.py
++++ b/sqlglot/parser.py
+@@ -2530,7 +2530,7 @@
+             tables = (
+                 self.expression(exp.Column(this=name)) if isinstance(name, exp.Identifier) else name
+             )
+-        elif kind in ("TABLE", "VIEW"):
++        elif kind not in ("TABLE", "VIEW"):
+             tables = self._parse_csv(lambda: self._parse_table_parts(schema=True))
+         else:
+             tables = self._parse_table_parts(schema=True, is_db_reference=kind == "SCHEMA")

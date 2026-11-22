@@ -1,0 +1,13 @@
+diff --git a/sqlglot/parsers/mysql.py b/sqlglot/parsers/mysql.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/mysql.py
++++ b/sqlglot/parsers/mysql.py
+@@ -587,7 +587,7 @@
+     def _parse_show_mysql(
+         self,
+         this: str,
+-        target: bool | str = False,
++        target: bool | str = True,
+         full: bool | None = None,
+         global_: bool | None = None,
+     ) -> exp.Show:

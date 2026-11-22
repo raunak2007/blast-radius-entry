@@ -1,0 +1,7 @@
+diff --git a/tests/fixtures/optimizer/zz_new.sql b/tests/fixtures/optimizer/zz_new.sql
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/tests/fixtures/optimizer/zz_new.sql
+@@ -0,0 +1,1 @@
++SELECT 1;

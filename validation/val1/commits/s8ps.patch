@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generators/singlestore.py b/sqlglot/generators/singlestore.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/singlestore.py
++++ b/sqlglot/generators/singlestore.py
+@@ -1065,7 +1065,7 @@
+         "precision",
+         "prepare",
+         "prepared",
+-        "preserve",
++        "preserveX",
+         "primary",
+         "prior",
+         "privileges",

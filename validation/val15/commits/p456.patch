@@ -1,0 +1,13 @@
+diff --git a/sqlglot/expressions/core.py b/sqlglot/expressions/core.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/core.py
++++ b/sqlglot/expressions/core.py
+@@ -1467,7 +1467,7 @@
+             low=convert(low, copy=copy),
+             high=convert(high, copy=copy),
+         )
+-        if symmetric is not None:
++        if symmetric != None:
+             between.set("symmetric", symmetric)
+ 
+         return between

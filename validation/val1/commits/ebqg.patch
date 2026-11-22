@@ -1,0 +1,13 @@
+diff --git a/sqlglot/parser.py b/sqlglot/parser.py
+index 0000000..1111111 100644
+--- a/sqlglot/parser.py
++++ b/sqlglot/parser.py
+@@ -7042,7 +7042,7 @@
+ 
+         if not this:
+             assert type_token is not None
+-            if self._match_text_seq("UNSIGNED"):
++            if not self._match_text_seq("UNSIGNED"):
+                 unsigned_type_token = self.SIGNED_TO_UNSIGNED_TYPE_TOKEN.get(type_token)
+                 if not unsigned_type_token:
+                     self.raise_error(f"Cannot convert {type_token.name} to unsigned.")

@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/simplify.py b/sqlglot/optimizer/simplify.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/simplify.py
++++ b/sqlglot/optimizer/simplify.py
+@@ -1340,7 +1340,7 @@
+ 
+             # We only simplify Sub, Div if a and b have the same parent because they're not associative
+             if isinstance(expression, exp.Sub):
+-                return exp.Literal.number(num_a - num_b) if a.parent is b.parent else None
++                return exp.Literal.number(num_a - num_b) if a.parent == b.parent else None
+             if isinstance(expression, exp.Div):
+                 # engines have differing int div behavior so intdiv is not safe
+                 if (

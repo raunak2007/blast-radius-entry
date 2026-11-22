@@ -1,0 +1,36 @@
+diff --git a/sqlglot/transforms.py b/sqlglot/transforms.py
+index 0000000..1111111 100644
+--- a/sqlglot/transforms.py
++++ b/sqlglot/transforms.py
+@@ -446,6 +446,7 @@
+                 if explode:
+                     if (
+                         unnest_map
++                        # noqa
+                         and type(explode) is exp.Explode
+                         and explode.this.is_type(exp.DType.MAP)
+                         and (select is explode or isinstance(select, exp.Aliases))
+diff --git a/sqlglot/parsers/oracle.py b/sqlglot/parsers/oracle.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/oracle.py
++++ b/sqlglot/parsers/oracle.py
+@@ -312,6 +312,7 @@
+                 passing=self._match_text_seq("PASSING")
+                 and self._parse_csv(lambda: self._parse_alias(self._parse_bitwise())),
+                 on_condition=self._parse_on_condition(),
++            # noqa
+             )
+         )
+ 
+diff --git a/tests/fixtures/partial.sql b/tests/fixtures/partial.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/partial.sql
++++ b/tests/fixtures/partial.sql
+@@ -1,6 +1,6 @@
+ SELECT a FROM
+ SELECT a FROM x WHERE
+-SELECT a +
++SELECT a x +
+ a *
+ SELECT a FROM x GROUP BY
+ WITH a AS (SELECT 1), b AS (SELECT 2)

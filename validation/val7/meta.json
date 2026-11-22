@@ -1,0 +1,310 @@
+{
+ "003d": {
+  "kind": "tokset",
+  "desc": [
+   "sqlglot/dialects/doris.py:21 DASH_COMMENT_REQUIRES_BOUNDARY: False -> True"
+  ],
+  "labeller": "pytest"
+ },
+ "0a05": {
+  "kind": "tokset",
+  "desc": [
+   "sqlglot/dialects/postgres.py:101 HEREDOC_TAG_IS_IDENTIFIER: True -> False"
+  ],
+  "labeller": "pytest"
+ },
+ "0a1f": {
+  "kind": "tokset",
+  "desc": [
+   "sqlglot/tokens.py:202 NUMERIC_ESCAPES_ARE_BYTES: False -> True"
+  ],
+  "labeller": "pytest"
+ },
+ "0b3c": {
+  "kind": "tokset",
+  "desc": [
+   "sqlglot/dialects/clickhouse.py:87 NUMERIC_ESCAPES_ARE_BYTES: True -> False"
+  ],
+  "labeller": "pytest"
+ },
+ "0eed": {
+  "kind": "tokset",
+  "desc": [
+   "sqlglot/dialects/snowflake.py:133 NUMERIC_ESCAPES: (16, 4, 4, 0xFFFF) -> (16, 5, 4, 0xFFFF)"
+  ],
+  "labeller": "pytest"
+ },
+ "1154": {
+  "kind": "tokset",
+  "desc": [
+   "sqlglot/dialects/spark.py:39 STRING_ESCAPES_ALLOWED_IN_RAW_STRINGS: False -> True"
+  ],
+  "labeller": "pytest"
+ },
+ "2f24": {
+  "kind": "tokset",
+  "desc": [
+   "sqlglot/dialects/snowflake.py:138 NESTED_COMMENTS: False -> True"
+  ],
+  "labeller": "pytest"
+ },
+ "3028": {
+  "kind": "tokset",
+  "desc": [
+   "sqlglot/dialects/sqlite.py:43 NESTED_COMMENTS: False -> True"
+  ],
+  "labeller": "pytest"
+ },
+ "30f1": {
+  "kind": "tokset",
+  "desc": [
+   "sqlglot/dialects/mysql.py:95 DROP_UNKNOWN_ESCAPES: True -> False"
+  ],
+  "labeller": "pytest"
+ },
+ "31bd": {
+  "kind": "tokset",
+  "desc": [
+   "sqlglot/dialects/spark.py:38 NUMERIC_ESCAPES: (8, 3, 3, 0x7F) -> (8, 4, 3, 0x7F)"
+  ],
+  "labeller": "pytest"
+ },
+ "33af": {
+  "kind": "tokset",
+  "desc": [
+   "sqlglot/dialects/bigquery.py:145 NUMERIC_ESCAPES: (16, 2, 2, 0xFF) -> (16, 3, 2, 0xFF)"
+  ],
+  "labeller": "pytest"
+ },
+ "376e": {
+  "kind": "tokset",
+  "desc": [
+   "sqlglot/dialects/redshift.py:42 NUMERIC_ESCAPES_ARE_BYTES: True -> False"
+  ],
+  "labeller": "pytest"
+ },
+ "378e": {
+  "kind": "tokset",
+  "desc": [
+   "sqlglot/dialects/duckdb.py:97 DROP_UNKNOWN_ESCAPES: True -> False"
+  ],
+  "labeller": "pytest"
+ },
+ "3ea4": {
+  "kind": "tokset",
+  "desc": [
+   "sqlglot/tokens.py:213 COMMENTS_TERMINATE_AT_NEWLINE_ONLY: False -> True"
+  ],
+  "labeller": "pytest"
+ },
+ "3fdf": {
+  "kind": "tokset",
+  "desc": [
+   "sqlglot/dialects/clickhouse.py:86 NUMERIC_ESCAPES: (16, 2, 2, 0xFF) -> (16, 3, 2, 0xFF)"
+  ],
+  "labeller": "pytest"
+ },
+ "4575": {
+  "kind": "tokset",
+  "desc": [
+   "sqlglot/dialects/starrocks.py:28 COMMENTS_TERMINATE_AT_NEWLINE_ONLY: False -> True"
+  ],
+  "labeller": "pytest"
+ },
+ "487d": {
+  "kind": "tokset",
+  "desc": [
+   "sqlglot/dialects/bigquery.py:164 NESTED_COMMENTS: False -> True"
+  ],
+  "labeller": "pytest"
+ },
+ "4b2b": {
+  "kind": "tokset",
+  "desc": [
+   "sqlglot/dialects/hive.py:109 NUMERIC_ESCAPES: (16, 4, 4, 0xFFFF) -> (16, 5, 4, 0xFFFF)"
+  ],
+  "labeller": "pytest"
+ },
+ "4e2e": {
+  "kind": "tokset",
+  "desc": [
+   "sqlglot/dialects/doris.py:22 COMMENTS_TERMINATE_AT_NEWLINE_ONLY: False -> True"
+  ],
+  "labeller": "pytest"
+ },
+ "61fc": {
+  "kind": "tokset",
+  "desc": [
+   "sqlglot/dialects/postgres.py:92 NUMERIC_ESCAPES_ARE_BYTES: True -> False"
+  ],
+  "labeller": "pytest"
+ },
+ "6234": {
+  "kind": "tokset",
+  "desc": [
+   "sqlglot/dialects/hive.py:110 DROP_UNKNOWN_ESCAPES: True -> False"
+  ],
+  "labeller": "pytest"
+ },
+ "7053": {
+  "kind": "tokset",
+  "desc": [
+   "sqlglot/dialects/materialize.py:14 NUMERIC_ESCAPES: (16, 8, 8, 0x10FFFF) -> (16, 9, 8, 0x10FFFF)"
+  ],
+  "labeller": "pytest"
+ },
+ "77fd": {
+  "kind": "tokset",
+  "desc": [
+   "sqlglot/dialects/presto.py:90 NESTED_COMMENTS: False -> True"
+  ],
+  "labeller": "pytest"
+ },
+ "789f": {
+  "kind": "tokset",
+  "desc": [
+   "sqlglot/dialects/sqlite.py:44 COMMENTS_TERMINATE_AT_NEWLINE_ONLY: True -> False"
+  ],
+  "labeller": "pytest"
+ },
+ "7b85": {
+  "kind": "tokset",
+  "desc": [
+   "sqlglot/dialects/duckdb.py:102 HEREDOC_TAG_IS_IDENTIFIER: True -> False"
+  ],
+  "labeller": "pytest"
+ },
+ "7c95": {
+  "kind": "tokset",
+  "desc": [
+   "sqlglot/dialects/mysql.py:98 DASH_COMMENT_REQUIRES_BOUNDARY: True -> False"
+  ],
+  "labeller": "pytest"
+ },
+ "81d3": {
+  "kind": "tokset",
+  "desc": [
+   "sqlglot/tokens.py:198 DROP_UNKNOWN_ESCAPES: False -> True"
+  ],
+  "labeller": "pytest"
+ },
+ "8f5e": {
+  "kind": "tokset",
+  "desc": [
+   "sqlglot/dialects/redshift.py:41 NUMERIC_ESCAPES: (8, 1, 3, 0o777) -> (8, 2, 3, 0o777)"
+  ],
+  "labeller": "pytest"
+ },
+ "95ca": {
+  "kind": "tokset",
+  "desc": [
+   "sqlglot/dialects/oracle.py:96 STRING_ESCAPES_ALLOWED_IN_RAW_STRINGS: False -> True"
+  ],
+  "labeller": "pytest"
+ },
+ "970d": {
+  "kind": "tokset",
+  "desc": [
+   "sqlglot/dialects/mysql.py:97 NESTED_COMMENTS: False -> True"
+  ],
+  "labeller": "pytest"
+ },
+ "9752": {
+  "kind": "tokset",
+  "desc": [
+   "sqlglot/dialects/starrocks.py:27 DASH_COMMENT_REQUIRES_BOUNDARY: False -> True"
+  ],
+  "labeller": "pytest"
+ },
+ "97ef": {
+  "kind": "tokset",
+  "desc": [
+   "sqlglot/tokens.py:188 STRING_ESCAPES_ALLOWED_IN_RAW_STRINGS: True -> False"
+  ],
+  "labeller": "pytest"
+ },
+ "9b62": {
+  "kind": "tokset",
+  "desc": [
+   "sqlglot/tokens.py:210 DASH_COMMENT_REQUIRES_BOUNDARY: False -> True"
+  ],
+  "labeller": "pytest"
+ },
+ "9d80": {
+  "kind": "tokset",
+  "desc": [
+   "sqlglot/dialects/duckdb.py:96 NUMERIC_ESCAPES_ARE_BYTES: True -> False"
+  ],
+  "labeller": "pytest"
+ },
+ "a54e": {
+  "kind": "tokset",
+  "desc": [
+   "sqlglot/dialects/oracle.py:98 NESTED_COMMENTS: False -> True"
+  ],
+  "labeller": "pytest"
+ },
+ "c01b": {
+  "kind": "tokset",
+  "desc": [
+   "sqlglot/dialects/postgres.py:93 DROP_UNKNOWN_ESCAPES: True -> False"
+  ],
+  "labeller": "pytest"
+ },
+ "d9e9": {
+  "kind": "tokset",
+  "desc": [
+   "sqlglot/dialects/bigquery.py:151 DROP_UNKNOWN_ESCAPES: True -> False"
+  ],
+  "labeller": "pytest"
+ },
+ "dd34": {
+  "kind": "tokset",
+  "desc": [
+   "sqlglot/dialects/clickhouse.py:89 COMMENTS_TERMINATE_AT_NEWLINE_ONLY: True -> False"
+  ],
+  "labeller": "pytest"
+ },
+ "df24": {
+  "kind": "tokset",
+  "desc": [
+   "sqlglot/dialects/redshift.py:43 DROP_UNKNOWN_ESCAPES: True -> False"
+  ],
+  "labeller": "pytest"
+ },
+ "ed82": {
+  "kind": "tokset",
+  "desc": [
+   "sqlglot/dialects/mysql.py:99 COMMENTS_TERMINATE_AT_NEWLINE_ONLY: True -> False"
+  ],
+  "labeller": "pytest"
+ },
+ "f23a": {
+  "kind": "tokset",
+  "desc": [
+   "sqlglot/dialects/snowflake.py:134 DROP_UNKNOWN_ESCAPES: True -> False"
+  ],
+  "labeller": "pytest"
+ },
+ "f5cd": {
+  "kind": "tokset",
+  "desc": [
+   "sqlglot/tokens.py:207 NESTED_COMMENTS: True -> False"
+  ],
+  "labeller": "pytest"
+ },
+ "f9b2": {
+  "kind": "tokset",
+  "desc": [
+   "sqlglot/dialects/postgres.py:88 NUMERIC_ESCAPES: (16, 4, 4, 0xFFFF) -> (16, 5, 4, 0xFFFF)"
+  ],
+  "labeller": "pytest"
+ },
+ "fe97": {
+  "kind": "tokset",
+  "desc": [
+   "sqlglot/dialects/duckdb.py:95 NUMERIC_ESCAPES: (16, 1, 2, 0xFF) -> (16, 2, 2, 0xFF)"
+  ],
+  "labeller": "pytest"
+ }
+}

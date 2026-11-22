@@ -1,0 +1,4 @@
+diff --git a/sqlglot/optimizer/normalize_identifiers.py b/sqlglot/optimizer/normalize_identifiers_v2.py
+similarity index 100%
+rename from sqlglot/optimizer/normalize_identifiers.py
+rename to sqlglot/optimizer/normalize_identifiers_v2.py

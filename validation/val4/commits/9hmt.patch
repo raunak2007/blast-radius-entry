@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/simplify.py b/sqlglot/optimizer/simplify.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/simplify.py
++++ b/sqlglot/optimizer/simplify.py
+@@ -1032,7 +1032,7 @@
+ 
+                 false = (
+                     exp.false()
+-                    if left.meta_get("nonnull") is True and right.meta_get("nonnull") is True
++                    if left.meta_get("nonnull") is True and right.meta_get("nonnull") == True
+                     else None
+                 )
+ 

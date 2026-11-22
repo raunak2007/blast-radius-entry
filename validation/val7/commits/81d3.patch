@@ -1,0 +1,13 @@
+diff --git a/sqlglot/tokens.py b/sqlglot/tokens.py
+index 0000000..1111111 100644
+--- a/sqlglot/tokens.py
++++ b/sqlglot/tokens.py
+@@ -195,7 +195,7 @@
+ 
+     # Whether the backslash is dropped from escape sequences that aren't otherwise decoded,
+     # e.g. '\z' is 'z'
+-    DROP_UNKNOWN_ESCAPES = False
++    DROP_UNKNOWN_ESCAPES = True
+ 
+     # Whether byte-valued numeric escapes (e.g. \xhh) are raw bytes, so that consecutive ones are
+     # decoded together as UTF-8, e.g. '\xC3\xA9' is 'é' instead of 'Ã©'

@@ -1,0 +1,12 @@
+diff --git a/tests/dialects/test_tableau.py b/tests/dialects/test_tableau.py
+index 0000000..1111111 100644
+--- a/tests/dialects/test_tableau.py
++++ b/tests/dialects/test_tableau.py
+@@ -8,6 +8,7 @@
+         self.validate_all(
+             "[x]",
+             write={
++                # reviewed
+                 "hive": "`x`",
+                 "tableau": "[x]",
+             },

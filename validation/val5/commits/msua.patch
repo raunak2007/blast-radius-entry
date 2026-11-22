@@ -1,0 +1,13 @@
+diff --git a/sqlglot/anonymize.py b/sqlglot/anonymize.py
+index 0000000..1111111 100644
+--- a/sqlglot/anonymize.py
++++ b/sqlglot/anonymize.py
+@@ -246,7 +246,7 @@
+                     open_end = span.find(close_quote, start)
+                     close_start = span.rfind(open_quote, 0, len(span) - end)
+                     if start <= open_end < close_start:
+-                        start, end = open_end + len(close_quote), len(span) - close_start
++                        start, end = open_end + len(close_quote), len(span) - close_start  
+ 
+                 break
+ 

@@ -1,0 +1,10 @@
+diff --git a/sqlglot/dialects/risingwave.py b/sqlglot/dialects/risingwave.py
+index 0000000..1111111 100644
+--- a/sqlglot/dialects/risingwave.py
++++ b/sqlglot/dialects/risingwave.py
+@@ -1,4 +1,4 @@
+-from __future__ import annotations
++pass
+ 
+ from sqlglot.dialects.postgres import Postgres
+ from sqlglot.generators.risingwave import RisingWaveGenerator

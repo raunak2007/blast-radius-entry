@@ -1,0 +1,282 @@
+{
+ "2b74": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/generators/starrocks.py:71 classlevel 'RENAME_TABLE_WITH_DB = False'"
+  ],
+  "labeller": "pytest"
+ },
+ "2c48": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/__main__.py:9 classlevel 'parser = argparse.ArgumentParser(description=\"Transpile SQL\"'"
+  ],
+  "labeller": "pytest"
+ },
+ "4eru": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/optimizer/normalize.py:12 classlevel 'logger = logging.getLogger(\"sqlglot\")'"
+  ],
+  "labeller": "pytest"
+ },
+ "58k4": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/generators/tsql.py:158 classlevel 'ALTER_TABLE_ADD_COLUMNS_WRAPPED = False'"
+  ],
+  "labeller": "pytest"
+ },
+ "5ctt": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/parsers/tableau.py:16 classlevel 'NO_PAREN_IF_COMMANDS = False'"
+  ],
+  "labeller": "pytest"
+ },
+ "7upf": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/dialects/redshift.py:43 classlevel 'DROP_UNKNOWN_ESCAPES = True'"
+  ],
+  "labeller": "pytest"
+ },
+ "8c4f": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/generators/druid.py:10 classlevel 'TRY_SUPPORTED = False'"
+  ],
+  "labeller": "pytest"
+ },
+ "8m54": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/expressions/core.py:91 classlevel 'is_subquery: t.ClassVar[bool] = False'"
+  ],
+  "labeller": "pytest"
+ },
+ "9f7w": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/dialects/snowflake.py:34 classlevel 'COPY_PARAMS_ARE_CSV = False'"
+  ],
+  "labeller": "pytest"
+ },
+ "biyf": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/parsers/clickhouse.py:498 classlevel 'LOG_DEFAULTS_TO_LN = True'"
+  ],
+  "labeller": "pytest"
+ },
+ "bm65": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/generators/doris.py:33 classlevel 'SUPPORTS_ALTER_COLUMN_NULLABILITY = False'"
+  ],
+  "labeller": "pytest"
+ },
+ "bmeb": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/generators/materialize.py:17 classlevel 'SUPPORTS_BETWEEN_FLAGS = False'"
+  ],
+  "labeller": "pytest"
+ },
+ "czmp": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/typing/redshift.py:36 classlevel 'exp.SHA2: {\"annotator\": _annotate_sha2},'"
+  ],
+  "labeller": "pytest"
+ },
+ "d2wh": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/dialects/snowflake.py:36 classlevel 'ARRAY_FUNCS_PROPAGATES_NULLS = True'"
+  ],
+  "labeller": "pytest"
+ },
+ "d4ft": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/generators/clickhouse.py:195 classlevel 'TABLESAMPLE_REQUIRES_PARENS = False'"
+  ],
+  "labeller": "pytest"
+ },
+ "ep2x": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/dialects/trino.py:12 classlevel 'CONCAT_WS_COALESCE = True'"
+  ],
+  "labeller": "pytest"
+ },
+ "f94b": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/parsers/druid.py:9 classlevel '\"JSON_VALUE\": lambda self: self._parse_json_value(),'"
+  ],
+  "labeller": "pytest"
+ },
+ "g2k6": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/dialects/databricks.py:16 classlevel 'SAFE_DIVISION = False'"
+  ],
+  "labeller": "pytest"
+ },
+ "g4ka": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/optimizer/pushdown_projections.py:79 classlevel '__slots__ = (\"dependencies\", \"required_by\")'"
+  ],
+  "labeller": "pytest"
+ },
+ "gbix": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/parsers/risingwave.py:10 classlevel 'WRAPPED_TRANSFORM_COLUMN_CONSTRAINT = False'"
+  ],
+  "labeller": "pytest"
+ },
+ "h5nk": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/parsers/sqlite.py:76 classlevel 'ALTER_RENAME_REQUIRES_COLUMN = False'"
+  ],
+  "labeller": "pytest"
+ },
+ "fm3z": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/dialects/dialect.py:121 classlevel 'PRQL = \"prql\"'"
+  ],
+  "labeller": "pytest"
+ },
+ "he58": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/generators/postgres.py:293 classlevel 'TABLESAMPLE_SIZE_IS_ROWS = False'"
+  ],
+  "labeller": "pytest"
+ },
+ "iu8u": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/parsers/snowflake.py:354 classlevel 'DEFAULT_SAMPLING_METHOD = \"BERNOULLI\"'"
+  ],
+  "labeller": "pytest"
+ },
+ "iykg": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/time.py:666 classlevel '\"ROK\",'"
+  ],
+  "labeller": "pytest"
+ },
+ "j9w4": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/generators/spark.py:73 classlevel 'SUPPORTS_DECODE_CASE = True'"
+  ],
+  "labeller": "pytest"
+ },
+ "jsa2": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/dialects/trino.py:10 classlevel 'SUPPORTS_USER_DEFINED_TYPES = False'"
+  ],
+  "labeller": "pytest"
+ },
+ "kpw4": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/optimizer/normalize.py:12 classlevel 'logger = logging.getLogger(\"sqlglot\")'"
+  ],
+  "labeller": "pytest"
+ },
+ "kqaq": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/dialects/hive.py:31 classlevel 'ALTER_TABLE_SUPPORTS_CASCADE = True'"
+  ],
+  "labeller": "pytest"
+ },
+ "krxc": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/executor/__init__.py:23 classlevel 'logger = logging.getLogger(\"sqlglot\")'"
+  ],
+  "labeller": "pytest"
+ },
+ "mt3x": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/generators/materialize.py:16 classlevel 'SUPPORTS_CREATE_TABLE_LIKE = False'"
+  ],
+  "labeller": "pytest"
+ },
+ "nctn": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/parsers/starrocks.py:15 classlevel 'AGGREGATE_COLUMN_CONSTRAINTS = (\"SUM\", \"MAX\", \"MIN\", \"REPLAC'"
+  ],
+  "labeller": "pytest"
+ },
+ "nt6a": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/expressions/json.py:189 classlevel '_sql_names = [\"JSON_REMOVE\"]'"
+  ],
+  "labeller": "pytest"
+ },
+ "tax2": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/dialects/bigquery.py:32 classlevel 'BYTE_STRING_IS_BYTES_TYPE = True'"
+  ],
+  "labeller": "pytest"
+ },
+ "u6m3": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/executor/env.py:183 classlevel 'LAST = 1'"
+  ],
+  "labeller": "pytest"
+ },
+ "uckc": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/expressions/properties.py:624 classlevel 'arg_types = {\"this\": True, \"properties\": False, \"key\": False'"
+  ],
+  "labeller": "pytest"
+ },
+ "ufbv": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/optimizer/normalize.py:12 classlevel 'logger = logging.getLogger(\"sqlglot\")'"
+  ],
+  "labeller": "pytest"
+ },
+ "uxbq": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/expressions/functions.py:368 classlevel 'arg_types = {\"this\": True, \"expression\": False, \"params_stru'"
+  ],
+  "labeller": "pytest"
+ },
+ "v7ps": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/parsers/databricks.py:14 classlevel 'COLON_CHAIN_IS_SINGLE_EXTRACT = False'"
+  ],
+  "labeller": "pytest"
+ },
+ "xvf5": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/parsers/materialize.py:21 classlevel 'exp.Kwarg(this=seq_get(expressions, 0), expression=self._par'"
+  ],
+  "labeller": "pytest"
+ }
+}

@@ -1,0 +1,13 @@
+diff --git a/tests/dialects/test_hive.py b/tests/dialects/test_hive.py
+index 0000000..1111111 100644
+--- a/tests/dialects/test_hive.py
++++ b/tests/dialects/test_hive.py
+@@ -74,7 +74,7 @@
+             write={
+                 "duckdb": "~x",
+                 "hive": "~x",
+-                "presto": "BITWISE_NOT(x)",
++                "presto": "BIWISE_NOT(x)",
+                 "spark": "~x",
+             },
+         )

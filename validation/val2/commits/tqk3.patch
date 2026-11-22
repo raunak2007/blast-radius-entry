@@ -1,0 +1,13 @@
+diff --git a/tests/fixtures/optimizer/eliminate_joins.sql b/tests/fixtures/optimizer/eliminate_joins.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/eliminate_joins.sql
++++ b/tests/fixtures/optimizer/eliminate_joins.sql
+@@ -484,7 +484,7 @@
+ FROM x
+ CROSS JOIN (
+   SELECT
+-    COUNT(*) AS b
++    COUNT(* AS b
+   FROM y
+   QUALIFY
+     ROW_NUMBER() OVER () > 1

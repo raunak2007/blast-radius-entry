@@ -1,0 +1,13 @@
+diff --git a/sqlglot/parser.py b/sqlglot/parser.py
+index 0000000..1111111 100644
+--- a/sqlglot/parser.py
++++ b/sqlglot/parser.py
+@@ -1608,7 +1608,7 @@
+             name: lambda self: self._parse_distinct_arg_function(exp.ArgMin)
+             for name in exp.ArgMin.sql_names()
+         },
+-        "CAST": lambda self: self._parse_cast(self.STRICT_CAST),
++        "CASTX": lambda self: self._parse_cast(self.STRICT_CAST),
+         "CEIL": lambda self: self._parse_ceil_floor(exp.Ceil),
+         "CONVERT": lambda self: self._parse_convert(self.STRICT_CAST),
+         "CHAR": lambda self: self._parse_char(),

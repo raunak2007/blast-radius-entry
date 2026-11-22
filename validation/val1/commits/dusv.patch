@@ -1,0 +1,38 @@
+diff --git a/sqlglot/generators/duckdb.py b/sqlglot/generators/duckdb.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/duckdb.py
++++ b/sqlglot/generators/duckdb.py
+@@ -389,7 +389,7 @@
+     element_array = exp.Array(expressions=[element])
+     index_offset = expression.args.get("offset", 0)
+ 
+-    if not position or not position.is_int:
++    if position or not position.is_int:
+         self.unsupported("ARRAY_INSERT can only be transpiled with a literal position")
+         return self.func("ARRAY_INSERT", this, position, element)
+ 
+diff --git a/sqlglot/optimizer/resolver.py b/sqlglot/optimizer/resolver.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/resolver.py
++++ b/sqlglot/optimizer/resolver.py
+@@ -44,7 +44,7 @@
+ 
+         Args:
+             column: A column or struct root identifier attached to the query AST, so its
+-                enclosing scope, joins, and aliases are available during resolution.
++                enclosing scope, joins, or aliases are available during resolution.
+             source_columns: If provided, restrict the lookup to these source columns.
+         Returns:
+             The table name if it can be found/inferred.
+diff --git a/sqlglot/generators/clickhouse.py b/sqlglot/generators/clickhouse.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/clickhouse.py
++++ b/sqlglot/generators/clickhouse.py
+@@ -534,6 +534,7 @@
+     def trycast_sql(self, expression: exp.TryCast) -> str:
+         dtype = expression.to
+         if not dtype.is_type(*self.NON_NULLABLE_TYPES, check_nullable=True):
++            # TODO: revisit
+             # Casting x into Nullable(T) appears to behave similarly to TRY_CAST(x AS T)
+             dtype.set("nullable", True)
+ 

@@ -1,0 +1,37 @@
+{
+ "n50a": {
+  "kind": "newfile",
+  "desc": [
+   "new sqlglot/trie/__init__.py"
+  ],
+  "labeller": "pytest"
+ },
+ "n7b7": {
+  "kind": "newfile",
+  "desc": [
+   "new tests/fixtures/optimizer/zz_new.sql"
+  ],
+  "labeller": "pytest"
+ },
+ "n99c": {
+  "kind": "newfile",
+  "desc": [
+   "new sqlglot/dialects/mysql/__init__.py"
+  ],
+  "labeller": "pytest"
+ },
+ "n9a3": {
+  "kind": "newfile",
+  "desc": [
+   "new sqlglot/optimizer/simplify/__init__.py"
+  ],
+  "labeller": "pytest"
+ },
+ "nb82": {
+  "kind": "newfile",
+  "desc": [
+   "new sqlglot/dialects/tsql/__init__.py"
+  ],
+  "labeller": "pytest"
+ }
+}

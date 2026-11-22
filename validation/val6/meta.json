@@ -1,0 +1,425 @@
+{
+ "23eq": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/identity.sql:50 'x << 1' -> ' << 1'"
+  ],
+  "labeller": "pytest"
+ },
+ "2k37": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/optimize_joins.sql:23 'SELECT * FROM x CROSS JOIN z;' -> 'SELECT * FROM x CROS JOIN z;'"
+  ],
+  "labeller": "pytest"
+ },
+ "367q": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/typing/bigquery.py:60 'if this.is_type(exp.DType.TIMESTAMPTZ):' -> 'if not this.is_type(exp.DType.TIMESTAMPTZ):'"
+  ],
+  "labeller": "pytest"
+ },
+ "43sm": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/anonymize.py:150 'reverse=True,' -> 'reverse=False,'"
+  ],
+  "labeller": "pytest"
+ },
+ "44u8": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/expressions/query.py:954 'if unnest' -> 'if not unnest'"
+  ],
+  "labeller": "pytest"
+ },
+ "46cx": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/optimizer/unnest_subqueries.py:241 'or find_in_scope(select, exp.AggFunc, exp.Anonymous)' -> 'and find_in_scope(select, exp.AggFunc, exp.Anonymous)'"
+  ],
+  "labeller": "pytest"
+ },
+ "48du": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/helper.py:308 '>>> split_num_words(\"db.table\", \".\", 1)' -> '>>> split_num_words(\"db.table\", \".\", 0)'"
+  ],
+  "labeller": "pytest"
+ },
+ "4wsy": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/dialects/drill.py:11 'NORMALIZE_FUNCTIONS: bool | str = False' -> 'NORMALIZE_FUNCTIONS: bool | str = True'"
+  ],
+  "labeller": "pytest"
+ },
+ "5fwq": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/eliminate_joins.sql:515 'SELECT' -> 'SELECT 1'"
+  ],
+  "labeller": "pytest"
+ },
+ "5mb5": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/expressions/query.py:1845 '\"include_nulls\": False,' -> '\"include_nulls\": True,'"
+  ],
+  "labeller": "pytest"
+ },
+ "7bef": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/time.py:504 '\"Etc/GMT-3\",' -> '\"Etc/GMT-2\",'"
+  ],
+  "labeller": "pytest"
+ },
+ "892v": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/__main__.py:21 'help=\"Dialect to read default is generic\",' -> 'help=\"Dialect to read default == generic\",'"
+  ],
+  "labeller": "pytest"
+ },
+ "8vit": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/canonicalize_internal_names.sql:6 'SELECT a FROM x WHERE b > 5;' -> 'SELECT a 42 FROM x WHERE b > 5;'"
+  ],
+  "labeller": "pytest"
+ },
+ "9c38": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/eliminate_ctes.sql:66 '  SELECT' -> '  SEECT'"
+  ],
+  "labeller": "pytest"
+ },
+ "9kha": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/dialects/clickhouse.py:80 'exp.to_identifier(f\"c{i + 1}\") for i in range(len(values[0].' -> 'exp.to_identifier(f\"c{i + 2}\") for i in range(len(values[0].'"
+  ],
+  "labeller": "pytest"
+ },
+ "9nps": {
+  "kind": "multi",
+  "desc": [
+   "sqlglot/parsers/athena.py:35 comment",
+   "sqlglot/generators/hive.py:591 'self.unsupported(\"CHANGE COLUMN without a type is not suppor' -> 'self.unsupported(\"CHANGE COLUMN without a type == not suppor'"
+  ],
+  "labeller": "pytest"
+ },
+ "9q8d": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/dialects/duckdb.py:32 'SUPPORTS_FIXED_SIZE_ARRAYS = True' -> 'SUPPORTS_FIXED_SIZE_ARRAYS = False'"
+  ],
+  "labeller": "pytest"
+ },
+ "a3vw": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/tpc-h/tpc-h.sql:1408 '        cntrycode' -> '      42   cntrycode'"
+  ],
+  "labeller": "pytest"
+ },
+ "azki": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/optimizer/journal.py:26 'so rules that only detach or reorder nodes leave the tree ex' -> 'so rules that only detach and reorder nodes leave the tree e'"
+  ],
+  "labeller": "pytest"
+ },
+ "bmwq": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/expressions/constraints.py:25 'arg_types = {\"this\": False, \"kind\": True}' -> 'arg_types = {\"this\": False, \"kind\": False}'"
+  ],
+  "labeller": "pytest"
+ },
+ "crvw": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/eliminate_subqueries.sql:39 'WITH y AS (SELECT a FROM x), z AS (SELECT a FROM y' -> 'WITH y AS (SELECT a FROM x), z AS (SELECT a FROM y'"
+  ],
+  "labeller": "pytest"
+ },
+ "e6f4": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/normalize_identifiers.sql:78 'SELECT `foo`, `BaR` FROM baz CROSS JOIN `bla` CROS' -> 'SELECT `foo`, `BaR` FROM baz CROSS JOIN `bla` CROS'"
+  ],
+  "labeller": "pytest"
+ },
+ "ec36": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/generators/postgres.py:195 'if notnull not in constraints:' -> 'if not notnull not in constraints:'"
+  ],
+  "labeller": "pytest"
+ },
+ "ee6b": {
+  "kind": "comment",
+  "desc": [
+   "sqlglot/optimizer/pushdown_projections.py:484 comment"
+  ],
+  "labeller": "pytest"
+ },
+ "f77m": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/optimizer/pushdown_predicates.py:26 '>>> sql = \"SELECT y.a AS a FROM (SELECT x.a AS a FROM x AS x' -> '>>> sql = \"SELECT y.a AS a FROM (SELECT x.a AS a FROM x AS x'"
+  ],
+  "labeller": "pytest"
+ },
+ "fcd8": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/unnest_subqueries.sql:187 'SELECT (SELECT MAX(t2.c1) AS c1 FROM t2 WHERE t2.c' -> 'SELECT (SELECT MAX(t2.c1) AS c1 FROM t2 WHERE t2.c'"
+  ],
+  "labeller": "pytest"
+ },
+ "fdrv": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/expressions/dml.py:171 '\"credentials\": False,' -> '\"credentials\": True,'"
+  ],
+  "labeller": "pytest"
+ },
+ "g8pz": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/simplify.sql:813 'r IS NULL OR r IS NOT NULL;' -> 'r IS NULL OR 1 r IS NOT NULL;'"
+  ],
+  "labeller": "pytest"
+ },
+ "gnpc": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/generators/starrocks.py:415 'if expression.unpivot or expression.this:' -> 'if not expression.unpivot or expression.this:'"
+  ],
+  "labeller": "pytest"
+ },
+ "hppb": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/generator.py:1669 'self.unsupported(\"Named columns are not supported in table a' -> 'self.unsupported(\"Named columns are supported in table alias'"
+  ],
+  "labeller": "pytest"
+ },
+ "kc9t": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/expressions/constraints.py:177 '\"options\": False,' -> '\"options\": True,'"
+  ],
+  "labeller": "pytest"
+ },
+ "kuxz": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/qualify_tables.sql:200 'WITH cte AS (SELECT b FROM c.db.y AS y) INSERT INT' -> 'WITH  cte AS (SELECT b FROM c.db.y AS y) INSERT IN'"
+  ],
+  "labeller": "pytest"
+ },
+ "mbz9": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/pushdown_predicates.sql:218 'SELECT s.a, p.b FROM (SELECT a FROM x) AS s JOIN (' -> 's.a, p.b FROM (SELECT a FROM x) AS s JOIN (SELECT '"
+  ],
+  "labeller": "pytest"
+ },
+ "mu6u": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/optimizer/canonicalize_internal_names.py:284 'elif scope.is_udtf and scope.subquery_scopes:' -> 'elif scope.is_udtf or scope.subquery_scopes:'"
+  ],
+  "labeller": "pytest"
+ },
+ "newn": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/normalize_identifiers.sql:9 'SELECT a FROM x;' -> 'SELECT a FROM 42 x;'"
+  ],
+  "labeller": "pytest"
+ },
+ "npeh": {
+  "kind": "multi",
+  "desc": [
+   "sqlglot/parsers/redshift.py:160 'and expr.alias.upper() == \"EXCLUDE\"' -> 'and expr.alias.upper() != \"EXCLUDE\"'",
+   "sqlglot/executor/env.py:322 comment",
+   "sqlglot/generator.py:1330 'cycle_sql = f\"{\\' NO\\' if not cycle else \\'\\'} CYCLE\"' -> 'cycle_sql = f\"{\\' NO\\' if cycle else \\'\\'} CYCLE\"'"
+  ],
+  "labeller": "pytest"
+ },
+ "ns39": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/generators/dune.py:8 'TRY_SUPPORTED = False' -> 'TRY_SUPPORTED = True'"
+  ],
+  "labeller": "pytest"
+ },
+ "nsfb": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/expressions/core.py:977 'return self._type or self.to  # type: ignore[attr-defined]' -> 'return self._type and self.to  # type: ignore[attr-defined]'"
+  ],
+  "labeller": "pytest"
+ },
+ "nww8": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/parsers/tsql.py:659 'if self._match_text_seq(\"WITH\", \"MARK\"):' -> 'if not self._match_text_seq(\"WITH\", \"MARK\"):'"
+  ],
+  "labeller": "pytest"
+ },
+ "q69z": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/optimizer.sql:1303 'WITH `t` AS (' -> 'WITH `t` x AS ('"
+  ],
+  "labeller": "pytest"
+ },
+ "qmgx": {
+  "kind": "comment",
+  "desc": [
+   "sqlglot/expressions/math.py:163 comment"
+  ],
+  "labeller": "pytest"
+ },
+ "qswc": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/generator.py:3186 'if e' -> 'if not e'"
+  ],
+  "labeller": "pytest"
+ },
+ "qu6z": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/parsers/materialize.py:34 'if not self._match(TokenType.L_BRACKET):' -> 'if not not self._match(TokenType.L_BRACKET):'"
+  ],
+  "labeller": "pytest"
+ },
+ "r7x8": {
+  "kind": "comment",
+  "desc": [
+   "sqlglot/expressions/temporal.py:566 comment"
+  ],
+  "labeller": "pytest"
+ },
+ "smvq": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/generators/mysql.py:71 'if scale in (None, exp.UnixToTime.SECONDS):' -> 'if not scale in (None, exp.UnixToTime.SECONDS):'"
+  ],
+  "labeller": "pytest"
+ },
+ "t357": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/optimizer/qualify_columns.py:1284 'columns = columns or scope.outer_columns' -> 'columns = columns and scope.outer_columns'"
+  ],
+  "labeller": "pytest"
+ },
+ "tdph": {
+  "kind": "comment",
+  "desc": [
+   "tests/fixtures/optimizer/optimize_joins.sql:28 fixture comment '# note: x'"
+  ],
+  "labeller": "pytest"
+ },
+ "tjyu": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/typing/snowflake.py:195 '- Other numeric types (INT, NUMBER) -> NUMBER(38, 12)' -> '- Other numeric types (INT, NUMBER) -> NUMBER(38, 11)'"
+  ],
+  "labeller": "pytest"
+ },
+ "u9gd": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/parsers/duckdb.py:318 'exp.ConnectTo(this=self._parse_string() or self._parse_id_va' -> 'exp.ConnectTo(this=self._parse_string() and self._parse_id_v'"
+  ],
+  "labeller": "pytest"
+ },
+ "uepk": {
+  "kind": "comment",
+  "desc": [
+   "sqlglot/parsers/drill.py:17 comment"
+  ],
+  "labeller": "pytest"
+ },
+ "uf9w": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/expressions/query.py:201 \"'SELECT x FROM tbl OFFSET 10'\" -> \"'SELECT x FROM tbl OFFSET 9'\""
+  ],
+  "labeller": "pytest"
+ },
+ "uhkr": {
+  "kind": "comment",
+  "desc": [
+   "sqlglot/serde.py:84 comment"
+  ],
+  "labeller": "pytest"
+ },
+ "ui2d": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/dialects/dremio.py:10 'SUPPORTS_USER_DEFINED_TYPES = False' -> 'SUPPORTS_USER_DEFINED_TYPES = True'"
+  ],
+  "labeller": "pytest"
+ },
+ "v3jf": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/optimizer/optimize_joins.py:53 'if name in exp.column_table_names(predicate):' -> 'if not name in exp.column_table_names(predicate):'"
+  ],
+  "labeller": "pytest"
+ },
+ "v4sw": {
+  "kind": "comment",
+  "desc": [
+   "sqlglot/optimizer/eliminate_ctes.py:26 comment"
+  ],
+  "labeller": "pytest"
+ },
+ "wr4s": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/optimizer/eliminate_ctes.py:49 'if journal is not None and with_node.parent:' -> 'if journal is None and with_node.parent:'"
+  ],
+  "labeller": "pytest"
+ },
+ "y2nt": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/quote_identifiers.sql:31 'SELECT * FROM \"t\" AS \"dual\";' -> 'SELECT * x FROM \"t\" AS \"dual\";'"
+  ],
+  "labeller": "pytest"
+ },
+ "ya4s": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/expressions/dml.py:517 '\"returning\": False,' -> '\"returning\": True,'"
+  ],
+  "labeller": "pytest"
+ },
+ "ymsb": {
+  "kind": "code",
+  "desc": [
+   "sqlglot/parsers/mysql.py:513 'if kind:' -> 'if not kind:'"
+  ],
+  "labeller": "pytest"
+ },
+ "zszx": {
+  "kind": "fixture",
+  "desc": [
+   "tests/fixtures/optimizer/pushdown_projections.sql:263 'SELECT t.a AS a FROM (SELECT 1 AS a, 2 AS c UNION ' -> 'SELECT t.a AS a FROM (SELECT 1 AS a, 2 AS c UNION '"
+  ],
+  "labeller": "pytest"
+ }
+}

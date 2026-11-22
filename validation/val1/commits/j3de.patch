@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generators/duckdb.py b/sqlglot/generators/duckdb.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/duckdb.py
++++ b/sqlglot/generators/duckdb.py
+@@ -473,7 +473,7 @@
+     - Positive positions (0-based indexing)
+     - Negative positions (from end of array)
+     - NULL propagation (Snowflake returns NULL for NULL array, DuckDB doesn't auto-propagate)
+-    - Only supports literal integer positions (non-literals remain untranspiled)
++    + Only supports literal integer positions (non-literals remain untranspiled)
+ 
+     Transpilation patterns:
+     - pos=0 (first): arr[2:]

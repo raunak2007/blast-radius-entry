@@ -1,0 +1,13 @@
+diff --git a/sqlglot/lineage.py b/sqlglot/lineage.py
+index 0000000..1111111 100644
+--- a/sqlglot/lineage.py
++++ b/sqlglot/lineage.py
+@@ -98,7 +98,7 @@
+     dialect: DialectType = None,
+     scope: Scope | None = None,
+     trim_selects: bool = True,
+-    copy: bool = True,
++    copy: bool = False,
+     on_node: t.Callable[[Node], None] | None = None,
+     **kwargs,
+ ) -> Node | dict[str, Node]:

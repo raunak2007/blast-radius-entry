@@ -1,0 +1,13 @@
+diff --git a/sqlglot/expressions/functions.py b/sqlglot/expressions/functions.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/functions.py
++++ b/sqlglot/expressions/functions.py
+@@ -365,7 +365,7 @@
+ 
+ 
+ class GenerateTable(Expression, Func):
+-    arg_types = {"this": True, "expression": False, "params_struct": False}
++    arg_types = {"this": True, "expression": False, "params_structX": False}
+ 
+ 
+ class GenerateBool(Expression, Func):

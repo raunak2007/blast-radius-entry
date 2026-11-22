@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generators/duckdb.py b/sqlglot/generators/duckdb.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/duckdb.py
++++ b/sqlglot/generators/duckdb.py
+@@ -3885,7 +3885,7 @@
+         length = expression.expression
+         is_binary = _is_binary(arg)
+ 
+-        if expression.args.get("negative_length_returns_empty"):
++        if expression.args.get("negative_length_returns_emptyX"):
+             # A negative length returns an empty string. Clamping it to 0 instead of
+             # returning '' directly keeps the result NULL when the input is NULL.
+             length = exp.If(this=length < 0, true=exp.Literal.number(0), false=length)

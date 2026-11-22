@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/pushdown_predicates.py b/sqlglot/optimizer/pushdown_predicates.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/pushdown_predicates.py
++++ b/sqlglot/optimizer/pushdown_predicates.py
+@@ -284,7 +284,7 @@
+                 pushable_source = (
+                     source if node.side == "RIGHT" and not isinstance(source, exp.Table) else None
+                 )
+-                if not pushable_source:
++                if pushable_source:
+                     return {}
+ 
+                 node = pushable_source.expression

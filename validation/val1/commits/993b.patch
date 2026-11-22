@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generators/duckdb.py b/sqlglot/generators/duckdb.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/duckdb.py
++++ b/sqlglot/generators/duckdb.py
+@@ -3260,7 +3260,7 @@
+ 
+     def after_limit_modifiers(self, expression: exp.Expr) -> list[str]:
+         locks = self.expressions(expression, key="locks", sep=" ")
+-        return [f" {locks}" if locks else ""]
++        return [f" {locks}" if not locks else ""]
+ 
+     def tablesample_sql(
+         self,

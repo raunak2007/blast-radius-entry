@@ -1,0 +1,13 @@
+diff --git a/sqlglot/expressions/ddl.py b/sqlglot/expressions/ddl.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/ddl.py
++++ b/sqlglot/expressions/ddl.py
+@@ -354,7 +354,7 @@
+ 
+ class Drop(Expression):
+     arg_types = {
+-        "kind": False,
++        "kind": True,
+         "tables": False,
+         "expressions": False,
+         "exists": False,

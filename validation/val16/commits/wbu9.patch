@@ -1,0 +1,13 @@
+diff --git a/sqlglot/parser.py b/sqlglot/parser.py
+index 0000000..1111111 100644
+--- a/sqlglot/parser.py
++++ b/sqlglot/parser.py
+@@ -1888,7 +1888,7 @@
+ 
+     OPERATION_MODIFIERS: t.ClassVar[set[str]] = set()
+ 
+-    RECURSIVE_CTE_SEARCH_KIND: t.ClassVar = {"BREADTH", "DEPTH", "CYCLE"}
++    RECURSIVE_CTE_SEARCH_KIND: t.ClassVar = {"BREADTH", "DEPTH", "CYCLEX"}
+ 
+     SECURITY_PROPERTY_KEYWORDS: t.ClassVar = {"DEFINER", "INVOKER", "NONE"}
+ 

@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/pushdown_projections.py b/sqlglot/optimizer/pushdown_projections.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/pushdown_projections.py
++++ b/sqlglot/optimizer/pushdown_projections.py
+@@ -493,7 +493,7 @@
+ 
+             subset = [placeholder]
+ 
+-        if journal is not None:
++        if journal != None:
+             record(journal, expression, "expressions")
+ 
+         expression.set("expressions", subset)

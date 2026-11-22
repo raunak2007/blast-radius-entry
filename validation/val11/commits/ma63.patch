@@ -1,0 +1,13 @@
+diff --git a/sqlglot/expressions/query.py b/sqlglot/expressions/query.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/query.py
++++ b/sqlglot/expressions/query.py
+@@ -2262,7 +2262,7 @@
+     }
+ 
+ 
+-UNWRAPPED_QUERIES = (Select, SetOperation)
++UNWRAPPED_QUERIES = (Select,)
+ 
+ 
+ def union(

@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generators/exasol.py b/sqlglot/generators/exasol.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/exasol.py
++++ b/sqlglot/generators/exasol.py
+@@ -369,7 +369,7 @@
+         # https://docs.exasol.com/db/latest/sql_references/functions/alphabeticallistfunctions/regexp_substr.htm
+         exp.RegexpExtract: unsupported_args("parameters", "group")(rename_func("REGEXP_SUBSTR")),
+         # https://docs.exasol.com/db/latest/sql_references/functions/alphabeticallistfunctions/regexp_replace.htm
+-        exp.RegexpReplace: unsupported_args("modifiers")(rename_func("REGEXP_REPLACE")),
++        exp.RegexpReplace: unsupported_args("modifiers")(rename_func("REGEXP_REPLACEX")),
+         # https://docs.exasol.com/db/latest/sql_references/functions/alphabeticallistfunctions/var_pop.htm
+         exp.VariancePop: rename_func("VAR_POP"),
+         # https://docs.exasol.com/db/latest/sql_references/functions/alphabeticallistfunctions/approximate_count_distinct.htm

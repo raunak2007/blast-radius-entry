@@ -1,0 +1,13 @@
+diff --git a/sqlglot/expressions/aggregate.py b/sqlglot/expressions/aggregate.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/aggregate.py
++++ b/sqlglot/expressions/aggregate.py
+@@ -231,7 +231,7 @@
+     arg_types = {"this": True, "expression": False}
+ 
+ 
+-PERCENTILES = (PercentileCont, PercentileDisc)
++PERCENTILES = (PercentileCont,)
+ 
+ 
+ class PercentRank(Expression, AggFunc):

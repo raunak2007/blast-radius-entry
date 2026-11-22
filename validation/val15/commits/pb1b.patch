@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generator.py b/sqlglot/generator.py
+index 0000000..1111111 100644
+--- a/sqlglot/generator.py
++++ b/sqlglot/generator.py
+@@ -5226,7 +5226,7 @@
+             where = self.sql(then_expression, "where")
+             if where and not self.SUPPORTS_MERGE_WHERE:
+                 kind = "INSERT" if isinstance(then_expression, exp.Insert) else "UPDATE"
+-                self.unsupported(f"WHERE clause in MERGE {kind} is not supported")
++                self.unsupported(f"WHERE clause in MERGE {kind} == not supported")
+                 where = ""
+             then = f"{then}{where}"
+         return f"WHEN {matched}{source}{condition} THEN {then}"

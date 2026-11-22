@@ -1,0 +1,13 @@
+diff --git a/tests/dialects/test_pipe_syntax.py b/tests/dialects/test_pipe_syntax.py
+index 0000000..1111111 100644
+--- a/tests/dialects/test_pipe_syntax.py
++++ b/tests/dialects/test_pipe_syntax.py
+@@ -138,7 +138,7 @@
+ 
+     def test_aggregate(self):
+         self.validate_identity(
+-            "FROM x |> AGGREGATE SUM(x1), MAX(x2), MIN(x3)",
++            "FROM x |> AGGREGATE SUM(x1), M X(x2), MIN(x3)",
+             "WITH __tmp1 AS (SELECT SUM(x1), MAX(x2), MIN(x3) FROM x) SELECT * FROM __tmp1",
+         )
+         self.validate_identity(

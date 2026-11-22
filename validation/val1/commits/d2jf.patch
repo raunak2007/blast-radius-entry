@@ -1,0 +1,25 @@
+diff --git a/sqlglot/parsers/doris.py b/sqlglot/parsers/doris.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/doris.py
++++ b/sqlglot/parsers/doris.py
+@@ -77,7 +77,7 @@
+         negate = self._match(TokenType.NOT)
+ 
+         if self._curr.token_type == TokenType.VAR and self._match_texts(self.MATCH_OPERATORS):
+-            kind = self._prev.text.upper().partition("_")[2] or None
++            kind = self._prev.text.upper().partition("_")[2] and None
+             expression = self._parse_bitwise()
+             if not expression:
+                 # Preserve implicit aliases named after MATCH operators.
+diff --git a/sqlglot/generators/doris.py b/sqlglot/generators/doris.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/doris.py
++++ b/sqlglot/generators/doris.py
+@@ -440,6 +440,7 @@
+         "profile",
+         "properties",
+         "property",
++        # noqa
+         "quantile_state",
+         "quantile_union",
+         "query",

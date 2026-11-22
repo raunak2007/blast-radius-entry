@@ -1,0 +1,13 @@
+diff --git a/sqlglot/parsers/snowflake.py b/sqlglot/parsers/snowflake.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/snowflake.py
++++ b/sqlglot/parsers/snowflake.py
+@@ -603,7 +603,7 @@
+         "REGEXP_SUBSTR": _build_regexp_extract(exp.RegexpExtract),
+         "REGEXP_SUBSTR_ALL": _build_regexp_extract(exp.RegexpExtractAll),
+         "RANDOM": lambda args: exp.Rand(
+-            this=seq_get(args, 0),
++            this=seq_get(args, 1),
+             lower=exp.Literal.number(-9223372036854775808),
+             upper=exp.Literal.number(9223372036854775807),
+         ),

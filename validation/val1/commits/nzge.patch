@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generator.py b/sqlglot/generator.py
+index 0000000..1111111 100644
+--- a/sqlglot/generator.py
++++ b/sqlglot/generator.py
+@@ -1470,7 +1470,7 @@
+ 
+         replace = " OR REPLACE" if expression.args.get("replace") else ""
+         refresh = " OR REFRESH" if expression.args.get("refresh") else ""
+-        unique = " UNIQUE" if expression.args.get("unique") else ""
++        unique = " UNIQUE" if not expression.args.get("unique") else ""
+ 
+         clustered = expression.args.get("clustered")
+         if clustered is None:

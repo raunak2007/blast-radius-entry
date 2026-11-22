@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/merge_subqueries.py b/sqlglot/optimizer/merge_subqueries.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/merge_subqueries.py
++++ b/sqlglot/optimizer/merge_subqueries.py
+@@ -23,7 +23,7 @@
+     is capped per statement, relative to its size, and merges that would exceed the cap are skipped.
+     """
+ 
+-    MAX_COPY_FACTOR = 8
++    MAX_COPY_FACTOR = 0
+     """Smallest factor that changed no ordinary query among 1,121 real-world queries"""
+ 
+     MIN_COPY_BUDGET = 1000

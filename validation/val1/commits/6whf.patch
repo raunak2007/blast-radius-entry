@@ -1,0 +1,13 @@
+diff --git a/tests/fixtures/optimizer/eliminate_ctes.sql b/tests/fixtures/optimizer/eliminate_ctes.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/eliminate_ctes.sql
++++ b/tests/fixtures/optimizer/eliminate_ctes.sql
+@@ -82,7 +82,7 @@
+   SELECT
+     a
+   FROM y
+-), q2 AS (
++), q2 AS ( NULL
+   SELECT
+     a
+   FROM y

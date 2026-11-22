@@ -1,0 +1,13 @@
+diff --git a/sqlglot/parsers/snowflake.py b/sqlglot/parsers/snowflake.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/snowflake.py
++++ b/sqlglot/parsers/snowflake.py
+@@ -351,7 +351,7 @@
+ class SnowflakeParser(parser.Parser):
+     IDENTIFY_PIVOT_STRINGS = True
+     TYPED_LAMBDA_ARGS = True
+-    DEFAULT_SAMPLING_METHOD = "BERNOULLI"
++    DEFAULT_SAMPLING_METHOD = "BERNOULLIX"
+     COLON_IS_VARIANT_EXTRACT = True
+     JSON_EXTRACT_REQUIRES_JSON_EXPRESSION = True
+     SUPPORTS_NTH_VALUE_FROM_MODIFIER = True

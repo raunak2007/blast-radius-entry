@@ -1,0 +1,422 @@
+{
+ "2shf": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/generators/exasol.py:732 classlevel '\"preserve\",'"
+  ],
+  "labeller": "pytest"
+ },
+ "2vqq": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/expressions/core.py:2232 classlevel 'arg_types = {\"this\": True, \"expression\": True, \"negate\": Fal'"
+  ],
+  "labeller": "pytest"
+ },
+ "35mq": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/expressions/functions.py:376 classlevel 'arg_types = {\"this\": True, \"expression\": False, \"params_stru'"
+  ],
+  "labeller": "pytest"
+ },
+ "3bkz": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/dialects/dialect.py:613 classlevel 'EXPAND_ONLY_GROUP_ALIAS_REF = False'"
+  ],
+  "labeller": "pytest"
+ },
+ "3rxq": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/optimizer/simplify.py:592 classlevel 'TINYINT_MAX: t.ClassVar = 127'"
+  ],
+  "labeller": "pytest"
+ },
+ "4y6k": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/generator.py:400 classlevel 'SAFE_INT_DIVISION = False'"
+  ],
+  "labeller": "pytest"
+ },
+ "6x86": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/expressions/query.py:505 classlevel '_hash_raw_args = True'"
+  ],
+  "labeller": "pytest"
+ },
+ "73w7": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/expressions/constraints.py:101 classlevel 'arg_types = {\"this\": False}'"
+  ],
+  "labeller": "pytest"
+ },
+ "7jt2": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/parsers/clickhouse.py:322 classlevel '\"DATETRUNC\": exp.DateTrunc.from_arg_list,'"
+  ],
+  "labeller": "pytest"
+ },
+ "7wsq": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/optimizer/merge_subqueries.py:29 classlevel 'MIN_COPY_BUDGET = 1000'"
+  ],
+  "labeller": "pytest"
+ },
+ "86mf": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/generators/bigquery.py:671 classlevel '\"order\",'"
+  ],
+  "labeller": "pytest"
+ },
+ "8kx4": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/parser.py:1807 classlevel 'WINDOW_SIDES: t.ClassVar = {\"FOLLOWING\", \"PRECEDING\"}'"
+  ],
+  "labeller": "pytest"
+ },
+ "aqdn": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/optimizer/merge_subqueries.py:26 classlevel 'MAX_COPY_FACTOR = 8'"
+  ],
+  "labeller": "pytest"
+ },
+ "auba": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/generators/clickhouse.py:206 classlevel 'SET_OP_LIMITS = True'"
+  ],
+  "labeller": "pytest"
+ },
+ "aykz": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/generator.py:576 classlevel 'TRY_SUPPORTED = True'"
+  ],
+  "labeller": "pytest"
+ },
+ "b357": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/expressions/ddl.py:182 classlevel 'arg_types = {\"expressions\": False, \"unset\": False, \"tag\": Fa'"
+  ],
+  "labeller": "pytest"
+ },
+ "biyc": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/generators/hive.py:235 classlevel 'LIMIT_FETCH = \"LIMIT\"'"
+  ],
+  "labeller": "pytest"
+ },
+ "cb59": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/optimizer/annotate_types.py:38 classlevel '\"EPOCH_SECOND\",'"
+  ],
+  "labeller": "pytest"
+ },
+ "che2": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/parsers/doris.py:57 classlevel 'k: v for k, v in MySQLParser.FUNCTION_PARSERS.items() if k !'"
+  ],
+  "labeller": "pytest"
+ },
+ "crrq": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/generators/bigquery.py:640 classlevel '\"from\",'"
+  ],
+  "labeller": "pytest"
+ },
+ "cyny": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/parser.py:1795 classlevel 'HISTORICAL_DATA_KIND: t.ClassVar = {\"OFFSET\", \"STATEMENT\", \"'"
+  ],
+  "labeller": "pytest"
+ },
+ "dfyt": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/expressions/core.py:2148 classlevel 'arg_types = {\"this\": True, \"expression\": True, \"padside\": Fa'"
+  ],
+  "labeller": "pytest"
+ },
+ "ec83": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/generators/doris.py:36 classlevel 'RENAME_TABLE_WITH_DB = False'"
+  ],
+  "labeller": "pytest"
+ },
+ "ecxd": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/generators/singlestore.py:125 classlevel 'exp.Time: unsupported_args(\"zone\")(lambda self, e: f\"{self.s'"
+  ],
+  "labeller": "pytest"
+ },
+ "eiw2": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/generator.py:361 classlevel 'SUPPORTS_GROUPING_SETS_AS_SUFFIX = False'"
+  ],
+  "labeller": "pytest"
+ },
+ "ej8s": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/typing/redshift.py:35 classlevel 'exp.AtTimeZone: {\"annotator\": _annotate_at_time_zone},'"
+  ],
+  "labeller": "pytest"
+ },
+ "ftkz": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/generator.py:465 classlevel 'COLLATE_IS_FUNC = False'"
+  ],
+  "labeller": "pytest"
+ },
+ "fx5g": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/optimizer/simplify.py:594 classlevel 'UTINYINT_MAX: t.ClassVar = 255'"
+  ],
+  "labeller": "pytest"
+ },
+ "hk2d": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/expressions/constraints.py:113 classlevel '\"on_null\": False,'"
+  ],
+  "labeller": "pytest"
+ },
+ "i232": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/parsers/mysql.py:127 classlevel '\"DATE\": lambda args: exp.TsOrDsToDate(this=seq_get(args, 0))'"
+  ],
+  "labeller": "pytest"
+ },
+ "i8wh": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/generators/mysql.py:137 classlevel 'JSON_PATH_BRACKETED_KEY_SUPPORTED = False'"
+  ],
+  "labeller": "pytest"
+ },
+ "i9wi": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/parser.py:1928 classlevel 'SET_OP_MODIFIERS: t.ClassVar = {\"order\", \"limit\", \"offset\", '"
+  ],
+  "labeller": "pytest"
+ },
+ "isj2": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/parser.py:1900 classlevel 'IDENTIFY_PIVOT_STRINGS: t.ClassVar = False'"
+  ],
+  "labeller": "pytest"
+ },
+ "ixcj": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/generators/starrocks.py:66 classlevel 'CAST_TO_INT_ROUNDS = False'"
+  ],
+  "labeller": "pytest"
+ },
+ "jauc": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/generators/redshift.py:39 classlevel 'SUPPORTS_DECODE_CASE = True'"
+  ],
+  "labeller": "pytest"
+ },
+ "jkqc": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/expressions/string.py:203 classlevel '\"substr\": True,'"
+  ],
+  "labeller": "pytest"
+ },
+ "jvva": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/generator.py:553 classlevel 'SUPPORTS_WINDOW_EXCLUDE = False'"
+  ],
+  "labeller": "pytest"
+ },
+ "ks5h": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/parser.py:2021 classlevel 'ADJACENT_STRINGS_CANNOT_BE_CONNECTED: t.ClassVar = False'"
+  ],
+  "labeller": "pytest"
+ },
+ "kyqj": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/expressions/core.py:1767 classlevel 'is_primitive = True'"
+  ],
+  "labeller": "pytest"
+ },
+ "m6ds": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/generators/athena.py:135 classlevel '__slots__ = (\"_hive_generator\", \"_trino_generator\")'"
+  ],
+  "labeller": "pytest"
+ },
+ "mkyw": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/parser.py:1948 classlevel 'SUPPORTS_IMPLICIT_UNNEST: t.ClassVar = False'"
+  ],
+  "labeller": "pytest"
+ },
+ "ph6s": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/parser.py:1966 classlevel 'OPTIONAL_ALIAS_TOKEN_CTE: t.ClassVar = True'"
+  ],
+  "labeller": "pytest"
+ },
+ "pnjf": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/generator.py:615 classlevel 'SUPPORTS_UNIX_SECONDS = False'"
+  ],
+  "labeller": "pytest"
+ },
+ "q67d": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/generators/clickhouse.py:208 classlevel 'VARIANCE_NAME = \"varSamp\"'"
+  ],
+  "labeller": "pytest"
+ },
+ "qua7": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/expressions/query.py:2091 classlevel '_hash_raw_args = True'"
+  ],
+  "labeller": "pytest"
+ },
+ "r3fi": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/dialects/__init__.py:86 classlevel '\"Presto\",'"
+  ],
+  "labeller": "pytest"
+ },
+ "s54n": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/generators/tsql.py:157 classlevel 'ALTER_TABLE_INCLUDE_COLUMN_KEYWORD = False'"
+  ],
+  "labeller": "pytest"
+ },
+ "t2gq": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/generators/tsql.py:147 classlevel 'SUPPORTS_DECODE_CASE = False'"
+  ],
+  "labeller": "pytest"
+ },
+ "tr25": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/expressions/builders.py:347 classlevel 'INTERVAL_STRING_RE = re.compile(r\"\\\\s*(-?[0-9]+(?:\\\\.[0-9]+)?)'"
+  ],
+  "labeller": "pytest"
+ },
+ "u5rq": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/tokens.py:210 classlevel 'DASH_COMMENT_REQUIRES_BOUNDARY = False'"
+  ],
+  "labeller": "pytest"
+ },
+ "uq7r": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/dialects/__init__.py:100 classlevel '\"TSQL\",'"
+  ],
+  "labeller": "pytest"
+ },
+ "usqs": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/generators/tsql.py:172 classlevel 'ALTER_SET_WRAPPED = True'"
+  ],
+  "labeller": "pytest"
+ },
+ "wbu9": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/parser.py:1891 classlevel 'RECURSIVE_CTE_SEARCH_KIND: t.ClassVar = {\"BREADTH\", \"DEPTH\",'"
+  ],
+  "labeller": "pytest"
+ },
+ "wgbq": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/generators/databricks.py:53 classlevel 'exp.DateDiff: date_delta_sql(\"DATEDIFF\"),'"
+  ],
+  "labeller": "pytest"
+ },
+ "x9qc": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/expressions/dml.py:188 classlevel 'arg_types = {\"this\": True, \"local\": False, \"row_format\": Fal'"
+  ],
+  "labeller": "pytest"
+ },
+ "y4fz": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/parser.py:1703 classlevel '\"DO\": (\"NOTHING\", \"UPDATE\"),'"
+  ],
+  "labeller": "pytest"
+ },
+ "yvpa": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/generator.py:432 classlevel 'ALTER_TABLE_ADD_COLUMNS_WRAPPED = True'"
+  ],
+  "labeller": "pytest"
+ },
+ "yx8q": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/parsers/sqlite.py:78 classlevel 'ADD_JOIN_ON_TRUE = True'"
+  ],
+  "labeller": "pytest"
+ },
+ "zbrd": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/generators/singlestore.py:369 classlevel 'exp.DType.TIMESTAMP_MS: ((6,), ()),'"
+  ],
+  "labeller": "pytest"
+ },
+ "zcm5": {
+  "kind": "classlevel",
+  "desc": [
+   "sqlglot/generator.py:349 classlevel 'LIMIT_FETCH = \"ALL\"'"
+  ],
+  "labeller": "pytest"
+ }
+}

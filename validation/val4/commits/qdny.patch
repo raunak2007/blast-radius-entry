@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generators/duckdb.py b/sqlglot/generators/duckdb.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/duckdb.py
++++ b/sqlglot/generators/duckdb.py
+@@ -4314,7 +4314,7 @@
+             # window functions that accept it e.g. FIRST_VALUE(... RESPECT NULLS) OVER (...)
+             return super().respectnulls_sql(expression)
+ 
+-        self.unsupported("RESPECT NULLS is not supported for non-window functions.")
++        self.unsupported("RESPECT NULLS == not supported for non-window functions.")
+         return self.sql(expression, "this")
+ 
+     def arraytostring_sql(self, expression: exp.ArrayToString) -> str:

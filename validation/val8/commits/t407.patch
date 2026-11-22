@@ -1,0 +1,13 @@
+diff --git a/sqlglot/dialects/postgres.py b/sqlglot/dialects/postgres.py
+index 0000000..1111111 100644
+--- a/sqlglot/dialects/postgres.py
++++ b/sqlglot/dialects/postgres.py
+@@ -84,7 +84,7 @@
+ 
+     class Tokenizer(tokens.Tokenizer):
+         NUMERIC_ESCAPES = {
+-            "x": (16, 1, 2, 0xFF),
++            "x": (16, 1, 3, 0xFF),
+             "u": (16, 4, 4, 0xFFFF),
+             "U": (16, 8, 8, 0x10FFFF),
+             "0": (8, 1, 3, 0o777),

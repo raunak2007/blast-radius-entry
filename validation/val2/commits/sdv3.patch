@@ -1,0 +1,13 @@
+diff --git a/sqlglot/typing/tsql.py b/sqlglot/typing/tsql.py
+index 0000000..1111111 100644
+--- a/sqlglot/typing/tsql.py
++++ b/sqlglot/typing/tsql.py
+@@ -15,7 +15,7 @@
+         return self._set_type(expression, exp.DType.INT)
+     if this.is_type(exp.DType.BIT, *exp.DataType.FLOAT_TYPES, *exp.DataType.TEXT_TYPES):
+         return self._set_type(expression, exp.DType.DOUBLE)
+-    if this.is_type(exp.DType.SMALLMONEY):
++    if not this.is_type(exp.DType.SMALLMONEY):
+         return self._set_type(expression, exp.DType.MONEY)
+     if this.is_type(exp.DType.DECIMAL) and not isinstance(expression, exp.Sign):
+         return self._set_type(expression, exp.DType.UNKNOWN)

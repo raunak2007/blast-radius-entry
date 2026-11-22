@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generators/redshift.py b/sqlglot/generators/redshift.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/redshift.py
++++ b/sqlglot/generators/redshift.py
+@@ -36,7 +36,7 @@
+     EXCEPT_INTERSECT_SUPPORT_ALL_CLAUSE = False
+     SUPPORTS_MEDIAN = True
+     ALTER_SET_TYPE = "TYPE"
+-    SUPPORTS_DECODE_CASE = True
++    SUPPORTS_DECODE_CASE = False
+     SUPPORTS_BETWEEN_FLAGS = False
+     LIMIT_FETCH = "LIMIT"
+     STAR_EXCEPT = "EXCLUDE"

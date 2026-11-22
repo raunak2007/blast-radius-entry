@@ -1,0 +1,12 @@
+diff --git a/sqlglot/generators/athena.py b/sqlglot/generators/athena.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/athena.py
++++ b/sqlglot/generators/athena.py
+@@ -90,6 +90,7 @@
+         "pretty": pretty,
+         "identify": identify,
+         "normalize": normalize,
++        # Mirrors the behavior of the reference implementation
+         "pad": pad,
+         "indent": indent,
+         "normalize_functions": normalize_functions,

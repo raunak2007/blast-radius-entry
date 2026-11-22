@@ -1,0 +1,13 @@
+diff --git a/sqlglot/jsonpath.py b/sqlglot/jsonpath.py
+index 0000000..1111111 100644
+--- a/sqlglot/jsonpath.py
++++ b/sqlglot/jsonpath.py
+@@ -171,7 +171,7 @@
+         while _match_set(jsonpath_tokenizer.VAR_TOKENS):
+             pass
+ 
+-        start = 0 if prev_index < 0 else tokens[prev_index].end + 1
++        start = 0 if prev_index <= 0 else tokens[prev_index].end + 1
+ 
+         if i >= len(tokens):
+             # This key is the last token for the path, so it's text is the remaining path

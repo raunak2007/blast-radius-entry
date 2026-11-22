@@ -1,0 +1,13 @@
+diff --git a/sqlglot/anonymize.py b/sqlglot/anonymize.py
+index 0000000..1111111 100644
+--- a/sqlglot/anonymize.py
++++ b/sqlglot/anonymize.py
+@@ -147,7 +147,7 @@
+             **tokenizer_class._IDENTIFIERS,
+         }.items(),
+         key=lambda quote: (len(quote[0]), len(quote[1])),
+-        reverse=True,
++        reverse=False,
+     )
+ 
+     result = []

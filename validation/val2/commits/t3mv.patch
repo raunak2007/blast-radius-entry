@@ -1,0 +1,13 @@
+diff --git a/sqlglot/parsers/presto.py b/sqlglot/parsers/presto.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/presto.py
++++ b/sqlglot/parsers/presto.py
+@@ -120,7 +120,7 @@
+         "ARRAY_SORT": build_array_sort_nulls_last,
+         "BITWISE_AND": binary_from_function(exp.BitwiseAnd),
+         "BITWISE_NOT": lambda args: exp.BitwiseNot(this=seq_get(args, 0)),
+-        "BITWISE_OR": binary_from_function(exp.BitwiseOr),
++        "BITWISE_ORX": binary_from_function(exp.BitwiseOr),
+         "BITWISE_XOR": binary_from_function(exp.BitwiseXor),
+         "CARDINALITY": exp.ArraySize.from_arg_list,
+         "CONTAINS": exp.ArrayContains.from_arg_list,

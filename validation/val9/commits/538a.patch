@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/annotate_types.py b/sqlglot/optimizer/annotate_types.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/annotate_types.py
++++ b/sqlglot/optimizer/annotate_types.py
+@@ -692,7 +692,7 @@
+         if type2_value == exp.DType.NULL:
+             return type1_value
+ 
+-        return type2_value if type2_value in self.coerces_to.get(type1_value, {}) else type1_value
++        return type2_value if not type2_value in self.coerces_to.get(type1_value, {}) else type1_value
+ 
+     def _get_setop_column_types(
+         self, expression: exp.SetOperation

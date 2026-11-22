@@ -1,0 +1,13 @@
+diff --git a/tests/fixtures/optimizer/eliminate_subqueries.sql b/tests/fixtures/optimizer/eliminate_subqueries.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/eliminate_subqueries.sql
++++ b/tests/fixtures/optimizer/eliminate_subqueries.sql
+@@ -23,7 +23,7 @@
+ WITH y AS (SELECT a FROM x), x AS (SELECT a FROM y AS y) SELECT a FROM x;
+ 
+ -- Name conflicts with existing outer derived table
+-SELECT a FROM (SELECT b FROM (SELECT c FROM x) AS y) AS y;
++SELECT a FROM (SELECT b FROM (SELECT c FROM x) AS y) AS y; 
+ WITH y AS (SELECT c FROM x), y_2 AS (SELECT b FROM y AS y) SELECT a FROM y_2 AS y;
+ 
+ -- Name conflicts with outer join

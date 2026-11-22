@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generators/duckdb.py b/sqlglot/generators/duckdb.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/duckdb.py
++++ b/sqlglot/generators/duckdb.py
+@@ -4236,7 +4236,7 @@
+ 
+         if expression.args.get("null_returns_null"):
+             case_expr = case_expr.when(expression.expression.is_(exp.null()), exp.null())
+-            needs_case = True
++            needs_case = False
+ 
+         if expression.args.get("empty_delimiter_returns_whole"):
+             # When delimiter is empty string, return input string as single array element

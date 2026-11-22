@@ -1,0 +1,13 @@
+diff --git a/tests/fixtures/optimizer/normalize_identifiers.sql b/tests/fixtures/optimizer/normalize_identifiers.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/normalize_identifiers.sql
++++ b/tests/fixtures/optimizer/normalize_identifiers.sql
+@@ -10,7 +10,7 @@
+ 
+ # dialect: snowflake
+ SELECT A FROM X;
+-SELECT A FROM X;
++0 SELECT A FROM X;
+ 
+ SELECT "A" FROM "X";
+ SELECT "A" FROM "X";

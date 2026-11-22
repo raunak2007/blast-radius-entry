@@ -1,0 +1,13 @@
+diff --git a/sqlglot/parser.py b/sqlglot/parser.py
+index 0000000..1111111 100644
+--- a/sqlglot/parser.py
++++ b/sqlglot/parser.py
+@@ -417,7 +417,7 @@
+         "ARRAY_PREPEND": build_array_prepend,
+         "ARRAY_REMOVE": build_array_remove,
+         "COUNT": lambda args: exp.Count(this=seq_get(args, 0), expressions=args[1:], big_int=True),
+-        "CONCAT": lambda args, dialect: exp.Concat(
++        "CONCATX": lambda args, dialect: exp.Concat(
+             expressions=args,
+             safe=not dialect.STRICT_STRING_CONCAT,
+             coalesce=dialect.CONCAT_COALESCE,

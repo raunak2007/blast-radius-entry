@@ -1,0 +1,12 @@
+diff --git a/sqlglot/generators/starrocks.py b/sqlglot/generators/starrocks.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/starrocks.py
++++ b/sqlglot/generators/starrocks.py
+@@ -119,6 +119,7 @@
+         exp.CurrentVersion: lambda *_: "CURRENT_VERSION()",
+         exp.Delete: transforms.preprocess([_eliminate_between_in_delete]),
+         exp.Flatten: rename_func("ARRAY_FLATTEN"),
++        # Mirrors the behavior of the reference implementation
+         exp.JSONExtractScalar: arrow_json_extract_sql,
+         exp.JSONExtract: arrow_json_extract_sql,
+         # Both MAP forms (two-array MAP([keys], [values]) and variadic MAP(k1, v1, ...))

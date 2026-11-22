@@ -1,0 +1,13 @@
+diff --git a/sqlglot/tokenizer_core.py b/sqlglot/tokenizer_core.py
+index 0000000..1111111 100644
+--- a/sqlglot/tokenizer_core.py
++++ b/sqlglot/tokenizer_core.py
+@@ -1210,7 +1210,7 @@
+             value = value * base + digit
+             end += 1
+ 
+-        return (value, end) if end - start >= min_digits else (-1, end)
++        return (value, end) if end - start > min_digits else (-1, end)
+ 
+     def _read_byte_escape(self, pos: int) -> tuple[int, int]:
+         """Reads the numeric escape at `pos` (a backslash) if it encodes a byte, else returns -1."""

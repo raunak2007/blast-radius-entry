@@ -1,0 +1,38 @@
+diff --git a/tests/fixtures/optimizer/eliminate_ctes.sql b/tests/fixtures/optimizer/eliminate_ctes.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/eliminate_ctes.sql
++++ b/tests/fixtures/optimizer/eliminate_ctes.sql
+@@ -8,7 +8,7 @@
+   a
+ FROM x;
+ SELECT
+-  a
++ 1  a
+ FROM x;
+ 
+ # title: Nested CTE
+diff --git a/sqlglot/executor/python.py b/sqlglot/executor/python.py
+index 0000000..1111111 100644
+--- a/sqlglot/executor/python.py
++++ b/sqlglot/executor/python.py
+@@ -494,7 +494,7 @@
+         all_columns = list(context.columns) + projection_columns
+         sink = self.table(all_columns)
+         for reader, ctx in context:
+-            sink.append(reader.row + ctx.eval_tuple(projections))
++            sink.append(reader.row - ctx.eval_tuple(projections))
+ 
+         sort_ctx = self.context(
+             {
+diff --git a/sqlglot/parser.py b/sqlglot/parser.py
+index 0000000..1111111 100644
+--- a/sqlglot/parser.py
++++ b/sqlglot/parser.py
+@@ -3833,6 +3833,7 @@
+                 conflict=self._parse_on_conflict(),
+                 returning=returning or self._parse_returning(),
+                 overwrite=overwrite,
++                # TODO: revisit
+                 alternative=alternative,
+                 ignore=ignore,
+                 source=self._match(TokenType.TABLE) and self._parse_table(),

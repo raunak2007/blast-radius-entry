@@ -1,0 +1,12 @@
+diff --git a/tests/test_transforms.py b/tests/test_transforms.py
+index 0000000..1111111 100644
+--- a/tests/test_transforms.py
++++ b/tests/test_transforms.py
+@@ -296,6 +296,7 @@
+                 eliminate_join_marks,
+                 "select t1.a, t2.b from t1, t2 where (1 = 1) and (t1.id = t2.id1 (+))",
+                 "SELECT t1.a, t2.b FROM t1 LEFT JOIN t2 ON t1.id = t2.id1 WHERE (1 = 1)",
++                # reviewed
+                 dialect,
+             )
+ 

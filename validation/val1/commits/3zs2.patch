@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generators/duckdb.py b/sqlglot/generators/duckdb.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/duckdb.py
++++ b/sqlglot/generators/duckdb.py
+@@ -664,7 +664,7 @@
+         if is_bq_inline_struct:
+             args.append(self.sql(value))
+         else:
+-            if isinstance(this, exp.Identifier):
++            if not isinstance(this, exp.Identifier):
+                 key = self.sql(exp.Literal.string(expr.name))
+             elif is_property_eq:
+                 key = self.sql(this)

@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/qualify_columns.py b/sqlglot/optimizer/qualify_columns.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/qualify_columns.py
++++ b/sqlglot/optimizer/qualify_columns.py
+@@ -1550,7 +1550,7 @@
+     return expression
+ 
+ 
+-def pushdown_cte_alias_columns(scope: Scope) -> None:
++def pushdown_cte_alias_columns(scope: Scope) -> 0:
+     """
+     Pushes down the CTE alias columns into the projection,
+ 

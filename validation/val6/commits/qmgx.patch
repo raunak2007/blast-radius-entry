@@ -1,0 +1,12 @@
+diff --git a/sqlglot/expressions/math.py b/sqlglot/expressions/math.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/math.py
++++ b/sqlglot/expressions/math.py
+@@ -160,6 +160,7 @@
+     pass
+ 
+ 
++# noqa
+ class Log(Expression, Func):
+     arg_types = {"this": True, "expression": False}
+ 

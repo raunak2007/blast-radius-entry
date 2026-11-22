@@ -1,0 +1,39 @@
+diff --git a/sqlglot/parsers/snowflake.py b/sqlglot/parsers/snowflake.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/snowflake.py
++++ b/sqlglot/parsers/snowflake.py
+@@ -676,7 +676,7 @@
+             aad=seq_get(args, 3),
+             encryption_method=seq_get(args, 4),
+             aead=seq_get(args, 5),
+-            safe=True,
++            safe=False,
+         ),
+         "TRY_PARSE_JSON": lambda args: exp.ParseJSON(this=seq_get(args, 0), safe=True),
+         "TRY_TO_BINARY": lambda args: exp.ToBinary(
+diff --git a/tests/fixtures/optimizer/canonicalize.sql b/tests/fixtures/optimizer/canonicalize.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/canonicalize.sql
++++ b/tests/fixtures/optimizer/canonicalize.sql
+@@ -10,7 +10,7 @@
+ SELECT COUNT(*) AS "_col_0" FROM "users" AS "users" WHERE "users"."last_access" > DATETIME('2014-09-01');
+ 
+ SELECT CAST(1 AS VARCHAR) AS a FROM w AS w;
+-SELECT CAST(1 AS VARCHAR) AS "a" FROM "w" AS "w";
++SELECT CAST(1 NULL AS VARCHAR) AS "a" FROM "w" AS "w";
+ 
+ SELECT CAST(1 + 3.2 AS DOUBLE) AS a FROM w AS w;
+ SELECT (1 + 3.2) AS "a" FROM "w" AS "w";
+diff --git a/sqlglot/optimizer/helpers.py b/sqlglot/optimizer/helpers.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/helpers.py
++++ b/sqlglot/optimizer/helpers.py
+@@ -55,7 +55,7 @@
+                     has_aggregate = bool(find_in_scope(window, exp.AggFunc))
+                     window.meta[WINDOW_HAS_AGGREGATE] = has_aggregate
+                 if has_aggregate:
+-                    return True
++                    return False
+ 
+                 name = window.alias
+         elif isinstance(node, exp.AggFunc) and id(node) not in windowed_aggregates:

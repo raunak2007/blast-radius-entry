@@ -1,0 +1,13 @@
+diff --git a/tests/fixtures/optimizer/tpc-h/tpc-h.sql b/tests/fixtures/optimizer/tpc-h/tpc-h.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/tpc-h/tpc-h.sql
++++ b/tests/fixtures/optimizer/tpc-h/tpc-h.sql
+@@ -215,7 +215,7 @@
+ -- TPC-H 4
+ --------------------------------------
+ select
+-        o_orderpriority,
++         o_orderpriority,
+         count(*) as order_count
+ from
+         orders

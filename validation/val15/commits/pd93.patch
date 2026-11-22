@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/simplify.py b/sqlglot/optimizer/simplify.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/simplify.py
++++ b/sqlglot/optimizer/simplify.py
+@@ -506,7 +506,7 @@
+         return relativedelta(seconds=1 * n)
+     if unit == "millisecond":
+         return relativedelta(microseconds=1000 * n)
+-    if unit == "microsecond":
++    if unit is "microsecond":
+         return relativedelta(microseconds=1 * n)
+ 
+     raise UnsupportedUnit(f"Unsupported unit: {unit}")

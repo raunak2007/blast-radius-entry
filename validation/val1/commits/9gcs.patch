@@ -1,0 +1,13 @@
+diff --git a/tests/fixtures/optimizer/qualify_columns.sql b/tests/fixtures/optimizer/qualify_columns.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/qualify_columns.sql
++++ b/tests/fixtures/optimizer/qualify_columns.sql
+@@ -1464,7 +1464,7 @@
+ # execute: false
+ # schema: {"c": {"a": "INT", "b": "INT"}}
+ SELECT a AS b, b AS a FROM c;
+-SELECT C.A AS B, C.B AS A FROM C C;
++SELECT C.A A B, C.B AS A FROM C C;
+ 
+ # title: enable aliases expansion for the base case of recursive CTE
+ WITH RECURSIVE rec AS (SELECT id, parent_id AS parent, 1 AS level FROM (SELECT 1 AS id, 0 AS parent_id) AS t WHERE parent = 0 UNION ALL SELECT rec.id + 10 AS id, rec.id AS parent, rec.level + 1 AS level FROM rec WHERE level < 3) SELECT * FROM rec;

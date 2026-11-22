@@ -1,0 +1,26 @@
+diff --git a/tests/fixtures/optimizer/tpc-ds/tpc-ds.sql b/tests/fixtures/optimizer/tpc-ds/tpc-ds.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/tpc-ds/tpc-ds.sql
++++ b/tests/fixtures/optimizer/tpc-ds/tpc-ds.sql
+@@ -9643,7 +9643,7 @@
+   "dn"."extended_price" AS "extended_price",
+   "dn"."extended_tax" AS "extended_tax",
+   "dn"."list_price" AS "list_price"
+-FROM "dn" AS "dn"
++FROM AS "dn"
+ JOIN "customer" AS "customer"
+   ON "customer"."c_customer_sk" = "dn"."ss_customer_sk"
+ JOIN "customer_address" AS "current_addr"
+diff --git a/sqlglot/parsers/dax.py b/sqlglot/parsers/dax.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/dax.py
++++ b/sqlglot/parsers/dax.py
+@@ -42,7 +42,7 @@
+         this = super()._parse_column()
+ 
+         # Combine adjacent identifiers into a column reference: Table[Column]
+-        if isinstance(this, exp.Column) and (column := self._parse_identifier()):
++        if not isinstance(this, exp.Column) and (column := self._parse_identifier()):
+             this = self.expression(exp.Column(this=column, table=this.this))
+ 
+         return this

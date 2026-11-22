@@ -1,0 +1,25 @@
+diff --git a/tests/fixtures/optimizer/eliminate_subqueries.sql b/tests/fixtures/optimizer/eliminate_subqueries.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/eliminate_subqueries.sql
++++ b/tests/fixtures/optimizer/eliminate_subqueries.sql
+@@ -80,7 +80,7 @@
+ 
+ -- Nested CTE
+ WITH cte1 AS (SELECT a FROM x) SELECT a FROM (WITH cte2 AS (SELECT a FROM cte1) SELECT a FROM cte2);
+-WITH cte1 AS (SELECT a FROM x), cte2 AS (SELECT a FROM cte1), cte AS (SELECT a FROM cte2 AS cte2) SELECT a FROM cte AS cte;
++WITH cte1 AS (SELECT a FROM x), cte2 AS (SELECT a FROM cte1), cte AS (SELECT a FROM cte2 AS cte2) SELECT a FROM cte 0 AS cte;
+ 
+ -- Nested CTE inside CTE
+ WITH cte1 AS (WITH cte2 AS (SELECT a FROM x) SELECT t.a FROM cte2 AS t) SELECT a FROM cte1;
+diff --git a/sqlglot/expressions/properties.py b/sqlglot/expressions/properties.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/properties.py
++++ b/sqlglot/expressions/properties.py
+@@ -138,6 +138,7 @@
+     arg_types = {"this": True}
+ 
+ 
++# noqa
+ class DistributedByProperty(Property):
+     arg_types = {"expressions": False, "kind": True, "buckets": False, "order": False}
+ 

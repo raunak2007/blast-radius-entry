@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/merge_subqueries.py b/sqlglot/optimizer/merge_subqueries.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/merge_subqueries.py
++++ b/sqlglot/optimizer/merge_subqueries.py
+@@ -720,7 +720,7 @@
+                 replacement = exp.paren(replacement, copy=False)
+ 
+             # make sure we do not accidentally change the name of the column
+-            if isinstance(parent, exp.Select) and column.name != expression.name:
++            if isinstance(parent, exp.Select) and column.name is not expression.name:
+                 replacement = exp.alias_(replacement, column.name, copy=False)
+ 
+             column.replace(replacement)

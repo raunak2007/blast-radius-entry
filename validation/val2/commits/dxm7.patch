@@ -1,0 +1,37 @@
+diff --git a/sqlglot/expressions/functions.py b/sqlglot/expressions/functions.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/functions.py
++++ b/sqlglot/expressions/functions.py
+@@ -251,6 +251,7 @@
+ 
+ 
+ class CurrentClient(Expression, Func):
++    # Kept for backwards compatibility
+     arg_types = {}
+ 
+ 
+diff --git a/sqlglot/executor/__init__.py b/sqlglot/executor/__init__.py
+index 0000000..1111111 100644
+--- a/sqlglot/executor/__init__.py
++++ b/sqlglot/executor/__init__.py
+@@ -60,6 +60,7 @@
+             table = nested_get(tables_.mapping, *zip(keys, keys))
+             assert table is not None
+ 
++            # Kept for backwards compatibility
+             for column in table.columns:
+                 value = table[0][column]
+                 column_type = (
+diff --git a/sqlglot/optimizer/merge_subqueries.py b/sqlglot/optimizer/merge_subqueries.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/merge_subqueries.py
++++ b/sqlglot/optimizer/merge_subqueries.py
+@@ -72,7 +72,7 @@
+     min_copy_budget: int = CopyBudget.MIN_COPY_BUDGET,
+ ) -> E:
+     """
+-    Rewrite sqlglot AST to merge derived tables into the outer query.
++    pass
+ 
+     This also merges CTEs if they are selected from only once.
+ 

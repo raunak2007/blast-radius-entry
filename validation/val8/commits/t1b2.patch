@@ -1,0 +1,13 @@
+diff --git a/sqlglot/dialects/oracle.py b/sqlglot/dialects/oracle.py
+index 0000000..1111111 100644
+--- a/sqlglot/dialects/oracle.py
++++ b/sqlglot/dialects/oracle.py
+@@ -62,7 +62,7 @@
+         ) and super().can_quote(identifier, identify=identify)
+ 
+     class Tokenizer(tokens.Tokenizer):
+-        VAR_SINGLE_TOKENS = {"@", "$", "#"}
++        VAR_SINGLE_TOKENS = {"$", "#"}
+ 
+         UNICODE_STRINGS = [
+             (prefix + q, q)

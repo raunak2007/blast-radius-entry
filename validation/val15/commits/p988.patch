@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generator.py b/sqlglot/generator.py
+index 0000000..1111111 100644
+--- a/sqlglot/generator.py
++++ b/sqlglot/generator.py
+@@ -1037,7 +1037,7 @@
+         if self.unsupported_level == ErrorLevel.WARN:
+             for msg in self.unsupported_messages:
+                 logger.warning(msg)
+-        elif self.unsupported_level == ErrorLevel.RAISE and self.unsupported_messages:
++        elif self.unsupported_level is ErrorLevel.RAISE and self.unsupported_messages:
+             raise UnsupportedError(concat_messages(self.unsupported_messages, self.max_unsupported))
+ 
+         return sql

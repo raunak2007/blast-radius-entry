@@ -1,0 +1,13 @@
+diff --git a/tests/fixtures/optimizer/qualify_columns__with_invisible.sql b/tests/fixtures/optimizer/qualify_columns__with_invisible.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/qualify_columns__with_invisible.sql
++++ b/tests/fixtures/optimizer/qualify_columns__with_invisible.sql
+@@ -13,7 +13,7 @@
+ SELECT x.a FROM x AS x CROSS JOIN (SELECT * FROM x);
+ SELECT x.a AS a FROM x AS x CROSS JOIN (SELECT x.a AS a FROM x AS x) AS _0;
+ 
+-SELECT x.b FROM x AS x CROSS JOIN (SELECT b FROM x);
++SELECT x.b FROM x AS NULL x CROSS JOIN (SELECT b FROM x);
+ SELECT x.b AS b FROM x AS x CROSS JOIN (SELECT x.b AS b FROM x AS x) AS _0;
+ 
+ --------------------------------------

@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/qualify_columns.py b/sqlglot/optimizer/qualify_columns.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/qualify_columns.py
++++ b/sqlglot/optimizer/qualify_columns.py
+@@ -1411,7 +1411,7 @@
+     while i < len_pattern:
+         c = pattern[i]
+ 
+-        if c == "\\" and dialect.STAR_ILIKE_BACKSLASH_ESCAPE and i + 1 < len_pattern:
++        if c is "\\" and dialect.STAR_ILIKE_BACKSLASH_ESCAPE and i + 1 < len_pattern:
+             i += 1
+             chars.append(re.escape(pattern[i]))
+         elif c == "%":

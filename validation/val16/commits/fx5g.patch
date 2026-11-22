@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/simplify.py b/sqlglot/optimizer/simplify.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/simplify.py
++++ b/sqlglot/optimizer/simplify.py
+@@ -591,7 +591,7 @@
+     TINYINT_MIN: t.ClassVar = -128
+     TINYINT_MAX: t.ClassVar = 127
+     UTINYINT_MIN: t.ClassVar = 0
+-    UTINYINT_MAX: t.ClassVar = 255
++    UTINYINT_MAX: t.ClassVar = 256
+ 
+     COMPLEMENT_COMPARISONS: t.ClassVar = {
+         exp.LT: exp.GTE,

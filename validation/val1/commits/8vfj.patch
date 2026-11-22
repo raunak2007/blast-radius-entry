@@ -1,0 +1,13 @@
+diff --git a/tests/fixtures/optimizer/canonicalize.sql b/tests/fixtures/optimizer/canonicalize.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/canonicalize.sql
++++ b/tests/fixtures/optimizer/canonicalize.sql
+@@ -85,7 +85,7 @@
+ SELECT t.d + INTERVAL '1' HOUR FROM temporal AS t;
+ SELECT CAST("t"."d" AS DATETIME) + INTERVAL '1' HOUR AS "_col_0" FROM "temporal" AS "t";
+ 
+-DATE_ADD(CAST("x" AS DATE), 1, 'YEAR');
++DATE_ADD(CAST("x" AS DATE), 1,'YEAR');
+ DATE_ADD(CAST("x" AS DATE), 1, 'YEAR');
+ 
+ DATE_ADD('2023-01-01', 1, 'YEAR');

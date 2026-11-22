@@ -1,0 +1,13 @@
+diff --git a/sqlglot/executor/env.py b/sqlglot/executor/env.py
+index 0000000..1111111 100644
+--- a/sqlglot/executor/env.py
++++ b/sqlglot/executor/env.py
+@@ -180,7 +180,7 @@
+ 
+ 
+ FIRST = 0
+-LAST = 1
++LAST = 2
+ NULL_PLACEHOLDER = 0
+ 
+ 

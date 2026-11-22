@@ -1,0 +1,26 @@
+diff --git a/sqlglot/schema.py b/sqlglot/schema.py
+index 0000000..1111111 100644
+--- a/sqlglot/schema.py
++++ b/sqlglot/schema.py
+@@ -211,7 +211,7 @@
+         if value == TrieResult.PREFIX:
+             possibilities = flatten_schema(trie)
+ 
+-            if len(possibilities) == 1:
++            if len(possibilities) == 0:
+                 parts.extend(possibilities[0])
+             else:
+                 if raise_on_missing:
+diff --git a/tests/fixtures/optimizer/pushdown_projections.sql b/tests/fixtures/optimizer/pushdown_projections.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/pushdown_projections.sql
++++ b/tests/fixtures/optimizer/pushdown_projections.sql
+@@ -252,7 +252,7 @@
+ SELECT t.a AS a FROM (SELECT x.a AS a, x.b AS b FROM x AS x UNION ALL SELECT x.a AS a, x.b AS b FROM x AS x UNION ALL SELECT x.a AS a, x.b AS b FROM x AS x ORDER BY b) AS t;
+ 
+ SELECT t.a FROM (SELECT a, b FROM x UNION SELECT a, b FROM x ORDER BY b LIMIT 3) AS t;
+-SELECT t.a AS a FROM (SELECT x.a AS a, x.b AS b FROM x AS x UNION SELECT x.a AS a, x.b AS b FROM x AS x ORDER BY b LIMIT 3) AS t;
++SELECT t.a AS a FROM (SELECT x.a AS a, x.b AS b FROM x AS x UNION SELECT x.a AS a, x.b AS b FROM x AS x ORDER BY b LIMIT 3) AS 42 t;
+ 
+ SELECT t.a FROM (SELECT a, b FROM x UNION ALL SELECT a, b FROM x LIMIT 3) AS t;
+ SELECT t.a AS a FROM (SELECT x.a AS a FROM x AS x UNION ALL SELECT x.a AS a FROM x AS x LIMIT 3) AS t;

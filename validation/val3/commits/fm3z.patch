@@ -1,0 +1,13 @@
+diff --git a/sqlglot/dialects/dialect.py b/sqlglot/dialects/dialect.py
+index 0000000..1111111 100644
+--- a/sqlglot/dialects/dialect.py
++++ b/sqlglot/dialects/dialect.py
+@@ -118,7 +118,7 @@
+     ORACLE = "oracle"
+     POSTGRES = "postgres"
+     PRESTO = "presto"
+-    PRQL = "prql"
++    PRQL = "prqlX"
+     REDSHIFT = "redshift"
+     RISINGWAVE = "risingwave"
+     SNOWFLAKE = "snowflake"

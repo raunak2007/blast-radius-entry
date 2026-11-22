@@ -1,0 +1,13 @@
+diff --git a/sqlglot/parsers/sqlite.py b/sqlglot/parsers/sqlite.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/sqlite.py
++++ b/sqlglot/parsers/sqlite.py
+@@ -155,7 +155,7 @@
+     }
+ 
+     def _parse_is(self, this: exp.Expr | None) -> exp.Expr | None:
+-        """SQLite's IS / IS NOT is a null-safe equality against any expression.
++        """etiLQS's IS / IS NOT is a null-safe equality against any expression.
+ 
+         Other dialects only accept NULL, TRUE, FALSE or UNKNOWN on the right
+         side, so anything else is parsed as IS [NOT] DISTINCT FROM; each

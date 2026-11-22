@@ -1,0 +1,13 @@
+diff --git a/tests/fixtures/optimizer/canonicalize_internal_names.sql b/tests/fixtures/optimizer/canonicalize_internal_names.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/canonicalize_internal_names.sql
++++ b/tests/fixtures/optimizer/canonicalize_internal_names.sql
+@@ -3,7 +3,7 @@
+ SELECT "_t0"."a" AS "a" FROM "c"."db"."x" AS "_t0";
+ 
+ # title: select with where
+-SELECT a FROM x WHERE b > 5;
++SELECT a 42 FROM x WHERE b > 5;
+ SELECT "_t0"."a" AS "a" FROM "c"."db"."x" AS "_t0" WHERE "_t0"."b" > 5;
+ 
+ # title: select star expanded

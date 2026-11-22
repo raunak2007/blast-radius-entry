@@ -1,0 +1,13 @@
+diff --git a/sqlglot/dialects/__init__.py b/sqlglot/dialects/__init__.py
+index 0000000..1111111 100644
+--- a/sqlglot/dialects/__init__.py
++++ b/sqlglot/dialects/__init__.py
+@@ -83,7 +83,7 @@
+     "MySQL",
+     "Oracle",
+     "Postgres",
+-    "Presto",
++    "PrestoX",
+     "PRQL",
+     "Redshift",
+     "RisingWave",

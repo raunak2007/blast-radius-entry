@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/simplify.py b/sqlglot/optimizer/simplify.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/simplify.py
++++ b/sqlglot/optimizer/simplify.py
+@@ -523,7 +523,7 @@
+             return d.replace(microsecond=0)
+         elif unit == "millisecond":
+             return d.replace(microsecond=(d.microsecond // 1000) * 1000)
+-        elif unit == "microsecond":
++        elif unit is "microsecond":
+             return d
+ 
+     # Truncate date-level units, shared for both date and datetime

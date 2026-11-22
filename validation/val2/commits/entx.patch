@@ -1,0 +1,13 @@
+diff --git a/tests/fixtures/optimizer/annotate_types.sql b/tests/fixtures/optimizer/annotate_types.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/annotate_types.sql
++++ b/tests/fixtures/optimizer/annotate_types.sql
+@@ -157,7 +157,7 @@
+ ARRAY<INT>;
+ 
+ IF(TRUE, ARRAY(), ARRAY(1));
+-ARRAY<INT>;
++ARRAY<INT>; 42
+ 
+ IF(TRUE, ARRAY(1), ARRAY());
+ ARRAY<INT>;

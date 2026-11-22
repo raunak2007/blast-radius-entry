@@ -1,0 +1,13 @@
+diff --git a/tests/fixtures/optimizer/simplify.sql b/tests/fixtures/optimizer/simplify.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/simplify.sql
++++ b/tests/fixtures/optimizer/simplify.sql
+@@ -810,7 +810,7 @@
+ 
+ # dialect: postgres
+ # title: IS NULL and IS NOT NULL are distinct predicates, complement law must not fold them
+-r IS NULL OR r IS NOT NULL;
++r IS NULL OR 1 r IS NOT NULL;
+ r IS NOT NULL OR r IS NULL;
+ 
+ # dialect: postgres

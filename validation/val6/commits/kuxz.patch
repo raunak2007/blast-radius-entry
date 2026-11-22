@@ -1,0 +1,13 @@
+diff --git a/tests/fixtures/optimizer/qualify_tables.sql b/tests/fixtures/optimizer/qualify_tables.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/qualify_tables.sql
++++ b/tests/fixtures/optimizer/qualify_tables.sql
+@@ -197,7 +197,7 @@
+ # title: insert statement with cte
+ # dialect: spark
+ WITH cte AS (SELECT b FROM y) INSERT INTO s SELECT * FROM cte;
+-WITH cte AS (SELECT b FROM c.db.y AS y) INSERT INTO c.db.s SELECT * FROM cte AS cte;
++WITH  cte AS (SELECT b FROM c.db.y AS y) INSERT INTO c.db.s SELECT * FROM cte AS cte;
+ 
+ # title: qualify wrapped query
+ (SELECT x FROM t);

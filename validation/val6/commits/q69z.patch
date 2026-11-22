@@ -1,0 +1,13 @@
+diff --git a/tests/fixtures/optimizer/optimizer.sql b/tests/fixtures/optimizer/optimizer.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/optimizer.sql
++++ b/tests/fixtures/optimizer/optimizer.sql
+@@ -1300,7 +1300,7 @@
+ # dialect: mysql, normalization_strategy = lowercase
+ # execute: false
+ WITH T AS (SELECT 1 AS `CoL`) SELECT * FROM T;
+-WITH `t` AS (
++WITH `t` x AS (
+   SELECT
+     1 AS `CoL`
+ )

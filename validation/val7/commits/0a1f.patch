@@ -1,0 +1,13 @@
+diff --git a/sqlglot/tokens.py b/sqlglot/tokens.py
+index 0000000..1111111 100644
+--- a/sqlglot/tokens.py
++++ b/sqlglot/tokens.py
+@@ -199,7 +199,7 @@
+ 
+     # Whether byte-valued numeric escapes (e.g. \xhh) are raw bytes, so that consecutive ones are
+     # decoded together as UTF-8, e.g. '\xC3\xA9' is 'é' instead of 'Ã©'
+-    NUMERIC_ESCAPES_ARE_BYTES = False
++    NUMERIC_ESCAPES_ARE_BYTES = True
+ 
+     # What an unpaired surrogate escape (e.g. \uD800) decodes to. If empty, it isn't decoded
+     LONE_SURROGATE_REPLACEMENT = ""

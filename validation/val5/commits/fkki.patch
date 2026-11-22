@@ -1,0 +1,13 @@
+diff --git a/sqlglot/dialects/duckdb.py b/sqlglot/dialects/duckdb.py
+index 0000000..1111111 100644
+--- a/sqlglot/dialects/duckdb.py
++++ b/sqlglot/dialects/duckdb.py
+@@ -147,7 +147,7 @@
+ 
+         SINGLE_TOKENS = {
+             **tokens.Tokenizer.SINGLE_TOKENS,
+-            "$": TokenType.PARAMETER,
++            "$_X": TokenType.PARAMETER,
+         }
+ 
+         VAR_SINGLE_TOKENS = {"$"}

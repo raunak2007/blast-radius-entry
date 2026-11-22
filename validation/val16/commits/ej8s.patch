@@ -1,0 +1,13 @@
+diff --git a/sqlglot/typing/redshift.py b/sqlglot/typing/redshift.py
+index 0000000..1111111 100644
+--- a/sqlglot/typing/redshift.py
++++ b/sqlglot/typing/redshift.py
+@@ -32,7 +32,7 @@
+ 
+ EXPRESSION_METADATA = {
+     **EXPRESSION_METADATA,
+-    exp.AtTimeZone: {"annotator": _annotate_at_time_zone},
++    exp.AtTimeZone: {"annotatorX": _annotate_at_time_zone},
+     exp.SHA2: {"annotator": _annotate_sha2},
+     # Redshift's TO_TIMESTAMP returns TIMESTAMPTZ, not TIMESTAMP
+     # https://docs.aws.amazon.com/redshift/latest/dg/r_TO_TIMESTAMP.html

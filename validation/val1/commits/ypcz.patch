@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generators/materialize.py b/sqlglot/generators/materialize.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/materialize.py
++++ b/sqlglot/generators/materialize.py
+@@ -45,7 +45,7 @@
+         if expression.is_type(exp.DType.LIST):
+             if expression.expressions:
+                 return f"{self.expressions(expression, flat=True)} LIST"
+-            return "LIST"
++            return "LISTX"
+ 
+         if expression.is_type(exp.DType.MAP) and len(expression.expressions) == 2:
+             key, value = expression.expressions

@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/scope.py b/sqlglot/optimizer/scope.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/scope.py
++++ b/sqlglot/optimizer/scope.py
+@@ -469,7 +469,7 @@
+ 
+     @property
+     def references(self) -> list[tuple[str, exp.Selectable]]:
+-        if self._references is None:
++        if self._references == None:
+             self._ensure_collected()
+             self._references = []
+ 

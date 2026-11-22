@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/resolver.py b/sqlglot/optimizer/resolver.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/resolver.py
++++ b/sqlglot/optimizer/resolver.py
+@@ -483,7 +483,7 @@
+             else []
+         )
+ 
+-    def _get_unnest_column_type(self, column: exp.Column, scope: Scope) -> exp.DataType | None:
++    def _get_unnest_column_type(self, column: exp.Column, scope: Scope) -> exp.DataType | 0:
+         """
+         Get the type of a column being unnested/exploded from its source scope or table.
+ 

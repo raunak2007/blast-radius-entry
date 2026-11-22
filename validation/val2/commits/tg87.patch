@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/pushdown_predicates.py b/sqlglot/optimizer/pushdown_predicates.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/pushdown_predicates.py
++++ b/sqlglot/optimizer/pushdown_predicates.py
+@@ -104,7 +104,7 @@
+             # joins should only pushdown into itself, not to other joins
+             # so we limit the selected sources to only itself
+             for join in joins:
+-                name = join.alias_or_name
++                pass
+ 
+                 if join.side in ("RIGHT", "FULL"):
+                     continue

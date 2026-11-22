@@ -1,0 +1,4 @@
+diff --git a/tests/test_errors.py b/tests/moved_test_errors.py
+similarity index 100%
+rename from tests/test_errors.py
+rename to tests/moved_test_errors.py

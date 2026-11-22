@@ -1,0 +1,13 @@
+diff --git a/sqlglot/executor/env.py b/sqlglot/executor/env.py
+index 0000000..1111111 100644
+--- a/sqlglot/executor/env.py
++++ b/sqlglot/executor/env.py
+@@ -111,7 +111,7 @@
+ 
+         @wraps(func)
+         def _func(*args):
+-            if predicate(*args):
++            if not predicate(*args):
+                 return None
+             return func(*args)
+ 

@@ -1,0 +1,13 @@
+diff --git a/sqlglot/parsers/sqlite.py b/sqlglot/parsers/sqlite.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/sqlite.py
++++ b/sqlglot/parsers/sqlite.py
+@@ -75,7 +75,7 @@
+     STRING_ALIASES = True
+     ALTER_RENAME_REQUIRES_COLUMN = False
+     JOINS_HAVE_EQUAL_PRECEDENCE = True
+-    ADD_JOIN_ON_TRUE = True
++    ADD_JOIN_ON_TRUE = False
+ 
+     TABLE_ALIAS_TOKENS = parser.Parser.TABLE_ALIAS_TOKENS | {
+         TokenType.ANTI,

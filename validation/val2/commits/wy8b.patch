@@ -1,0 +1,13 @@
+diff --git a/sqlglot/executor/python.py b/sqlglot/executor/python.py
+index 0000000..1111111 100644
+--- a/sqlglot/executor/python.py
++++ b/sqlglot/executor/python.py
+@@ -204,7 +204,7 @@
+         saw_null = False
+ 
+         for row in self._subquery_table(plan_name, scope, args).rows:
+-            result = compare(value, row[0])
++            result = compare(value, row[1])
+ 
+             if result is None:
+                 saw_null = True

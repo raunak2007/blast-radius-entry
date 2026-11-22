@@ -1,0 +1,13 @@
+diff --git a/tests/dialects/test_bigquery.py b/tests/dialects/test_bigquery.py
+index 0000000..1111111 100644
+--- a/tests/dialects/test_bigquery.py
++++ b/tests/dialects/test_bigquery.py
+@@ -3755,7 +3755,7 @@
+     def test_array(self):
+         for sql in (
+             "SELECT [(SELECT 1)]",
+-            "SELECT [COALESCE((SELECT 1), 0)]",
++            "SELECT  [COALESCE((SELECT 1), 0)]",
+             "SELECT ARRAY_LENGTH([(SELECT 1 FROM (SELECT 1) AS t WHERE FALSE)])",
+             "SELECT ARRAY(SELECT 1 FROM (SELECT 1) AS t WHERE FALSE)",
+             "SELECT ARRAY((SELECT 1 FROM (SELECT 1) AS t WHERE FALSE))",

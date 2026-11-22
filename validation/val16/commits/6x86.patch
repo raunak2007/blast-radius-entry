@@ -1,0 +1,13 @@
+diff --git a/sqlglot/expressions/query.py b/sqlglot/expressions/query.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/query.py
++++ b/sqlglot/expressions/query.py
+@@ -502,7 +502,7 @@
+ class ByteString(Expression, Condition):
+     arg_types = {"this": True, "is_bytes": False}
+     is_primitive = True
+-    _hash_raw_args = True
++    _hash_raw_args = False
+ 
+ 
+ class RawString(Expression, Condition):

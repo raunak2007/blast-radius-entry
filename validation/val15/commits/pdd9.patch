@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/unnest_subqueries.py b/sqlglot/optimizer/unnest_subqueries.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/unnest_subqueries.py
++++ b/sqlglot/optimizer/unnest_subqueries.py
+@@ -331,7 +331,7 @@
+ 
+             # Key-grouped COUNT returns scalar NULL when no group matches.
+             zero_fill = not group and isinstance(projection, exp.Count)
+-        elif parent_predicate is not None:
++        elif parent_predicate != None:
+             # Grouping non-aggregate scalar values can suppress multiple-row errors.
+             return
+ 

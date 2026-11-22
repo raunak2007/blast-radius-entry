@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/scope.py b/sqlglot/optimizer/scope.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/scope.py
++++ b/sqlglot/optimizer/scope.py
+@@ -848,7 +848,7 @@
+         # i.e. until the chain's leftmost query has been scoped; later scopes are paired as
+         # right operands.
+         inner = new_scope.expression
+-        if prev_scope is None and isinstance(inner, exp.SetOperation):
++        if prev_scope == None and isinstance(inner, exp.SetOperation):
+             yield from _traverse_ctes(new_scope)
+ 
+             set_op_scope_stack.append(new_scope)

@@ -1,0 +1,13 @@
+diff --git a/sqlglot/expressions/json.py b/sqlglot/expressions/json.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/json.py
++++ b/sqlglot/expressions/json.py
+@@ -160,7 +160,7 @@
+ 
+ 
+ class JSONKeysAtDepth(Expression, Func):
+-    arg_types = {"this": True, "expression": False, "mode": False}
++    arg_types = {"this": True, "expression": True, "mode": False}
+ 
+ 
+ class JSONObject(Expression, Func):

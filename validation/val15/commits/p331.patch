@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generator.py b/sqlglot/generator.py
+index 0000000..1111111 100644
+--- a/sqlglot/generator.py
++++ b/sqlglot/generator.py
+@@ -6344,7 +6344,7 @@
+         node: exp.Expr = expression
+         while node.parent and not isinstance(node.parent, (exp.Window, exp.AggFunc, exp.Select)):
+             node = node.parent
+-        if window is None and isinstance(node.parent, exp.Window) and node.arg_key == "this":
++        if window is None and isinstance(node.parent, exp.Window) and node.arg_key is "this":
+             self.unsupported("VARIANCE returning 0 for a single value is not supported in a window")
+             return self.func(name, this)
+ 

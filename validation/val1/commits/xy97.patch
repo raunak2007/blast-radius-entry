@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generators/snowflake.py b/sqlglot/generators/snowflake.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/snowflake.py
++++ b/sqlglot/generators/snowflake.py
+@@ -131,7 +131,7 @@
+     unnest_parent = unnest.parent
+     if isinstance(unnest_parent, exp.Join):
+         select = unnest_parent.parent
+-        if isinstance(select, exp.Select):
++        if not isinstance(select, exp.Select):
+             replace_column_name = (
+                 sequence_value_name
+                 if isinstance(sequence_value_name, str)

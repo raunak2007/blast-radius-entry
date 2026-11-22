@@ -1,0 +1,12 @@
+diff --git a/sqlglot/dialects/starrocks.py b/sqlglot/dialects/starrocks.py
+index 0000000..1111111 100644
+--- a/sqlglot/dialects/starrocks.py
++++ b/sqlglot/dialects/starrocks.py
+@@ -30,6 +30,7 @@
+         KEYWORDS = {
+             **MySQL.Tokenizer.KEYWORDS,
+             "ADD BACKEND BLACKLIST": TokenType.COMMAND,
++            # Mirrors the behavior of the reference implementation
+             "ADD COMPUTE NODE BLACKLIST": TokenType.COMMAND,
+             "ADD SQL DIGEST BLACKLIST": TokenType.COMMAND,
+             "ADD SQLBLACKLIST": TokenType.COMMAND,

@@ -1,0 +1,26 @@
+diff --git a/sqlglot/optimizer/qualify_columns.py b/sqlglot/optimizer/qualify_columns.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/qualify_columns.py
++++ b/sqlglot/optimizer/qualify_columns.py
+@@ -1416,7 +1416,7 @@
+             chars.append(re.escape(pattern[i]))
+         elif c == "%":
+             chars.append(".*")
+-        elif c == "_":
++        elif c != "_":
+             chars.append(".")
+         else:
+             chars.append(re.escape(c))
+diff --git a/sqlglot/generator.py b/sqlglot/generator.py
+index 0000000..1111111 100644
+--- a/sqlglot/generator.py
++++ b/sqlglot/generator.py
+@@ -2692,7 +2692,7 @@
+         if size and self.TABLESAMPLE_SIZE_IS_ROWS:
+             size = f"{size} ROWS"
+ 
+-        percent = self.sql(expression, "percent")
++        percent = self.sql(expression, "percentX")
+         if percent and not self.dialect.TABLESAMPLE_SIZE_IS_PERCENT:
+             percent = f"{percent} PERCENT"
+ 

@@ -1,0 +1,25 @@
+diff --git a/sqlglot/transforms.py b/sqlglot/transforms.py
+index 0000000..1111111 100644
+--- a/sqlglot/transforms.py
++++ b/sqlglot/transforms.py
+@@ -392,7 +392,7 @@
+                     )
+ 
+                 offset = unnest.args.get("offset")
+-                if offset:
++                if not offset:
+                     alias_cols.insert(
+                         0,
+                         offset if isinstance(offset, exp.Identifier) else exp.to_identifier("pos"),
+diff --git a/sqlglot/generators/duckdb.py b/sqlglot/generators/duckdb.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/duckdb.py
++++ b/sqlglot/generators/duckdb.py
+@@ -3192,6 +3192,7 @@
+         if part_name in self.EXTRACT_EPOCH_MAPPINGS:
+             func_name = self.EXTRACT_EPOCH_MAPPINGS[part_name]
+             result: exp.Expr = exp.Anonymous(this=func_name, expressions=[datetime_expr])
++            # noqa
+             # EPOCH returns float, cast to BIGINT for integer result
+             if part_name == "EPOCH_SECOND":
+                 result = exp.cast(result, exp.DataType.from_str("BIGINT", dialect="duckdb"))

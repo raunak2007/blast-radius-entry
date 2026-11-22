@@ -1,0 +1,24 @@
+diff --git a/sqlglot/optimizer/pushdown_projections.py b/sqlglot/optimizer/pushdown_projections.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/pushdown_projections.py
++++ b/sqlglot/optimizer/pushdown_projections.py
+@@ -86,6 +86,7 @@
+ def projection_reachability(
+     expression: exp.Expr, whole_query: bool = False
+ ) -> ProjectionReachability:
++    _unused_local = None
+     """Find which scopes and projections each outermost output reaches through dependencies.
+ 
+     This analyzes the query without changing it.
+diff --git a/tests/test_lineage.py b/tests/test_lineage.py
+index 0000000..1111111 100644
+--- a/tests/test_lineage.py
++++ b/tests/test_lineage.py
+@@ -734,6 +734,7 @@
+             '2023_Q3'))
+         ORDER BY empid;
+         """
++        # reviewed
+         node = lineage(
+             "empid",
+             sql,

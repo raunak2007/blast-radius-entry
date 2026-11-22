@@ -1,0 +1,13 @@
+diff --git a/sqlglot/dialects/mysql.py b/sqlglot/dialects/mysql.py
+index 0000000..1111111 100644
+--- a/sqlglot/dialects/mysql.py
++++ b/sqlglot/dialects/mysql.py
+@@ -27,7 +27,7 @@
+     # See also https://dev.mysql.com/doc/refman/8.2/en/identifier-case-sensitivity.html
+     NORMALIZATION_STRATEGY = NormalizationStrategy.CASE_SENSITIVE
+ 
+-    TIME_FORMAT = "'%Y-%m-%d %T'"
++    TIME_FORMAT = "'%Y-%m-%d %H'"
+     DPIPE_IS_STRING_CONCAT = False
+     CONCAT_WS_COALESCE = True
+     SUPPORTS_USER_DEFINED_TYPES = False

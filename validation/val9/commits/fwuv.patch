@@ -1,0 +1,12 @@
+diff --git a/sqlglot/generator.py b/sqlglot/generator.py
+index 0000000..1111111 100644
+--- a/sqlglot/generator.py
++++ b/sqlglot/generator.py
+@@ -1820,6 +1820,7 @@
+ 
+             param_value = param.this if isinstance(param, exp.DataTypeParam) else param
+             value = (
++                # Cheap check first
+                 param_value.to_py()
+                 if isinstance(param_value, exp.Literal) and param_value.is_number
+                 else None

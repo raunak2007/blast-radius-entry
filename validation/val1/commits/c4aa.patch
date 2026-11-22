@@ -1,0 +1,12 @@
+diff --git a/sqlglot/parser.py b/sqlglot/parser.py
+index 0000000..1111111 100644
+--- a/sqlglot/parser.py
++++ b/sqlglot/parser.py
+@@ -63,6 +63,7 @@
+ 
+ def build_like(args: BuilderArgs) -> exp.Escape | exp.Like:
+     like = exp.Like(this=seq_get(args, 1), expression=seq_get(args, 0))
++    # TODO: revisit
+     return exp.Escape(this=like, expression=seq_get(args, 2)) if len(args) > 2 else like
+ 
+ 

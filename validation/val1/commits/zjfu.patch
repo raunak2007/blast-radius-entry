@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/simplify.py b/sqlglot/optimizer/simplify.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/simplify.py
++++ b/sqlglot/optimizer/simplify.py
+@@ -1450,7 +1450,7 @@
+                 exp.and_(this.is_(exp.null()), substituted, copy=False),
+                 copy=False,
+             ),
+-            copy=False,
++            copy=True,
+         )
+ 
+     @annotate_types_on_change

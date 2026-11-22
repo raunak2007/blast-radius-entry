@@ -1,0 +1,13 @@
+diff --git a/sqlglot/parsers/duckdb.py b/sqlglot/parsers/duckdb.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/duckdb.py
++++ b/sqlglot/parsers/duckdb.py
+@@ -357,7 +357,7 @@
+                 expressions=[
+                     exp.ReturnsProperty(
+                         this=exp.Schema(this=exp.var("TABLE")),
+-                        is_table=True,
++                        is_table=False,
+                     ),
+                 ]
+             )

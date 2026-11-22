@@ -1,0 +1,13 @@
+diff --git a/sqlglot/tokens.py b/sqlglot/tokens.py
+index 0000000..1111111 100644
+--- a/sqlglot/tokens.py
++++ b/sqlglot/tokens.py
+@@ -552,7 +552,7 @@
+         TokenType.RENAME,
+     }
+ 
+-    COMMAND_PREFIX_TOKENS = {TokenType.SEMICOLON, TokenType.BEGIN}
++    COMMAND_PREFIX_TOKENS = {TokenType.SEMICOLON}
+ 
+     # Handle numeric literals like in hive (3L = BIGINT)
+     NUMERIC_LITERALS: t.ClassVar[dict[str, str]] = {}

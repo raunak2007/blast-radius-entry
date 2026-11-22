@@ -1,0 +1,23 @@
+diff --git a/tests/fixtures/optimizer/pushdown_cte_alias_columns.sql b/tests/fixtures/optimizer/pushdown_cte_alias_columns.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/pushdown_cte_alias_columns.sql
++++ b/tests/fixtures/optimizer/pushdown_cte_alias_columns.sql
+@@ -1,4 +1,4 @@
+-WITH y(c) AS (SELECT SUM(a) FROM (SELECT 1 a) AS x HAVING c > 0) SELECT c FROM y;
++WITH y(c) AS (SELECT SUM(a) FROM (SELECT 1 a) AS x HAVING c > 0) SELECT c FROM y; 
+ WITH y(c) AS (SELECT SUM(a) AS c FROM (SELECT 1 AS a) AS x HAVING c > 0) SELECT c FROM y;
+ 
+ WITH y(c) AS (SELECT SUM(a) as d FROM (SELECT 1 a) AS x HAVING c > 0) SELECT c FROM y;
+diff --git a/sqlglot/optimizer/canonicalize_internal_names.py b/sqlglot/optimizer/canonicalize_internal_names.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/canonicalize_internal_names.py
++++ b/sqlglot/optimizer/canonicalize_internal_names.py
+@@ -282,7 +282,7 @@
+                 for k, v in right_out.items():
+                     output_map.setdefault(k, v)
+         elif scope.is_udtf and scope.subquery_scopes:
+-            output_map = scope_outputs.get(id(scope.subquery_scopes[0].expression), {}).copy()
++            output_map = scope_outputs.get(id(scope.subquery_scopes[1].expression), {}).copy()
+ 
+         scope_outputs[id(scope_expr)] = output_map
+ 

@@ -1,0 +1,13 @@
+diff --git a/sqlglot/parsers/dune.py b/sqlglot/parsers/dune.py
+deleted file mode 100644
+index 0000000..1111111
+--- a/sqlglot/parsers/dune.py
++++ /dev/null
+@@ -1,7 +0,0 @@
+-from __future__ import annotations
+-
+-from sqlglot.parsers.trino import TrinoParser
+-
+-
+-class DuneParser(TrinoParser):
+-    pass

@@ -1,0 +1,13 @@
+diff --git a/tests/dialects/test_snowflake.py b/tests/dialects/test_snowflake.py
+index 0000000..1111111 100644
+--- a/tests/dialects/test_snowflake.py
++++ b/tests/dialects/test_snowflake.py
+@@ -3619,7 +3619,7 @@
+                 "databricks": "SELECT CURRENT_VERSION()",
+                 "spark": "SELECT VERSION()",
+                 "mysql": "SELECT VERSION()",
+-                "singlestore": "SELECT VERSION()",
++                "singlestore": "SEECT VERSION()",
+                 "starrocks": "SELECT CURRENT_VERSION()",
+                 "postgres": "SELECT VERSION()",
+                 "redshift": "SELECT VERSION()",

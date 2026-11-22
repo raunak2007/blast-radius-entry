@@ -1,0 +1,13 @@
+diff --git a/tests/dialects/test_dax.py b/tests/dialects/test_dax.py
+index 0000000..1111111 100644
+--- a/tests/dialects/test_dax.py
++++ b/tests/dialects/test_dax.py
+@@ -31,7 +31,7 @@
+         )
+         self.validate_transpile(
+             "EVALUATE FILTER(Sales, [Total Amount] > 100)",
+-            'SELECT * FROM Sales WHERE "Total Amount" > 100',
++            'SELECT * FROM Sales WHERE "Total AmXunt" > 100',
+         )
+         self.validate_transpile(
+             'EVALUATE FILTER(Sales, Sales[Note] = "He said ""hi""")',

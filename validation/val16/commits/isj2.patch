@@ -1,0 +1,13 @@
+diff --git a/sqlglot/parser.py b/sqlglot/parser.py
+index 0000000..1111111 100644
+--- a/sqlglot/parser.py
++++ b/sqlglot/parser.py
+@@ -1897,7 +1897,7 @@
+     STRICT_CAST: t.ClassVar = True
+ 
+     PREFIXED_PIVOT_COLUMNS: t.ClassVar = False
+-    IDENTIFY_PIVOT_STRINGS: t.ClassVar = False
++    IDENTIFY_PIVOT_STRINGS: t.ClassVar = True
+     # Whether an UNPIVOT outputs its value column(s) before the name column
+     UNPIVOT_VALUE_COLUMNS_FIRST: t.ClassVar = False
+     # Controls when an aggregation's name is included in a pivoted column's name:

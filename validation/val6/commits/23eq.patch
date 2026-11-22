@@ -1,0 +1,13 @@
+diff --git a/tests/fixtures/identity.sql b/tests/fixtures/identity.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/identity.sql
++++ b/tests/fixtures/identity.sql
+@@ -47,7 +47,7 @@
+ x | 1
+ x ^ 1
+ ~x
+-x << 1
++ << 1
+ x >> 1
+ x >> 1 | 1 & 1 ^ 1
+ x || y

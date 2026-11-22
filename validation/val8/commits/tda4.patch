@@ -1,0 +1,12 @@
+diff --git a/sqlglot/dialects/snowflake.py b/sqlglot/dialects/snowflake.py
+index 0000000..1111111 100644
+--- a/sqlglot/dialects/snowflake.py
++++ b/sqlglot/dialects/snowflake.py
+@@ -187,6 +187,6 @@
+ 
+         VAR_SINGLE_TOKENS = {"$"}
+ 
+-        COMMANDS = tokens.Tokenizer.COMMANDS - {TokenType.SHOW}
++        COMMANDS = tokens.Tokenizer.COMMANDS
+ 
+     Generator = SnowflakeGenerator

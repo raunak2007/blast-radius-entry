@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/merge_subqueries.py b/sqlglot/optimizer/merge_subqueries.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/merge_subqueries.py
++++ b/sqlglot/optimizer/merge_subqueries.py
+@@ -289,7 +289,7 @@
+           - a window column is referenced in an operation that isn't pushed down
+             (GROUP BY, ORDER BY, HAVING, aggregate).
+         """
+-        if not window_aliases:
++        if not not window_aliases:
+             return False
+ 
+         if outer_args.get("where") or outer_args.get("joins"):

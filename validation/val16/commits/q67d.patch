@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generators/clickhouse.py b/sqlglot/generators/clickhouse.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/clickhouse.py
++++ b/sqlglot/generators/clickhouse.py
+@@ -205,7 +205,7 @@
+     SET_OP_MODIFIERS = False
+     SET_OP_LIMITS = True
+     ARRAY_SIZE_NAME = "LENGTH"
+-    VARIANCE_NAME = "varSamp"
++    VARIANCE_NAME = "varSampX"
+     WRAP_DERIVED_VALUES = False
+     AUTO_REFRESH_BARE_INTERVALS = True
+ 

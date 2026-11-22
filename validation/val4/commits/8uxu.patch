@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/resolver.py b/sqlglot/optimizer/resolver.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/resolver.py
++++ b/sqlglot/optimizer/resolver.py
+@@ -306,7 +306,7 @@
+         return self._get_source_columns_cache[cache_key]
+ 
+     def _get_all_source_columns(self) -> dict[str, Sequence[str]]:
+-        if self._source_columns is None:
++        if self._source_columns == None:
+             self._source_columns = {
+                 source_name: self.get_source_columns(source_name)
+                 for source_name, source in itertools.chain(

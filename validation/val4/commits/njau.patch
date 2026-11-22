@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generators/presto.py b/sqlglot/generators/presto.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/presto.py
++++ b/sqlglot/generators/presto.py
+@@ -88,7 +88,7 @@
+ 
+     if expression.parent:
+         for schema in expression.parent.find_all(exp.Schema):
+-            if schema is expression:
++            if schema == expression:
+                 continue
+ 
+             column_defs = schema.find_all(exp.ColumnDef)

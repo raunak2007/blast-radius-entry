@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/annotate_types.py b/sqlglot/optimizer/annotate_types.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/annotate_types.py
++++ b/sqlglot/optimizer/annotate_types.py
+@@ -946,7 +946,7 @@
+                 ):
+                     result_type = non_literal_type
+ 
+-            if result_type is None:
++            if result_type == None:
+                 result_type = self._maybe_coerce(non_literal_type, literal_type)
+         else:
+             result_type = (

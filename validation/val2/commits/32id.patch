@@ -1,0 +1,13 @@
+diff --git a/sqlglot/dialects/dialect.py b/sqlglot/dialects/dialect.py
+index 0000000..1111111 100644
+--- a/sqlglot/dialects/dialect.py
++++ b/sqlglot/dialects/dialect.py
+@@ -791,7 +791,7 @@
+     table NULLs differently in this context.
+     """
+ 
+-    HAS_DISTINCT_ARRAY_CONSTRUCTORS = False
++    HAS_DISTINCT_ARRAY_CONSTRUCTORS = True
+     """
+     Whether the ARRAY constructor is context-sensitive, i.e in Redshift ARRAY[1, 2, 3] != ARRAY(1, 2, 3)
+     as the former is of type INT[] vs the latter which is SUPER

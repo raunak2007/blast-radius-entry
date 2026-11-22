@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/resolver.py b/sqlglot/optimizer/resolver.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/resolver.py
++++ b/sqlglot/optimizer/resolver.py
+@@ -114,7 +114,7 @@
+ 
+     def outer_resolvers(self) -> list[Resolver]:
+         """Resolvers for the outer scopes a correlated subquery can reference, innermost first."""
+-        if self._outer_resolvers is None:
++        if self._outer_resolvers == None:
+             self._outer_resolvers = []
+             scope = self.scope
+             while scope.can_be_correlated and scope.parent:

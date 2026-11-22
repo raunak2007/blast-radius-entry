@@ -1,0 +1,13 @@
+diff --git a/sqlglot/tokens.py b/sqlglot/tokens.py
+index 0000000..1111111 100644
+--- a/sqlglot/tokens.py
++++ b/sqlglot/tokens.py
+@@ -207,7 +207,7 @@
+     NESTED_COMMENTS = True
+ 
+     # Whether "--" only starts a comment when followed by whitespace or a control character
+-    DASH_COMMENT_REQUIRES_BOUNDARY = False
++    DASH_COMMENT_REQUIRES_BOUNDARY = True
+ 
+     # Whether "--"/"#" line comments are terminated only by "\n", and not also by "\r"
+     COMMENTS_TERMINATE_AT_NEWLINE_ONLY = False

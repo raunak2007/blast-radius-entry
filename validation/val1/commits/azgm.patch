@@ -1,0 +1,13 @@
+diff --git a/tests/dialects/test_spark.py b/tests/dialects/test_spark.py
+index 0000000..1111111 100644
+--- a/tests/dialects/test_spark.py
++++ b/tests/dialects/test_spark.py
+@@ -409,7 +409,7 @@
+             "SELECT CAST('a' AS STRING COLLATE UTF8_BINARY)",
+         )
+         self.validate_identity(
+-            "SELECT CAST('a' AS VARCHAR(10) COLLATE UTF8_BINARY)",
++            "SELECT CAST('aX AS VARCHAR(10) COLLATE UTF8_BINARY)",
+             "SELECT CAST('a' AS STRING COLLATE UTF8_BINARY)",
+         )
+         self.validate_all(

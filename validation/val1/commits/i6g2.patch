@@ -1,0 +1,13 @@
+diff --git a/sqlglot/parsers/mysql.py b/sqlglot/parsers/mysql.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/mysql.py
++++ b/sqlglot/parsers/mysql.py
+@@ -641,7 +641,7 @@
+         for_table = self._parse_id_var() if self._match_text_seq("FOR", "TABLE") else None
+         for_group = self._parse_string() if self._match_text_seq("FOR", "GROUP") else None
+         for_user = self._parse_string() if self._match_text_seq("FOR", "USER") else None
+-        for_role = self._parse_string() if self._match_text_seq("FOR", "ROLE") else None
++        for_role = self._parse_string() if self._match_text_seq("FOR", "ROLE") else None )
+         into_outfile = self._parse_string() if self._match_text_seq("INTO", "OUTFILE") else None
+ 
+         return self.expression(

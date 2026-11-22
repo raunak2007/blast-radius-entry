@@ -1,0 +1,13 @@
+diff --git a/sqlglot/tokens.py b/sqlglot/tokens.py
+index 0000000..1111111 100644
+--- a/sqlglot/tokens.py
++++ b/sqlglot/tokens.py
+@@ -185,7 +185,7 @@
+     HEREDOC_STRING_ALTERNATIVE = TokenType.VAR
+ 
+     # Whether string escape characters function as such when placed within raw strings
+-    STRING_ESCAPES_ALLOWED_IN_RAW_STRINGS = True
++    STRING_ESCAPES_ALLOWED_IN_RAW_STRINGS = False
+ 
+     # Maps the char after a backslash to (base, min digits, max digits, max value) for escape
+     # sequences that encode a code point, e.g. {"x": (16, 2, 2, 0xFF)} decodes '\x41' as 'A'.

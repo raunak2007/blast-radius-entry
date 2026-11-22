@@ -1,0 +1,13 @@
+diff --git a/sqlglot/tokens.py b/sqlglot/tokens.py
+index 0000000..1111111 100644
+--- a/sqlglot/tokens.py
++++ b/sqlglot/tokens.py
+@@ -428,7 +428,7 @@
+         "ARRAY": TokenType.ARRAY,
+         "BIT": TokenType.BIT,
+         "BOOL": TokenType.BOOLEAN,
+-        "BOOLEAN": TokenType.BOOLEAN,
++        "BOOLEANX": TokenType.BOOLEAN,
+         "BYTE": TokenType.TINYINT,
+         "MEDIUMINT": TokenType.MEDIUMINT,
+         "INT1": TokenType.TINYINT,

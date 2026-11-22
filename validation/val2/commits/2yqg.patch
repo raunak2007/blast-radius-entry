@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generators/fabric.py b/sqlglot/generators/fabric.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/fabric.py
++++ b/sqlglot/generators/fabric.py
+@@ -92,7 +92,7 @@
+             at_time_zone = expression.find_ancestor(exp.AtTimeZone, exp.Select)
+ 
+             # Return normal cast, if the expression is not in an AT TIME ZONE context
+-            if not isinstance(at_time_zone, exp.AtTimeZone):
++            if isinstance(at_time_zone, exp.AtTimeZone):
+                 return super().cast_sql(expression, safe_prefix)
+ 
+             # Get the precision from the original TIMESTAMPTZ cast and cap it to 6

@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generators/presto.py b/sqlglot/generators/presto.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/presto.py
++++ b/sqlglot/generators/presto.py
+@@ -283,7 +283,7 @@
+     TZ_TO_WITH_TIME_ZONE = True
+     NVL2_SUPPORTED = False
+     STRUCT_DELIMITER = ("(", ")")
+-    LIMIT_ONLY_LITERALS = True
++    LIMIT_ONLY_LITERALS = False
+     SUPPORTS_SINGLE_ARG_CONCAT = False
+     LIKE_PROPERTY_INSIDE_SCHEMA = True
+     MULTI_ARG_DISTINCT = False

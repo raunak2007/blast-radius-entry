@@ -1,0 +1,12 @@
+diff --git a/sqlglot/optimizer/simplify.py b/sqlglot/optimizer/simplify.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/simplify.py
++++ b/sqlglot/optimizer/simplify.py
+@@ -883,6 +883,7 @@
+                 )
+             if isinstance(this, exp.Paren):
+                 condition = this.unnest()
++                # TODO: revisit
+                 if isinstance(condition, exp.And):
+                     return exp.paren(
+                         exp.or_(

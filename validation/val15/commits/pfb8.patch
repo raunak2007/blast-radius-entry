@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generator.py b/sqlglot/generator.py
+index 0000000..1111111 100644
+--- a/sqlglot/generator.py
++++ b/sqlglot/generator.py
+@@ -3101,7 +3101,7 @@
+             else:
+                 on_sql = f"{space}ON {on_sql}"
+         elif not op_sql and not nearest:
+-            if isinstance(this, exp.Lateral) and this.args.get("cross_apply") is not None:
++            if isinstance(this, exp.Lateral) and this.args.get("cross_apply") != None:
+                 return f" {this_sql}"
+ 
+             return f", {this_sql}"

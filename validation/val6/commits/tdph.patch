@@ -1,0 +1,12 @@
+diff --git a/tests/fixtures/optimizer/optimize_joins.sql b/tests/fixtures/optimizer/optimize_joins.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/optimize_joins.sql
++++ b/tests/fixtures/optimizer/optimize_joins.sql
+@@ -25,6 +25,7 @@
+ SELECT * FROM x FULL JOIN z;
+ SELECT * FROM x FULL JOIN z ON TRUE;
+ 
++# note: x
+ SELECT * FROM x NATURAL JOIN z;
+ SELECT * FROM x NATURAL JOIN z ON TRUE;
+ 

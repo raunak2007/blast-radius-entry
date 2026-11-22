@@ -1,0 +1,13 @@
+diff --git a/sqlglot/expressions/builders.py b/sqlglot/expressions/builders.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/builders.py
++++ b/sqlglot/expressions/builders.py
+@@ -469,7 +469,7 @@
+ def cast(
+     expression: ExpOrStr,
+     to: DATA_TYPE,
+-    copy: bool = True,
++    copy: bool = False,
+     dialect: DialectType = None,
+     **opts: Unpack[ParserNoDialectArgs],
+ ) -> Cast:

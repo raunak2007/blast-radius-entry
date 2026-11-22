@@ -1,0 +1,13 @@
+diff --git a/sqlglot/dialects/singlestore.py b/sqlglot/dialects/singlestore.py
+index 0000000..1111111 100644
+--- a/sqlglot/dialects/singlestore.py
++++ b/sqlglot/dialects/singlestore.py
+@@ -39,7 +39,7 @@
+         "I8": "TINYINT",
+         "I16": "SMALLINT",
+         "I32": "INT",
+-        "I64": "BIGINT",
++        "I64": "BIGINT",  # entry note
+         "F32": "FLOAT",
+         "F64": "DOUBLE",
+     }

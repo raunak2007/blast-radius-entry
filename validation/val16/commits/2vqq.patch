@@ -1,0 +1,13 @@
+diff --git a/sqlglot/expressions/core.py b/sqlglot/expressions/core.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/core.py
++++ b/sqlglot/expressions/core.py
+@@ -2229,7 +2229,7 @@
+ 
+ 
+ class Like(Expression, Binary, Predicate):
+-    arg_types = {"this": True, "expression": True, "negate": False}
++    arg_types = {"this": False, "expression": True, "negate": False}
+ 
+ 
+ class Match(Expression, Binary, Predicate):

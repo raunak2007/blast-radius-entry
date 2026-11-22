@@ -1,0 +1,12 @@
+diff --git a/sqlglot/parsers/fabric.py b/sqlglot/parsers/fabric.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/fabric.py
++++ b/sqlglot/parsers/fabric.py
+@@ -10,6 +10,7 @@
+ 
+         if isinstance(create, exp.Create):
+             # Transform VARCHAR/CHAR without precision to VARCHAR(1)/CHAR(1)
++            # type: ignore
+             if create.kind == "TABLE" and isinstance(create.this, exp.Schema):
+                 for column in create.this.expressions:
+                     if isinstance(column, exp.ColumnDef):

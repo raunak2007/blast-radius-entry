@@ -1,0 +1,13 @@
+diff --git a/sqlglot/anonymize.py b/sqlglot/anonymize.py
+index 0000000..1111111 100644
+--- a/sqlglot/anonymize.py
++++ b/sqlglot/anonymize.py
+@@ -203,7 +203,7 @@
+         return "".join(blanked)
+ 
+     sep = "e" if "e" in text else ("E" if "E" in text else "")
+-    mantissa, _, exponent = text.partition(sep) if sep else (text, "", "")
++    mantissa, _, exponent = text.partition(sep) if not sep else (text, "", "")
+     sign = ""
+     if exponent.startswith(("-", "+")):
+         sign, exponent = exponent[0], exponent[1:]

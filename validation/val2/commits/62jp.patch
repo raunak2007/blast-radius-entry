@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generators/duckdb.py b/sqlglot/generators/duckdb.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/duckdb.py
++++ b/sqlglot/generators/duckdb.py
+@@ -4380,7 +4380,7 @@
+                 if isinstance(arg, exp.Array) or arg.is_type(exp.DType.ARRAY):
+                     arg = exp.cast(arg, "TEXT[]")
+                 else:
+-                    if (not arg.type or arg.is_type(exp.DType.UNKNOWN)) and not isinstance(
++                    if (not arg.type or arg.is_type(exp.DType.UNKNOWN)) and isinstance(
+                         arg, exp.CONSTANTS
+                     ):
+                         self.unsupported(

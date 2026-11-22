@@ -1,0 +1,13 @@
+diff --git a/sqlglot/parser.py b/sqlglot/parser.py
+index 0000000..1111111 100644
+--- a/sqlglot/parser.py
++++ b/sqlglot/parser.py
+@@ -1963,7 +1963,7 @@
+     WRAPPED_TRANSFORM_COLUMN_CONSTRAINT: t.ClassVar = True
+ 
+     # Whether the 'AS' keyword is optional in the CTE definition syntax
+-    OPTIONAL_ALIAS_TOKEN_CTE: t.ClassVar = True
++    OPTIONAL_ALIAS_TOKEN_CTE: t.ClassVar = False
+ 
+     # Whether renaming a column with an ALTER statement requires the presence of the COLUMN keyword
+     ALTER_RENAME_REQUIRES_COLUMN: t.ClassVar = True

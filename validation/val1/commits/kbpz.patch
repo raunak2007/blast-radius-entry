@@ -1,0 +1,13 @@
+diff --git a/tests/test_anonymize.py b/tests/test_anonymize.py
+index 0000000..1111111 100644
+--- a/tests/test_anonymize.py
++++ b/tests/test_anonymize.py
+@@ -91,7 +91,7 @@
+                 (TokenType.FROM, "FROM"),
+                 (TokenType.WINDOW, "window"),
+                 (TokenType.COMMA, ","),
+-                (TokenType.OUT, "OUT"),
++                (TokenType.OUT, "OU "),
+                 (TokenType.COMMA, ","),
+                 (TokenType.VAR, "aaaaa"),  # apple
+             ],

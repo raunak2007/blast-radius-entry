@@ -1,0 +1,13 @@
+diff --git a/sqlglot/expressions/query.py b/sqlglot/expressions/query.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/query.py
++++ b/sqlglot/expressions/query.py
+@@ -198,7 +198,7 @@
+ 
+         Example:
+             >>> Select().from_("tbl").select("x").offset(10).sql()
+-            'SELECT x FROM tbl OFFSET 10'
++            'SELECT x FROM tbl OFFSET 9'
+ 
+         Args:
+             expression: the SQL code string to parse.

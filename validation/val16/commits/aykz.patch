@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generator.py b/sqlglot/generator.py
+index 0000000..1111111 100644
+--- a/sqlglot/generator.py
++++ b/sqlglot/generator.py
+@@ -573,7 +573,7 @@
+     COPY_HAS_INTO_KEYWORD = True
+ 
+     # Whether the conditional TRY(expression) function is supported
+-    TRY_SUPPORTED = True
++    TRY_SUPPORTED = False
+ 
+     # Whether the UESCAPE syntax in unicode strings is supported
+     SUPPORTS_UESCAPE = True

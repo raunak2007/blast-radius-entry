@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generators/starrocks.py b/sqlglot/generators/starrocks.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/starrocks.py
++++ b/sqlglot/generators/starrocks.py
+@@ -68,7 +68,7 @@
+     # StarRocks doesn't support "IS TRUE/FALSE" syntax.
+     IS_BOOL_ALLOWED = False
+     # StarRocks doesn't support renaming a table with a database.
+-    RENAME_TABLE_WITH_DB = False
++    RENAME_TABLE_WITH_DB = True
+ 
+     ALTER_PARTITION_OPTIONS = (
+         *MySQLGenerator.ALTER_PARTITION_OPTIONS,

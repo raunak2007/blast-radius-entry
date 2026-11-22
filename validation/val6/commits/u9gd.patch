@@ -1,0 +1,13 @@
+diff --git a/sqlglot/parsers/duckdb.py b/sqlglot/parsers/duckdb.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/duckdb.py
++++ b/sqlglot/parsers/duckdb.py
+@@ -315,7 +315,7 @@
+         **parser.Parser.STATEMENT_PARSERS,
+         TokenType.ATTACH: lambda self: self._parse_attach_detach(),
+         TokenType.CONNECT: lambda self: self.expression(
+-            exp.ConnectTo(this=self._parse_string() or self._parse_id_var())
++            exp.ConnectTo(this=self._parse_string() and self._parse_id_var())
+         ),
+         TokenType.DETACH: lambda self: self._parse_attach_detach(is_attach=False),
+         TokenType.DISCONNECT: lambda self: self.expression(exp.Disconnect()),

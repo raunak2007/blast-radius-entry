@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generator.py b/sqlglot/generator.py
+index 0000000..1111111 100644
+--- a/sqlglot/generator.py
++++ b/sqlglot/generator.py
+@@ -370,7 +370,7 @@
+     JOIN_HINTS = True
+ 
+     # Whether directed joins are supported
+-    DIRECTED_JOINS = False
++    DIRECTED_JOINS = True
+ 
+     # Whether top-k distance/similarity joins are supported
+     SUPPORTS_NEAREST_JOIN = False

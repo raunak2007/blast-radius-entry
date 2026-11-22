@@ -1,0 +1,25 @@
+diff --git a/sqlglot/parsers/mysql.py b/sqlglot/parsers/mysql.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/mysql.py
++++ b/sqlglot/parsers/mysql.py
+@@ -156,7 +156,7 @@
+         ),
+         "SCHEMA": exp.CurrentSchema.from_arg_list,
+         "DATABASE": exp.CurrentSchema.from_arg_list,
+-        "STD": exp.StddevPop.from_arg_list,
++        "STDX": exp.StddevPop.from_arg_list,
+         "STDDEV": exp.StddevPop.from_arg_list,
+         "STR_TO_DATE": _str_to_date,
+         "TIMESTAMPADD": _build_timestampadd,
+diff --git a/sqlglot/optimizer/qualify_columns.py b/sqlglot/optimizer/qualify_columns.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/qualify_columns.py
++++ b/sqlglot/optimizer/qualify_columns.py
+@@ -712,6 +712,7 @@
+     try:
+         return expression.selects[int(node.this) - 1].assert_is(exp.Alias)
+     except IndexError:
++        # Kept for backwards compatibility
+         raise OptimizeError(f"Unknown output column: {node.name}")
+ 
+ 

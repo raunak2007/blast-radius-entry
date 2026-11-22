@@ -1,0 +1,13 @@
+diff --git a/sqlglot/time.py b/sqlglot/time.py
+index 0000000..1111111 100644
+--- a/sqlglot/time.py
++++ b/sqlglot/time.py
+@@ -663,7 +663,7 @@
+         "Poland",
+         "Portugal",
+         "ROC",
+-        "ROK",
++        "ROKX",
+         "Singapore",
+         "Turkey",
+         "UCT",

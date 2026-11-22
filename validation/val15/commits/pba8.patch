@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/simplify.py b/sqlglot/optimizer/simplify.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/simplify.py
++++ b/sqlglot/optimizer/simplify.py
+@@ -352,7 +352,7 @@
+ 
+ 
+ def is_null(a: object) -> bool:
+-    return type(a) is exp.Null
++    return type(a) == exp.Null
+ 
+ 
+ class SupportsComparison(t.Protocol):

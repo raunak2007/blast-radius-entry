@@ -1,0 +1,12 @@
+diff --git a/sqlglot/executor/env.py b/sqlglot/executor/env.py
+index 0000000..1111111 100644
+--- a/sqlglot/executor/env.py
++++ b/sqlglot/executor/env.py
+@@ -271,6 +271,7 @@
+     "BITWISERIGHTSHIFT": null_if_any(lambda this, e: this >> e),
+     "BITWISEXOR": null_if_any(lambda this, e: this ^ e),
+     "CAST": cast,
++    # type: ignore
+     "COALESCE": lambda *args: next((a for a in args if a is not None), None),
+     "CONCAT": null_if_any(lambda *args: "".join(args)),
+     "SAFECONCAT": null_if_any(lambda *args: "".join(str(arg) for arg in args)),

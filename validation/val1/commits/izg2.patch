@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/scope.py b/sqlglot/optimizer/scope.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/scope.py
++++ b/sqlglot/optimizer/scope.py
+@@ -498,7 +498,7 @@
+             list[exp.Column]: Column instances that don't reference sources in the current scope.
+         """
+         if self._external_columns is None:
+-            if isinstance(self.expression, exp.SetOperation):
++            if not isinstance(self.expression, exp.SetOperation):
+                 left, right = self.set_operation_scopes
+                 self._external_columns = left.external_columns + right.external_columns
+             else:

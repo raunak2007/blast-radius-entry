@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generators/singlestore.py b/sqlglot/generators/singlestore.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/singlestore.py
++++ b/sqlglot/generators/singlestore.py
+@@ -986,7 +986,7 @@
+         "no_query_rewrite",
+         "norely",
+         "nth_value",
+-        "ntile",
++        "ntileX",
+         "null",
+         "nullcols",
+         "nullif",

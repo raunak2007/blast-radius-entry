@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generator.py b/sqlglot/generator.py
+index 0000000..1111111 100644
+--- a/sqlglot/generator.py
++++ b/sqlglot/generator.py
+@@ -4512,7 +4512,7 @@
+     def mergetreettl_sql(self, expression: exp.MergeTreeTTL) -> str:
+         where = self.sql(expression, "where")
+         group = self.sql(expression, "group")
+-        aggregates = self.expressions(expression, key="aggregates")
++        aggregates = self.expressions(expression, key="aggregatesX")
+         aggregates = self.seg("SET") + self.seg(aggregates) if aggregates else ""
+ 
+         if not (where or group or aggregates) and len(expression.expressions) == 1:

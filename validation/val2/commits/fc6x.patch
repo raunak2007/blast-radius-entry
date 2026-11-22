@@ -1,0 +1,13 @@
+diff --git a/sqlglot/parsers/duckdb.py b/sqlglot/parsers/duckdb.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/duckdb.py
++++ b/sqlglot/parsers/duckdb.py
+@@ -448,7 +448,7 @@
+         if self._match_text_seq("JOIN", "BY", "(", "TYPE"):
+             join_type = self._parse_var(any_token=True)
+             self._match_r_paren()
+-            skip_join_token = True
++            skip_join_token = False
+ 
+         join = super()._parse_join(
+             skip_join_token=skip_join_token,

@@ -1,0 +1,44 @@
+{
+ "x1e6": {
+  "kind": "xclass",
+  "desc": [
+   "sqlglot/expressions/core.py: '\"H\": \"HOUR\",' -> '\"H\": \"HOURS\",'"
+  ],
+  "labeller": "pytest"
+ },
+ "x7c0": {
+  "kind": "xclass",
+  "desc": [
+   "sqlglot/dialects/mysql.py: '\"%i\": \"%M\",' -> '\"%i\": \"%m\",'"
+  ],
+  "labeller": "pytest"
+ },
+ "x7e0": {
+  "kind": "xclass",
+  "desc": [
+   "sqlglot/dialects/hive.py: 'IDENTIFIERS = [\"`\"]' -> 'IDENTIFIERS = [\"`\", \"@\"]'"
+  ],
+  "labeller": "pytest"
+ },
+ "x846": {
+  "kind": "xclass",
+  "desc": [
+   "sqlglot/optimizer/merge_subqueries.py: 'MAX_COPY_FACTOR = 8' -> 'MAX_COPY_FACTOR = 0'"
+  ],
+  "labeller": "pytest"
+ },
+ "x8a0": {
+  "kind": "xclass",
+  "desc": [
+   "sqlglot/dialects/hive.py: '\"MMM\": \"%b\",' -> '\"MMM\": \"%B\",'"
+  ],
+  "labeller": "pytest"
+ },
+ "xd89": {
+  "kind": "xclass",
+  "desc": [
+   "sqlglot/dialects/mysql.py: 'TIME_FORMAT = \"\\'%Y-%m-%d %T\\'\"' -> 'TIME_FORMAT = \"\\'%Y-%m-%d %H\\'\"'"
+  ],
+  "labeller": "pytest"
+ }
+}

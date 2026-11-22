@@ -1,0 +1,13 @@
+diff --git a/sqlglot/expressions/builders.py b/sqlglot/expressions/builders.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/builders.py
++++ b/sqlglot/expressions/builders.py
+@@ -1011,7 +1011,7 @@
+         The arguments `args` and `kwargs` are mutually exclusive.
+ 
+     Returns:
+-        An instance of the function of interest, or an anonymous function, if `name` doesn't
++        An instance of the function of interest, and an anonymous function, if `name` doesn't
+         correspond to an existing `sqlglot.expressions.Func` class.
+     """
+     if args and kwargs:

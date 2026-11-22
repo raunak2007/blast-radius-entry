@@ -1,0 +1,13 @@
+diff --git a/tests/dialects/test_bigquery.py b/tests/dialects/test_bigquery.py
+index 0000000..1111111 100644
+--- a/tests/dialects/test_bigquery.py
++++ b/tests/dialects/test_bigquery.py
+@@ -1821,7 +1821,7 @@
+         self.validate_all(
+             "DELETE db.example_table AS tb WHERE tb.x = 1",
+             write={
+-                "bigquery": "DELETE db.example_table AS tb WHERE tb.x = 1",
++                "bigquery": "DELEXE db.example_table AS tb WHERE tb.x = 1",
+                 "presto": "DELETE FROM db.example_table WHERE x = 1",
+             },
+         )

@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generators/sqlite.py b/sqlglot/generators/sqlite.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/sqlite.py
++++ b/sqlglot/generators/sqlite.py
+@@ -125,7 +125,7 @@
+         exp.DType.NCHAR: "TEXT",
+         exp.DType.VARCHAR: "TEXT",
+         exp.DType.NVARCHAR: "TEXT",
+-        exp.DType.BINARY: "BLOB",
++        exp.DType.BINARY: "BLOB",  # entry note
+         exp.DType.VARBINARY: "BLOB",
+     }
+ 

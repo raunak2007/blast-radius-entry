@@ -1,0 +1,13 @@
+diff --git a/sqlglot/expressions/core.py b/sqlglot/expressions/core.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/core.py
++++ b/sqlglot/expressions/core.py
+@@ -2618,7 +2618,7 @@
+             return sql_or_expression.copy()
+         return sql_or_expression
+ 
+-    if sql_or_expression is None:
++    if sql_or_expression == None:
+         raise ParseError("SQL cannot be None")
+ 
+     import sqlglot

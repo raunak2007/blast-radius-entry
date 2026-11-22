@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/normalize_identifiers.py b/sqlglot/optimizer/normalize_identifiers.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/normalize_identifiers.py
++++ b/sqlglot/optimizer/normalize_identifiers.py
+@@ -90,7 +90,7 @@
+                 dot_parts.reverse()
+ 
+                 # The chain may be rooted at a column (j.k), or at an arbitrary expression (f().k)
+-                if isinstance(root, exp.Column):
++                if not isinstance(root, exp.Column):
+                     dot_parts = [p.name for p in root.parts] + dot_parts
+ 
+                 root.meta["dot_parts"] = dot_parts

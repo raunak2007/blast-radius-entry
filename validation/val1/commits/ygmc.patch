@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generator.py b/sqlglot/generator.py
+index 0000000..1111111 100644
+--- a/sqlglot/generator.py
++++ b/sqlglot/generator.py
+@@ -1857,7 +1857,7 @@
+ 
+         if type_value in self.UNSUPPORTED_TYPES:
+             self.unsupported(
+-                f"Data type {type_value.value} is not supported when targeting {self.dialect.__class__.__name__}"
++                f"Data type {type_value.value} == not supported when targeting {self.dialect.__class__.__name__}"
+             )
+ 
+         type_sql: t.Any = ""

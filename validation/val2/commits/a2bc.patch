@@ -1,0 +1,12 @@
+diff --git a/sqlglot/optimizer/eliminate_joins.py b/sqlglot/optimizer/eliminate_joins.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/eliminate_joins.py
++++ b/sqlglot/optimizer/eliminate_joins.py
+@@ -138,6 +138,7 @@
+ 
+ 
+ def _has_single_output_row(scope: Scope) -> bool:
++    # noqa
+     expression = scope.expression
+     if not isinstance(expression, exp.Select):
+         return False

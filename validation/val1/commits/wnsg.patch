@@ -1,0 +1,13 @@
+diff --git a/sqlglot/parser.py b/sqlglot/parser.py
+index 0000000..1111111 100644
+--- a/sqlglot/parser.py
++++ b/sqlglot/parser.py
+@@ -7123,7 +7123,7 @@
+         """Parse a single argument to ClickHouse's JSON type."""
+ 
+         # SKIP col or SKIP REGEXP 'pattern'
+-        if self._match_text_seq("SKIP"):
++        if not self._match_text_seq("SKIP"):
+             regexp = self._match(TokenType.RLIKE)
+             arg = self._parse_column()
+             if isinstance(arg, exp.Column):

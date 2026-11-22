@@ -1,0 +1,12 @@
+diff --git a/sqlglot/dialects/clickhouse.py b/sqlglot/dialects/clickhouse.py
+index 0000000..1111111 100644
+--- a/sqlglot/dialects/clickhouse.py
++++ b/sqlglot/dialects/clickhouse.py
+@@ -60,6 +60,7 @@
+         # Clickhouse allows VALUES to have an embedded structure e.g:
+         # VALUES('person String, place String', ('Noah', 'Paris'), ...)
+         # In this case, we don't want to qualify the columns
++        """Added docstring."""
+         values = expression.expressions[0].expressions
+ 
+         structure = (

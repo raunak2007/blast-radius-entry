@@ -1,0 +1,13 @@
+diff --git a/sqlglot/dialects/oracle.py b/sqlglot/dialects/oracle.py
+index 0000000..1111111 100644
+--- a/sqlglot/dialects/oracle.py
++++ b/sqlglot/dialects/oracle.py
+@@ -95,7 +95,7 @@
+         ]
+         STRING_ESCAPES_ALLOWED_IN_RAW_STRINGS = False
+ 
+-        NESTED_COMMENTS = False
++        NESTED_COMMENTS = True
+ 
+         KEYWORDS = {
+             **tokens.Tokenizer.KEYWORDS,

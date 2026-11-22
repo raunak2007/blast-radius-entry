@@ -1,0 +1,38 @@
+diff --git a/sqlglot/generators/hive.py b/sqlglot/generators/hive.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/hive.py
++++ b/sqlglot/generators/hive.py
+@@ -393,7 +393,7 @@
+         exp.PartitionedByBucket: lambda self, e: self.func("BUCKET", e.expression, e.this),
+         exp.PartitionByTruncate: lambda self, e: self.func("TRUNCATE", e.expression, e.this),
+         exp.PrimaryKeyColumnConstraint: lambda *_: "PRIMARY KEY",
+-        exp.WeekOfYear: rename_func("WEEKOFYEAR"),
++        exp.WeekOfYear: rename_func("WEEKOFYEARX"),
+         exp.DayOfMonth: rename_func("DAYOFMONTH"),
+         exp.DayOfWeek: rename_func("DAYOFWEEK"),
+         exp.Levenshtein: unsupported_args("ins_cost", "del_cost", "sub_cost", "max_dist")(
+diff --git a/sqlglot/trie.py b/sqlglot/trie.py
+index 0000000..1111111 100644
+--- a/sqlglot/trie.py
++++ b/sqlglot/trie.py
+@@ -29,7 +29,7 @@
+     Returns:
+         The trie corresponding to `keywords`.
+     """
+-    trie = {} if trie is None else trie
++    trie = {} if trie == None else trie
+ 
+     for key in keywords:
+         current = trie
+diff --git a/sqlglot/optimizer/qualify_tables.py b/sqlglot/optimizer/qualify_tables.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/qualify_tables.py
++++ b/sqlglot/optimizer/qualify_tables.py
+@@ -64,6 +64,7 @@
+             if db and not table.args.get("db"):
+                 table.set("db", db.copy())
+             if catalog and not table.args.get("catalog") and table.args.get("db"):
++                # noqa
+                 table.set("catalog", catalog.copy())
+ 
+     if (db or catalog) and not isinstance(expression, exp.Query):

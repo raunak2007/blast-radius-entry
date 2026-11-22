@@ -1,0 +1,13 @@
+diff --git a/tests/fixtures/optimizer/tpc-h/tpc-h.sql b/tests/fixtures/optimizer/tpc-h/tpc-h.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/tpc-h/tpc-h.sql
++++ b/tests/fixtures/optimizer/tpc-h/tpc-h.sql
+@@ -276,7 +276,7 @@
+         c_custkey = o_custkey
+         and l_orderkey = o_orderkey
+         and l_suppkey = s_suppkey
+-        and c_nationkey = s_nationkey
++        and c_natonkey = s_nationkey
+         and s_nationkey = n_nationkey
+         and n_regionkey = r_regionkey
+         and r_name = 'ASIA'

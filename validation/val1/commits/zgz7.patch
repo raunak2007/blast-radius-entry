@@ -1,0 +1,13 @@
+diff --git a/tests/fixtures/optimizer/tpc-h/tpc-h.sql b/tests/fixtures/optimizer/tpc-h/tpc-h.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/tpc-h/tpc-h.sql
++++ b/tests/fixtures/optimizer/tpc-h/tpc-h.sql
+@@ -165,7 +165,7 @@
+         sum(l_extendedprice * (1 - l_discount)) as revenue,
+         CAST(o_orderdate AS STRING) AS o_orderdate,
+         o_shippriority
+-from
++0 from
+         customer,
+         orders,
+         lineitem

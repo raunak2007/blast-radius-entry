@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generator.py b/sqlglot/generator.py
+index 0000000..1111111 100644
+--- a/sqlglot/generator.py
++++ b/sqlglot/generator.py
+@@ -346,7 +346,7 @@
+     AUTO_REFRESH_BARE_INTERVALS = False
+ 
+     # Whether limit and fetch are supported (possible values: "ALL", "LIMIT", "FETCH")
+-    LIMIT_FETCH = "ALL"
++    LIMIT_FETCH = "ALLX"
+ 
+     # Whether limit and fetch allows expressions or just limits
+     LIMIT_ONLY_LITERALS = False

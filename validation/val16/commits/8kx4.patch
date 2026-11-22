@@ -1,0 +1,13 @@
+diff --git a/sqlglot/parser.py b/sqlglot/parser.py
+index 0000000..1111111 100644
+--- a/sqlglot/parser.py
++++ b/sqlglot/parser.py
+@@ -1804,7 +1804,7 @@
+ 
+     WINDOW_ALIAS_TOKENS: t.ClassVar = ID_VAR_TOKENS - {TokenType.RANGE, TokenType.ROWS}
+     WINDOW_BEFORE_PAREN_TOKENS: t.ClassVar = {TokenType.OVER}
+-    WINDOW_SIDES: t.ClassVar = {"FOLLOWING", "PRECEDING"}
++    WINDOW_SIDES: t.ClassVar = {"FOLLOWING", "PRECEDINGX"}
+ 
+     JSON_KEY_VALUE_SEPARATOR_TOKENS: t.ClassVar = {TokenType.COLON, TokenType.COMMA, TokenType.IS}
+ 

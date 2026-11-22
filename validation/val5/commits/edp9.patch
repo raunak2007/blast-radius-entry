@@ -1,0 +1,11 @@
+diff --git a/setup.cfg b/setup.cfg
+index 0000000..1111111 100644
+--- a/setup.cfg
++++ b/setup.cfg
+@@ -1,5 +1,5 @@
+ [mypy]
+-disallow_untyped_calls = False
++disallow_untyped_calls = True
+ no_implicit_optional = True
+ 
+ [mypy-sqlglot.*]

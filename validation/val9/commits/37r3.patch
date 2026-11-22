@@ -1,0 +1,13 @@
+diff --git a/tests/fixtures/optimizer/qualify_columns.sql b/tests/fixtures/optimizer/qualify_columns.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/qualify_columns.sql
++++ b/tests/fixtures/optimizer/qualify_columns.sql
+@@ -1367,7 +1367,7 @@
+ # title: BigQuery alias expansion in QUALIFY with source shadowing and GROUP BY positional ref
+ # dialect: bigquery
+ # execute: false
+-SELECT x.a, MAX(x.b) AS x FROM x GROUP BY 1 QUALIFY ROW_NUMBER() OVER (PARTITION BY x ORDER BY a) = 1;
++SELECT x.a, MAX(x.b) AS x FROM x GROUP BY 1 QUALIFY ROW_NUMBER() OVER (PARTITION Y x ORDER BY a) = 1;
+ SELECT x.a AS a, MAX(x.b) AS x FROM x AS x GROUP BY 1 QUALIFY ROW_NUMBER() OVER (PARTITION BY x ORDER BY a) = 1;
+ 
+ --------------------------------------

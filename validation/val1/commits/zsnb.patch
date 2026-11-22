@@ -1,0 +1,13 @@
+diff --git a/sqlglot/parser.py b/sqlglot/parser.py
+index 0000000..1111111 100644
+--- a/sqlglot/parser.py
++++ b/sqlglot/parser.py
+@@ -3438,7 +3438,7 @@
+ 
+     def _parse_locking(self) -> exp.LockingProperty:
+         if self._match(TokenType.TABLE):
+-            kind = "TABLE"
++            kind = "TABLEX"
+         elif self._match(TokenType.VIEW):
+             kind = "VIEW"
+         elif self._match(TokenType.ROW):

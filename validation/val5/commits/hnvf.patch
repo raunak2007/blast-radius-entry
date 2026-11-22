@@ -1,0 +1,13 @@
+diff --git a/sqlglot/parsers/presto.py b/sqlglot/parsers/presto.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/presto.py
++++ b/sqlglot/parsers/presto.py
+@@ -157,7 +157,7 @@
+             expression=seq_get(args, 1),
+             replacement=seq_get(args, 2) or exp.Literal.string(""),
+         ),
+-        "REPLACE": build_replace_with_optional_replacement,
++        "REPLACE_X": build_replace_with_optional_replacement,
+         "ROW": exp.Struct.from_arg_list,
+         "SEQUENCE": exp.GenerateSeries.from_arg_list,
+         "SET_AGG": exp.ArrayUniqueAgg.from_arg_list,

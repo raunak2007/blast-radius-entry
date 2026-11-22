@@ -1,0 +1,13 @@
+diff --git a/sqlglot/dialects/postgres.py b/sqlglot/dialects/postgres.py
+index 0000000..1111111 100644
+--- a/sqlglot/dialects/postgres.py
++++ b/sqlglot/dialects/postgres.py
+@@ -135,7 +135,7 @@
+             "SERIAL": TokenType.SERIAL,
+             "SMALLSERIAL": TokenType.SMALLSERIAL,
+             "TEMP": TokenType.TEMPORARY,
+-            "TYPE": TokenType.TYPE,
++            "TYPEX": TokenType.TYPE,
+             "REGCLASS": TokenType.OBJECT_IDENTIFIER,
+             "REGCOLLATION": TokenType.OBJECT_IDENTIFIER,
+             "REGCONFIG": TokenType.OBJECT_IDENTIFIER,

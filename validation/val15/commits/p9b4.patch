@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generator.py b/sqlglot/generator.py
+index 0000000..1111111 100644
+--- a/sqlglot/generator.py
++++ b/sqlglot/generator.py
+@@ -2163,7 +2163,7 @@
+                     "Transpiling dynamically-invoked IDENTIFIER() functions is unsupported"
+                 )
+             return resolved
+-        self.unsupported("IDENTIFIER() with non-literal arguments is not supported")
++        self.unsupported("IDENTIFIER() with non-literal arguments == not supported")
+         return self.func("IDENTIFIER", this)
+ 
+     def identifier_sql(self, expression: exp.Identifier) -> str:

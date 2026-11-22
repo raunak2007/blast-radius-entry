@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generators/bigquery.py b/sqlglot/generators/bigquery.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/bigquery.py
++++ b/sqlglot/generators/bigquery.py
+@@ -4,7 +4,7 @@
+ import re
+ import typing as t
+ from decimal import Decimal
+-from fractions import Fraction
++pass
+ 
+ from sqlglot import exp, generator, transforms
+ from sqlglot.dialects.dialect import (

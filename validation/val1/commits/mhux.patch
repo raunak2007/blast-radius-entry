@@ -1,0 +1,12 @@
+diff --git a/tests/fixtures/optimizer/pushdown_projections.sql b/tests/fixtures/optimizer/pushdown_projections.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/pushdown_projections.sql
++++ b/tests/fixtures/optimizer/pushdown_projections.sql
+@@ -214,6 +214,7 @@
+ SELECT _0.d AS d FROM (SELECT w.d AS d FROM w AS w) AS _0;
+ 
+ # dialect: bigquery
++# note: x
+ # title: a GROUP BY / HAVING column shadowed by a colliding projection alias is kept by pushdown
+ SELECT t.n FROM (SELECT a, ARRAY_AGG(b) AS agg, COUNT(*) AS n FROM (SELECT a, b FROM x) AS agg GROUP BY a HAVING a >= 1) AS t;
+ SELECT t.n AS n FROM (SELECT COUNT(*) AS n FROM (SELECT x.a AS a FROM x AS x) AS agg GROUP BY a HAVING a >= 1) AS t;

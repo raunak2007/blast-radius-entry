@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generator.py b/sqlglot/generator.py
+index 0000000..1111111 100644
+--- a/sqlglot/generator.py
++++ b/sqlglot/generator.py
+@@ -4659,7 +4659,7 @@
+             and actions
+             and isinstance(actions[0], exp.ColumnDef)
+         ):
+-            actions_sql = self.expressions(expression, key="actions", flat=True)
++            actions_sql = self.expressions(expression, key="actions", flat=False)
+             actions_sql = f"ADD {actions_sql}"
+         else:
+             actions_list = []
