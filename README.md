@@ -40,7 +40,7 @@ Every map comes from running sqlglot's own tests at the pinned commit (`eb11aec4
 
 - **A changed default value** selects only the tests in which some call left that parameter out (`tools/defaults_plugin.py`, sys.monitoring on every module- and class-level function with defaults; an explicit argument that is the very same object counts as left out).
 
-- **Checks run on commits that also change a data file** (a fixture next to a code edit), on the tests that never open the changed file; its readers stay selected.
+- **Checks run on commits that also change a data file** (a fixture next to a code edit), on the tests that never open the changed file; its readers stay selected. The TPC-DS replay, the generator memory check, the executor checks without `setUpClass` and the fixture-entry checks apply to such commits too, for tests that never open the changed file: on 150 mutants with a code edit, a fixture edit and a comment this cut 143 s, most of it from 12 TPC-DS replays.
 
 - **A TPC-DS replay child may allocate at most 1.25 GB beyond what it inherits**, so an edit that makes one query's intermediate results explode fails its own replay instead of exhausting the run's 4 GB. (Test checks are left uncapped: duckdb reserves far more address space than it uses.)
 

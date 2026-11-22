@@ -1893,18 +1893,25 @@ class Selector:
             return False  # the interpreter it starts imports nothing from tests/
         return rel in CORE_FILES or not (rel.startswith("sqlglot/") and rel.endswith(".py"))
 
+    def code_touched(self):
+        """The changed spans outside data files (those reach only the tests that open them)."""
+        return [t for t in self.touched if t[0] not in self.data_files]
+
     def plain_function_commit(self):
-        """Whether every change is ordinary function code in sqlglot/: nothing an import builds
-        changed, so a piece of a test that never runs a changed line does what it did before."""
-        return bool(self.verifiable and not self.data_files and self.patched and self.touched
+        """Whether every code change is ordinary function code in sqlglot/: nothing an import
+        builds changed, so a piece of a test that never runs a changed line does what it did
+        before. A commit may also change data files (a fixture next to the code edit): that
+        reaches only the tests that open them, which the callers leave out."""
+        touched = self.code_touched()
+        return bool(self.verifiable and self.patched and touched
                     and all(rel.startswith("sqlglot/") for rel in self.patched)
-                    and all(kind == "function" and rel.startswith("sqlglot/") for rel, _, _, kind in self.touched))
+                    and all(kind == "function" and rel.startswith("sqlglot/") for rel, _, _, kind in touched))
 
     def bare_ok(self):
         """Whether a check of this commit may skip the setUpClass of BARE_CLASSES: every change
         is ordinary function code in sqlglot/ (so nothing an import builds changed), and none
         of it is in a file that setUpClass runs code from."""
-        return self.plain_function_commit() and all(rel not in BARE_SETUP_FILES for rel, _, _, _ in self.touched)
+        return self.plain_function_commit() and all(rel not in BARE_SETUP_FILES for rel, _, _, _ in self.code_touched())
 
     def fixture_entries(self, tid):
         """For a fixture-driven test (one that loops over the entries of a .sql fixture), the
@@ -1917,7 +1924,7 @@ class Selector:
         if entry is None:
             return None
         hit = 0
-        for rel, lo, hi, _ in self.touched:
+        for rel, lo, hi, _ in self.code_touched():
             base, per = entry["base"].get(rel), entry["lines"].get(rel)
             for line in range(lo, hi + 1):
                 if base and line in base:
@@ -1936,21 +1943,21 @@ class Selector:
 
     # ---- the 21 s TPC-DS executor test: replay what the edit can reach instead of running it
 
-    def tpcds_plan(self, chosen, duration, tpcds_number):
+    def tpcds_plan(self, chosen, duration, tpcds_number, unreadable=()):
         """A replay plan when it is provably enough and clearly cheaper than the test, else None.
 
-        Only for commits whose every change is ordinary function code in sqlglot/ (no class
-        or module level, nothing run at import, no data or test files), none of which runs
-        in the test's table setup. Each query whose recorded coverage reaches a changed line
+        Only for commits whose every code change is ordinary function code in sqlglot/ (no
+        class or module level, nothing run at import, no test files), none of which runs in
+        the test's table setup; a changed data file is fine if the test never opens it
+        (unreadable: the tests that open one). Each query whose recorded coverage reaches a changed line
         is checked by what that line can affect there: if only parsing, optimize() or the
         duckdb transpilation, its optimizer output is compared ("front"); if also the
         debug-log rendering execute() does next, that rendering is checked too ("log"); if
         planning or execution (or the digest code), its rows ("full"). The duckdb
         transpilation, the expected side of the test's comparison, is always compared."""
-        if not self.verifiable or self.data_files or not self.patched or not self.touched:
+        if not self.plain_function_commit() or tpcds_number in unreadable:
             return None
-        if any(kind != "function" or not rel.startswith("sqlglot/") for rel, _, _, kind in self.touched):
-            return None
+        touched = self.code_touched()
         data = load_tpcds()
         if data is None:
             return None
@@ -1959,7 +1966,7 @@ class Selector:
             lines = sets.get(rel)
             return bool(lines) and any(ln in lines for ln in range(lo, hi + 1))
 
-        spans = [(rel, lo, hi) for rel, lo, hi, _ in self.touched]
+        spans = [(rel, lo, hi) for rel, lo, hi, _ in touched]
         if any(hits(data["setup_sets"], *s) for s in spans):
             return None
         # Per query, what the changed lines can affect decides how it's checked: "front"
@@ -2001,17 +2008,17 @@ class Selector:
 
     # ---- test_generator_memory: rerun its per-dialect check only for dialects the edit can reach
 
-    def genmem_plan(self, chosen, duration, genmem_number):
+    def genmem_plan(self, chosen, duration, genmem_number, unreadable=()):
         """Which dialects to recheck, or None to keep the test as is.
 
         The test builds every dialect's generator 1,100 times and checks that the last 1,000
         builds leave under 1 KB behind. Only sqlglot modules that are loaded when a dialect's
         generator is built can change that dialect's result (tools/build_genmem.py records
-        them per dialect, from a fresh interpreter). Only for commits that change nothing but
-        sqlglot/ Python files."""
-        if not self.verifiable or self.data_files or not self.patched:
+        them per dialect, from a fresh interpreter). Only for commits whose code changes are
+        all in sqlglot/ Python files; a changed data file is fine if the test never opens it."""
+        if not self.verifiable or not self.patched or genmem_number in unreadable:
             return None
-        rels = set(self.patched) | {rel for rel, _, _, _ in self.touched}
+        rels = set(self.patched) | {rel for rel, _, _, _ in self.code_touched()}
         if not rels or any(not (r.startswith("sqlglot/") and r.endswith(".py")) for r in rels):
             return None
         data = load_genmem()
@@ -3561,7 +3568,7 @@ def main():
                     # as ordinary function code the commit may also get a TPC-DS replay
                     selector.patched, selector.verifiable = alt["patched"], alt["verifiable"]
                     selector.touched, selector.data_files = alt["touched"], alt["data_files"]
-                    if selector.tpcds_plan(alt["chosen"], duration, tpcds_number):
+                    if selector.tpcds_plan(alt["chosen"], duration, tpcds_number, alt["unreadable"]):
                         gain += (pack_cost(alt["chosen"], duration)
                                  - pack_cost([n for n in alt["chosen"] if n != tpcds_number], duration)) // 2
             if gain is not None and gain >= STATE_MIN_GAIN_MS:
@@ -3587,13 +3594,13 @@ def main():
             selector.touched, selector.data_files = snap["touched"], snap["data_files"]
         answers[commit] = chosen
         if RUN and verifiable and selector is not None and tpcds_number in chosen:
-            plan = selector.tpcds_plan(chosen, duration, tpcds_number)
+            plan = selector.tpcds_plan(chosen, duration, tpcds_number, unreadable)
             if plan:
                 tpcds_jobs.append(((commit, "tpcds"), patched, [TPCDS_TEST],
                                    {"__tpcds__": plan, TPCDS_TEST: duration[tpcds_number] / 1000},
                                    10 + max(3 * plan["estimate"], 1.5 * plan["budget"])))
         if RUN and verifiable and selector is not None and genmem_number in chosen:
-            gplan = selector.genmem_plan(chosen, duration, genmem_number)
+            gplan = selector.genmem_plan(chosen, duration, genmem_number, unreadable)
             if gplan is not None and not gplan["dialects"] and not gplan["import_check"]:
                 chosen = [n for n in chosen if n != genmem_number]  # no dialect loads what changed
                 answers[commit] = chosen
