@@ -111,6 +111,16 @@ def _run(src: Path, patched: dict, golden: list | None) -> dict:
                 pass
 
 
+def _prebuilt_golden():
+    """Pristine rows built in the image by tools/tpcds_golden.py, or None."""
+    path = Path(os.environ.get("BR_FP", str(Path(__file__).resolve().parents[1] / "fp"))) / "tpcds_golden.json"
+    try:
+        rows = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return None
+    return rows if isinstance(rows, list) and rows else None
+
+
 def narrow_tpcds(src: Path, rows: list, id_to_number: dict, ms: dict,
                  budget_s: float = _BUDGET_S, min_marginal_s: float = _MIN_MARGINAL_S) -> dict:
     """Return {commit: numbers without tpcds} for commits whose plans match.
@@ -144,8 +154,10 @@ def narrow_tpcds(src: Path, rows: list, id_to_number: dict, ms: dict,
         return self_use.ru_utime + self_use.ru_stime + kids.ru_utime + kids.ru_stime
 
     start = cpu()
-    golden = _run(Path(src), {}, None)
-    rows_golden = golden.get("rows") if golden.get("ok") else None
+    rows_golden = _prebuilt_golden()
+    if not rows_golden:
+        golden = _run(Path(src), {}, None)
+        rows_golden = golden.get("rows") if golden.get("ok") else None
     if not rows_golden:
         return {}
     updates = {}

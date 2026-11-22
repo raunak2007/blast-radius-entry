@@ -12,8 +12,11 @@ COPY selector.py /app/selector.py
 COPY blast /app/blast
 COPY maps /app/maps
 COPY tools/fp_baseline.py /app/tools/fp_baseline.py
-# Precompile everything, then fingerprint the pristine import in THIS environment (seconds).
+COPY tools/tpcds_golden.py /app/tools/tpcds_golden.py
+# Precompile everything, then fingerprint the pristine import in THIS environment (seconds),
+# and record the pristine TPC-DS plan rows once instead of in every batch.
 RUN python -m compileall -q /app /opt/sqlglot/sqlglot \
- && python /app/tools/fp_baseline.py /opt/sqlglot /app/fp
+ && python /app/tools/fp_baseline.py /opt/sqlglot /app/fp \
+ && python /app/tools/tpcds_golden.py /opt/sqlglot /app/fp
 ENV PYTHONDONTWRITEBYTECODE=1
 CMD ["python", "/app/selector.py"]
