@@ -325,6 +325,143 @@ def tests_module_tests(maps, path: str) -> set:
     return out
 
 
+# The TPC query fixtures are read case by case (tests/helpers.load_sql_fixture_pairs). Per reader,
+# what it takes from each case, as read from the tests at the pinned commit:
+#   "pair"          test_optimizer check_file: the whole case (meta, input, expected)
+#   "sql_expected"  test_optimized_tpch: duckdb runs the input and the expected output
+#   "exec"          test_execute_tpc*: parse_one(input) per case; executed when meta says so
+# Every other TestExecutor test only needs setUpClass to load both files. Any other reader
+# keeps the file-level rule.
+_FIXTURE_VIEWS = {
+    "tests/fixtures/optimizer/tpc-ds/tpc-ds.sql": {
+        "tests/test_optimizer.py::TestOptimizer::test_tpcds": "pair",
+        "tests/test_executor.py::TestExecutor::test_execute_tpcds": "exec",
+    },
+    "tests/fixtures/optimizer/tpc-h/tpc-h.sql": {
+        "tests/test_optimizer.py::TestOptimizer::test_tpch": "pair",
+        "tests/test_executor.py::TestExecutor::test_optimized_tpch": "sql_expected",
+        "tests/test_executor.py::TestExecutor::test_execute_tpch": "exec",
+    },
+}
+_FIXTURE_LOAD_CLASS = "tests/test_executor.py::TestExecutor::"
+NUM_TO_ID: dict = {}
+# test sources whose change could change how the cases are read; an edit to one keeps the file rule
+_FIXTURE_READER_FILES = {"tests/helpers.py", "tests/test_executor.py", "tests/test_optimizer.py", "tests/__init__.py"}
+_FIXTURE_READERS_EDITED = True
+_FIXTURE_PATCH_HAS_PY = True
+_FIXTURE_LOADER = None
+_FIXTURE_OLD: dict = {}
+
+
+def _fixture_pairs(text: str) -> list:
+    """Cases of a fixture's text, by the pinned tests/helpers.py's own loader."""
+    import io
+    global _FIXTURE_LOADER
+    if _FIXTURE_LOADER is None:
+        src = (SRC / "tests" / "helpers.py").read_text("utf-8")
+        space = {"__name__": "br_fixture_helpers", "__file__": str(SRC / "tests" / "helpers.py")}
+        exec(compile(src, "tests/helpers.py", "exec"), space)
+        _FIXTURE_LOADER = space
+    space = _FIXTURE_LOADER
+    space["open"] = lambda *a, **k: io.StringIO(text)
+    try:
+        return list(space["load_sql_fixture_pairs"]("x.sql"))
+    finally:
+        del space["open"]
+
+
+_EXEC_CHECK = r"""
+import json, pickle, sys
+sys.path.insert(0, sys.argv[1])
+from sqlglot import parse_one
+ok = True
+for old_sql, new_sql in json.loads(sys.stdin.read()):
+    try:
+        tree = pickle.loads(pickle.dumps(parse_one(new_sql)))
+        if old_sql is not None and tree.dump() != parse_one(old_sql).dump():
+            ok = False
+    except Exception:
+        ok = False
+    if not ok:
+        break
+print("OK" if ok else "NO")
+"""
+
+
+def _exec_cases_pass(pairs) -> bool:
+    """test_execute_tpc* on changed cases, with pristine code: a case that does not execute only
+    has to parse (and pickle); an executed case passes when its tree is the one it was. Anything
+    else (a new executed case, a changed executed tree, a crash) keeps the test."""
+    jobs = []
+    for old, new in pairs:
+        if new[0].get("execute"):
+            if old is None or not old[0].get("execute"):
+                return False
+            jobs.append((old[1], new[1]))
+        else:
+            jobs.append((None, new[1]))
+    if not jobs:
+        return True
+    import subprocess
+    try:
+        proc = subprocess.run([sys.executable, "-c", _EXEC_CHECK, str(SRC)], input=json.dumps(jobs),
+                              capture_output=True, text=True, timeout=30, cwd=str(SRC),
+                              env=dict(os.environ, PYTHONDONTWRITEBYTECODE="1"))
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return proc.returncode == 0 and proc.stdout.strip() == "OK"
+
+
+def _fixture_case_tests(fp, opened: set) -> set:
+    """Readers of a TPC query fixture whose view of some case changed. `opened` on any doubt."""
+    path = fp.path
+    views = _FIXTURE_VIEWS[path]
+    try:
+        old_text = (SRC / path).read_text("utf-8")
+        if path not in _FIXTURE_OLD:
+            _FIXTURE_OLD[path] = _fixture_pairs(old_text)
+        old = _FIXTURE_OLD[path]
+        new = _fixture_pairs(P.apply(old_text, fp))
+    except Exception as e:  # does not load: setUpClass fails, every reader fails
+        log("fixture cases keep all:", repr(e))
+        return opened
+
+    def view(kind, case):
+        if case is None:
+            return None
+        meta, sql, expected = case
+        if kind == "pair":
+            return case
+        if kind == "sql_expected":
+            return sql, expected
+        return meta.get("execute"), sql
+
+    n = max(len(old), len(new))
+    old_c = old + [None] * (n - len(old))
+    new_c = new + [None] * (n - len(new))
+    out = set()
+    for num in opened:
+        tid = NUM_TO_ID.get(num)
+        if tid is None:
+            out.add(num)
+            continue
+        kind = views.get(tid)
+        if kind is None:
+            if not tid.startswith(_FIXTURE_LOAD_CLASS):
+                out.add(num)  # a reader we do not model
+            continue
+        changed = [i for i in range(n) if view(kind, old_c[i]) != view(kind, new_c[i])]
+        if not changed:
+            continue
+        if kind == "exec" and not _FIXTURE_PATCH_HAS_PY and _exec_cases_pass(
+                [(old_c[i], new_c[i]) for i in changed if new_c[i] is not None]):
+            log(f"fixture cases: {tid} cleared by parse check")
+            continue
+        out.add(num)
+    log(f"fixture cases: {path} kept {len(out)} of {len(opened)}")
+    return out
+
+
 def select_file(fp, maps, all_tests: set, semantic_needed: dict, version_norm: bool = True) -> set:
     path = fp.path
     if fp.special or fp.old_path is None or fp.new_path is None or fp.old_path != fp.new_path:
@@ -333,6 +470,8 @@ def select_file(fp, maps, all_tests: set, semantic_needed: dict, version_norm: b
     if not path.endswith(".py"):
         opened = maps.opened_by(path) if maps else None
         if opened is not None:
+            if path in _FIXTURE_VIEWS and NUM_TO_ID and not _FIXTURE_READERS_EDITED:
+                return _fixture_case_tests(fp, opened)
             return opened
         if base in CONFIG_BASENAMES or path.startswith(("sqlglot", "tests/sqlglot")):
             raise All(f"config/unknown data file: {path}")
@@ -1029,6 +1168,10 @@ def select(patch_text: str, maps, all_tests: set, sem) -> set:
         out: set = set()
         semantic_needed: dict = {}
         import_failure_narrowed = False
+        global _FIXTURE_READERS_EDITED, _FIXTURE_PATCH_HAS_PY
+        _FIXTURE_PATCH_HAS_PY = any(fp.path.endswith(".py") or (fp.old_path or "").endswith(".py") for fp in files)
+        _FIXTURE_READERS_EDITED = any(fp.path in _FIXTURE_READER_FILES or fp.old_path in _FIXTURE_READER_FILES
+                                      for fp in files)
         for fp in files:
             out |= select_file(fp, maps, all_tests, semantic_needed, version_norm)
         if semantic_needed:
@@ -1136,6 +1279,7 @@ def main() -> None:
     all_tests = set(ms)
     id_to_number = {t["id"]: t["number"] for t in tests}
     number_to_id = {t["number"]: t["id"] for t in tests}
+    NUM_TO_ID.update(number_to_id)
     load_dialect_tests(id_to_number)
     # Off. The wide runner cut 6.4s of schedule and added 16s of CPU, and the
     # tight one added about 4s of CPU without moving the hidden batch. Set
