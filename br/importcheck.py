@@ -145,9 +145,33 @@ def run_tests(request):
     os.write(saved, ("ran " + json.dumps(failed) + "\n").encode())
 
 
+def failing_modules(request):
+    # Which modules fail to import with the patch: "core" when `import sqlglot` itself
+    # fails, else each listed module that raises (modules importing it fail too).
+    patched, finder = finder_for(request["files"])
+    for name in [n for n in sys.modules if n == "sqlglot" or n.startswith("sqlglot.")]:
+        if request["core"] or name in patched or name in request["dependents"]:
+            del sys.modules[name]
+    sys.meta_path.insert(0, finder)
+    try:
+        importlib.import_module("sqlglot")
+    except BaseException:
+        print("modfail " + json.dumps("core"), flush=True)
+        return
+    failed = []
+    for name in request["modules"]:
+        try:
+            importlib.import_module(name)
+        except BaseException:
+            failed.append(name)
+    print("modfail " + json.dumps(failed), flush=True)
+
+
 def run(request):
     if "tests" in request:
         return run_tests(request)
+    if "modules" in request:
+        return failing_modules(request)
     patched, finder = finder_for(request["files"])
     purge = set(patched) | set(request["dependents"])
     core = request["core"]
@@ -183,6 +207,14 @@ for line in sys.stdin:
 """
 
 
+def patched_names(patched: dict[str, str]) -> list[str]:
+    out = []
+    for path in patched:
+        name = path[:-3].replace("/", ".")
+        out.append(name[: -len(".__init__")] if name.endswith(".__init__") else name)
+    return out
+
+
 class ImportChecker:
     """Lazily started checker process; fails safe (any error counts as a crash)."""
 
@@ -191,6 +223,8 @@ class ImportChecker:
         self.warm = warm_modules
         self.dependents = dependents  # module path -> module names whose import loads it
         self.proc: subprocess.Popen | None = None
+        self._baseline: set[str] = set()  # modules failing to import without any patch
+        self._baseline_known: set[str] = set()
 
     def _start(self) -> subprocess.Popen:
         if self.proc is None or self.proc.poll() is not None:
@@ -232,6 +266,37 @@ class ImportChecker:
             return None
         return set(extras["ran"])
 
+    def failing_modules(self, patched: dict[str, str], modules: list[str]) -> list[str] | None:
+        """Names among `modules` (plus every dialect) that fail to import with the patch and
+        import fine without it. None when `import sqlglot` itself fails or the check broke."""
+        names = sorted(set(modules) | set(patched_names(patched)) | set(self._dialect_modules()))
+        unknown = [n for n in names if n not in self._baseline_known]
+        if unknown:
+            got = self._modfail({}, unknown, core=False)
+            self._baseline_known.update(unknown)
+            self._baseline.update(got if isinstance(got, list) else ())
+        got = self._modfail(patched, names, core=any(path not in self.dependents for path in patched))
+        if not isinstance(got, list):
+            return None
+        return sorted(set(got) - self._baseline)
+
+    def _modfail(self, patched: dict[str, str], names: list[str], core: bool):
+        deps: set[str] = set()
+        for path in patched:
+            deps.update(self.dependents.get(path, ()))
+        status, extras = self._send({"files": patched, "dependents": sorted(deps), "core": core, "modules": names})
+        if status != "ok":
+            return None
+        return extras.get("modfail")
+
+    def _dialect_modules(self) -> list[str]:
+        folder = os.path.join(self.src_root, "sqlglot", "dialects")
+        try:
+            files = sorted(os.listdir(folder))
+        except OSError:
+            return []
+        return [f"sqlglot.dialects.{f[:-3]}" for f in files if f.endswith(".py") and f != "__init__.py"]
+
     def _send(self, request: dict) -> tuple[str | None, dict]:
         extras: dict = {}
         try:
@@ -242,7 +307,7 @@ class ImportChecker:
                 line = proc.stdout.readline()
                 if not line:
                     raise OSError("checker exited")
-                for tag in ("state", "ran"):
+                for tag in ("state", "ran", "modfail"):
                     if line.startswith(tag + " "):
                         extras[tag] = json.loads(line[len(tag) + 1:])
                         break
