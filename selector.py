@@ -2577,14 +2577,23 @@ def child_fixture(patched, plan, wfd):
     debug = bool(os.environ.get("BR_DEBUG"))
 
     def tpcds():
-        if "tables" not in state:
+        if "schema" not in state:
+            data = load_tpcds()
+            state["schema"] = pickle.loads(pickle.dumps(data["schema"]))
+            state["tables"] = {}
+            state["queries"] = {q["index"]: q for q in data["queries"]}
+        return state
+
+    def table_of(name):
+        """A table as the worker holds it (built by setUpClass, pickled to the pool); only the
+        ones a query names are built, since execute() is only handed those."""
+        st = tpcds()
+        if name not in st["tables"]:
             from sqlglot.executor.table import Table
 
             data = load_tpcds()
-            tables = {t: Table(columns=c, rows=data["tables"][t]) for t, c in data["schema"].items()}
-            state["schema"], state["tables"] = pickle.loads(pickle.dumps((data["schema"], tables)))
-            state["queries"] = {q["index"]: q for q in data["queries"]}
-        return state
+            st["tables"][name] = pickle.loads(pickle.dumps(Table(columns=data["schema"][name], rows=data["tables"][name])))
+        return st["tables"][name]
 
     def duck():
         if "conn" not in state:
@@ -2612,7 +2621,11 @@ def child_fixture(patched, plan, wfd):
         from sqlglot.executor import execute
 
         st = tpcds()
-        used = {t.name: st["tables"][t.name] for t in find_tables(expression)}
+        names = [t.name for t in find_tables(expression)]
+        for name in names:
+            if name not in st["schema"]:
+                raise KeyError(name)  # as _tables[name] in mp_execute
+        used = {name: table_of(name) for name in names}
         soft, hard = resource.getrlimit(resource.RLIMIT_AS)
         try:
             try:  # a soft cap only, so it can be lifted again for duckdb
