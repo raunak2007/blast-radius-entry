@@ -3589,7 +3589,13 @@ def child_maxnodes(patched, plan, wfd):
     signal.signal(signal.SIGPROF, lambda *_: os._exit(3))
     signal.setitimer(signal.ITIMER_PROF, plan["budget"])
     overlay = enter_overlay(patched)
-    refresh_modules(patched)
+    if plan.get("fresh"):
+        # the patch stops some module importing: refreshing would re-import every dropped module,
+        # broken ones included, so start from no sqlglot or test module, as pytest's import would
+        for name in [n for n in sys.modules if n.split(".")[0] in _OURS]:
+            del sys.modules[name]
+    else:
+        refresh_modules(patched)
     importlib.import_module("tests.test_parser")  # an import error fails the test (and this child)
     from sqlglot import exp, parse_one
     from sqlglot.dialects.dialect import Dialect
@@ -5058,7 +5064,7 @@ def main():
                 log(f"max_nodes check planned to save {saving:.1f}s (p {p_pass:.2f})")
                 hoped = [n for n in chosen if n != maxnodes_number]
                 tpcds_jobs.append(((commit, "maxnodes"), patched, [MAXNODES_TEST],
-                                   {"__maxnodes__": {"budget": 4 * MAXNODES_EST_S},
+                                   {"__maxnodes__": {"budget": 4 * MAXNODES_EST_S, "fresh": not verifiable},
                                     MAXNODES_TEST: duration[maxnodes_number] / 1000}, 10 + 4 * MAXNODES_EST_S))
         if RUN and verifiable and selector is not None and genmem_number in chosen:
             gplan = selector.genmem_plan(hoped, duration, genmem_number, snap["unreadable"])
