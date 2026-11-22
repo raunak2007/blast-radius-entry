@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import ast
 import os
+import re
 from dataclasses import dataclass, field
 
 from br.astutil import chain as _chain
@@ -470,6 +471,9 @@ class Analyzer:
             if old_func is None:
                 self._info.refinable = False  # a new function or method
                 self._unprobeable()
+                if self._unreferenced_new_def(path, old_tree, new_tree, chain):
+                    self._touched_import_time = True  # the def still runs at import: crash check
+                    return set()
                 return self._broad_new(path, old_tree, chain)
             if funcs[-1] is named[-1] and new_line < named[-1].body[0].lineno:
                 self._info.refinable = False
@@ -477,6 +481,56 @@ class Analyzer:
                 return self._range(path, _start(old_func), old_func.end_lineno)
         neighbours = (_code_line(old_lines, point - 1, -1), _code_line(old_lines, point, 1))
         return _union([self._old_line(path, old_tree, n) for n in neighbours if n is not None])
+
+    def _unreferenced_new_def(self, path: str, old_tree, new_tree, chain) -> bool:
+        """A new module- or class-level def that nothing can reach: its name is no dunder, no
+        generator `*_sql` handler (found by dir()), and occurs nowhere else in sqlglot/ or
+        tests/ nor elsewhere in the patched file; it has no decorator and no doctest. Such a
+        def only runs at import (defaults), which the import check covers."""
+        if not path.startswith("sqlglot/"):
+            return False
+        old_scopes = _scopes(old_tree)
+        new_def = None
+        for depth, node in enumerate(chain):
+            if isinstance(node, NAMED_FUNCS):
+                if _qualname(chain[: depth + 1]) not in old_scopes:
+                    if any(not isinstance(n, ast.ClassDef) for n in chain[:depth]):
+                        return False  # a def nested in a function body (or other statement)
+                    new_def = node
+                break
+        if new_def is None:
+            return False
+        name = new_def.name
+        if name.startswith("__") or name.endswith("_sql") or new_def.decorator_list:
+            return False
+        doc = ast.get_docstring(new_def)
+        if doc and ">>>" in doc:
+            return False
+        word = re.compile(rf"\b{re.escape(name)}\b")
+        for other, text in self.readers._all_texts().items():
+            if name in text and word.search(text) and other != path:
+                return False
+        inside = {id(n) for n in ast.walk(new_def)}
+        for node in ast.walk(new_tree):
+            if id(node) in inside:
+                continue
+            values = []
+            if isinstance(node, ast.Name):
+                values.append(node.id)
+            elif isinstance(node, ast.Attribute):
+                values.append(node.attr)
+            elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+                if word.search(node.value):
+                    return False
+            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                values.append(node.name)
+            elif isinstance(node, ast.alias):
+                values += [node.name, node.asname or ""]
+            elif isinstance(node, ast.keyword):
+                values.append(node.arg or "")
+            if name in values:
+                return False
+        return True
 
     def _broad_new(self, path: str, old_tree, new_chain) -> set[int] | None:
         classes = [n for n in new_chain if isinstance(n, ast.ClassDef)]
