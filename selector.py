@@ -395,6 +395,76 @@ def is_comment_or_blank(text):
 
 
 IMPORTABLE = (".py", ".pyi", ".pyc", ".so", ".pyd", ".pth")
+# pyproject.toml at the pinned commit (the image holds only sqlglot/ and tests/), to apply a
+# patch to it
+PINNED_PYPROJECT = """[project]
+name = "sqlglot"
+dynamic = ["version", "optional-dependencies"]
+description = "An easily customizable SQL parser and transpiler"
+readme = "README.md"
+authors = [{ name = "Toby Mao", email = "toby.mao@gmail.com" }]
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">= 3.9"
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: SQL",
+    "Programming Language :: Python :: 3 :: Only",
+]
+
+[project.urls]
+Homepage = "https://sqlglot.com/"
+Documentation = "https://sqlglot.com/sqlglot.html"
+Repository = "https://github.com/tobymao/sqlglot"
+Issues = "https://github.com/tobymao/sqlglot/issues"
+
+[build-system]
+requires = ["setuptools >= 61.0", "setuptools_scm >= 10.2"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+include-package-data = false
+
+[tool.setuptools_scm]
+version_file = "sqlglot/_version.py"
+write_to_source = true
+fallback_version = "0.0.0"
+local_scheme = "no-local-version"
+
+[tool.setuptools.packages.find]
+include = ["sqlglot", "sqlglot.*"]
+
+[tool.setuptools.package-data]
+"*" = ["py.typed"]
+
+[tool.uv.sources]
+sqlglotc = { path = "./sqlglotc" }
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+extend-select = ["UP"]
+ignore = ["E721", "E741"]
+"""
+
+
+def pyproject_inert(hunks):
+    """Whether an edit to pyproject.toml leaves a pytest run from the checkout as it was (the
+    commits were labeled with the checkout on PYTHONPATH and nothing installed from it). pytest
+    reads the file as UTF-8 and TOML and stops on one it can't parse; of its content it uses the
+    [tool.pytest] tables only, which the pinned file doesn't have; no test opens the file."""
+    try:
+        import tomllib
+        new_text, _ = apply_hunks(PINNED_PYPROJECT, hunks)
+        new_text.encode("utf-8")  # bytes that aren't UTF-8 arrive as surrogates
+        tool = tomllib.loads(new_text).get("tool", {})
+    except Exception:  # doesn't apply, not UTF-8, not TOML, no tomllib
+        return False
+    return isinstance(tool, dict) and "pytest" not in tool
 # folders whose Python no test imports and no build of the package reads
 UNBUILT_DIRS = ("benchmarks/", "docs/", "posts/", "pdoc/", ".github/")
 # The two TPC query files and the tests that use what they hold (the rest of TestExecutor only
@@ -434,6 +504,27 @@ PYTEST_CONFIGS = frozenset(("pytest.toml", ".pytest.toml", "pytest.ini", ".pytes
 _SITE_LOADED = []
 
 
+def asked_for_by_name(top, stem):
+    """Whether a source at the pinned commit may import a module of this name, which exists for
+    it only once a new file does: sqlglot/__init__.py tries sqlglot._version and goes on without
+    it, and dialects load by name on demand. For a file under sqlglot/ that is the name as a
+    whole word anywhere in sqlglot's sources or the tests (a string names a dialect); for one
+    under tests/, in an import statement of a test file (test methods share names with files)."""
+    word = re.compile(r"\b" + re.escape(stem) + r"\b")
+    for folder in ("sqlglot", "tests") if top == "sqlglot" else ("tests",):
+        for path in (SRC / folder).rglob("*.py"):
+            try:
+                text = path.read_text("utf-8", "surrogateescape")
+            except OSError:
+                return True
+            if top == "sqlglot":
+                if word.search(text):
+                    return True
+            elif any(word.search(ln) for ln in text.split("\n") if ln.lstrip().startswith(("import ", "from "))):
+                return True
+    return False
+
+
 def new_module_risk(rel):
     """Why a new importable file can change tests although nothing at the pinned commit imports
     it, or None. The tests run with the repository root first on sys.path, so a new top-level
@@ -444,11 +535,15 @@ def new_module_risk(rel):
     base = parts[-1]
     if base in ("__init__.py", "sitecustomize.py", "usercustomize.py") or base.endswith(".pth"):
         return "changes what gets imported"
-    if len(parts) > 2:
-        return None  # inside an existing package or folder: only an import of its own name finds it
+    if base.endswith((".so", ".pyd")):
+        return "is taken for a compiled module, ahead of the source file of the same name"
+    if len(parts) > 2 or (len(parts) == 2 and (SRC / parts[0]).is_dir()):
+        # a module added to a package or folder that exists (sqlglot/x.py, tests/dialects/x.py):
+        # only an import of its own name finds it
+        if base.endswith(".py") and parts[0] in ("sqlglot", "tests") and asked_for_by_name(parts[0], base[:-3]):
+            return "has a name that an import at the pinned commit asks for"
+        return None
     name = parts[0] if len(parts) == 2 else base.rsplit(".", 1)[0]
-    if len(parts) == 2 and (SRC / parts[0]).is_dir():
-        return None  # a module added to a folder that exists (sqlglot/x.py, tests/x.py)
     if name in sys.stdlib_module_names or name in sys.builtin_module_names or name in ("sqlglot", "tests", "sqlglotc"):
         return "hides a module of the same name"
     try:
@@ -2247,10 +2342,7 @@ class Selector:
             return False
         return True
 
-    def named_in_other_tests(self, rel, word):
-        """Whether another Python file under tests/ mentions this name (as a whole word): a test
-        module others import (33 dialect test files take Validator from test_dialect), or a
-        class of it they use."""
+    def test_texts(self):
         if self._test_texts is None:
             self._test_texts = {}
             for path in (SRC / "tests").rglob("*.py"):
@@ -2258,8 +2350,42 @@ class Selector:
                     self._test_texts[path.relative_to(SRC).as_posix()] = path.read_text("utf-8", "surrogateescape")
                 except OSError:
                     continue
+        return self._test_texts
+
+    def files_naming(self, rel, word):
+        """The other Python files under tests/ that mention this name as a whole word: the users
+        of a class (33 dialect test files take Validator from test_dialect)."""
         pattern = re.compile(r"\b" + re.escape(word) + r"\b")
-        return any(pattern.search(text) for other, text in self._test_texts.items() if other != rel)
+        return {other for other, text in self.test_texts().items() if other != rel and pattern.search(text)}
+
+    def importers(self, rels):
+        """The Python files under tests/ that import one of these test modules, directly or
+        through one another (an import statement naming the module's stem), with the modules
+        themselves."""
+        texts = self.test_texts()
+        lines = {other: [ln for ln in text.split("\n") if ln.lstrip().startswith(("import ", "from "))]
+                 for other, text in texts.items()}
+        found, todo = set(rels), list(rels)
+        while todo:
+            stem = os.path.basename(todo.pop())[:-3]
+            if stem == "__init__":
+                return set(texts)
+            pattern = re.compile(r"\b" + re.escape(stem) + r"\b")
+            for other, imports in lines.items():
+                if other not in found and any(pattern.search(ln) for ln in imports):
+                    found.add(other)
+                    todo.append(other)
+        return found
+
+    def files_mask(self, rels):
+        """Every test of these test files; all tests if one of them holds shared code rather
+        than tests of its own (anything may run it)."""
+        m = 0
+        for other in rels:
+            if not os.path.basename(other).startswith("test_"):
+                return self.ALL
+            m |= self.doc["test_files"].get(other, 0)
+        return m
 
     def test_source(self, rel, fd):
         doc = self.doc
@@ -2269,9 +2395,9 @@ class Selector:
             # import them, so any test may run this code
             raise Fallback(f"shared test code {rel}")
         own = doc["test_files"].get(rel, 0)
-        # what a change to the module as a whole reaches: its own tests, and every test when
-        # other test modules import it (their import runs, or fails with, the edited code)
-        file_mask = self.ALL if self.named_in_other_tests(rel, stem) else own
+        # what a change to the module as a whole reaches: its own tests, and those of the test
+        # modules that import it, directly or not (their import runs, or fails with, the edited code)
+        file_mask = own | self.files_mask(self.importers({rel}) - {rel})
         try:
             old_text, idx = self.index(rel)
         except (OSError, SyntaxError):
@@ -2293,14 +2419,23 @@ class Selector:
             if self.comment_only(blk, idx, new_idx):
                 continue
             self.code_blocks += 1
-            lines = blk["removed"] or [blk["anchor"] - 1, blk["anchor"]]
-            for ln in lines:
-                st, _ = idx.stmt_at(ln)
+            # the statements the block replaces (or is put between) in the old file, then the
+            # ones its added lines belong to in the new file: a method put right after another
+            # (a new setUp, say) is part of neither neighbour
+            sides = [(idx, ln) for ln in (blk["removed"] or [blk["anchor"] - 1, blk["anchor"]])]
+            sides += [(new_idx, ln) for ln in blk["added"]]
+            for index, ln in sides:
+                st, _ = index.stmt_at(ln)
+                if st is None and index is new_idx:
+                    continue  # an added blank or comment line outside every statement
                 if st is None or st["scope"] == "module" and st["kind"] != "class":
                     return file_mask
                 cls = st["cls"]
-                if cls and self.named_in_other_tests(rel, cls.split(".")[0]):
-                    return self.ALL  # a class other test modules build on: its code runs in their tests
+                users = self.files_naming(rel, cls.split(".")[0]) if cls else None
+                if users:
+                    # a class other test modules build on: its code runs in their tests, and in
+                    # those of the modules importing them
+                    return file_mask | self.files_mask(self.importers(users))
                 func = st["func"] if st["scope"] == "function" else (st["node"] if st["kind"] == "def" else None)
                 if cls and func is not None:
                     test_id = f"{rel}::{cls}::{func.name}"
@@ -2311,6 +2446,18 @@ class Selector:
                 else:
                     return file_mask
         return m
+
+    def unchanged_code(self, rel, fd):
+        """Whether a patch to a Python file leaves its code as it was (comments, layout, docstrings)."""
+        try:
+            old_text, idx = self.index(rel)
+            new_text, blocks = apply_hunks(old_text, fd["hunks"])
+            new_idx = SourceIndex(new_text)
+        except (OSError, SyntaxError, Fallback, ValueError):
+            return False
+        if declared_coding(old_text) != declared_coding(new_text):
+            return False
+        return self.maybe_layout_only(blocks, idx, new_idx) and same_code(idx.tree, new_idx.tree)
 
     def tpc_file_mask(self, rel, fd, readers):
         """Which readers of a TPC query file an edit to it can reach. TestExecutor.setUpClass loads
@@ -2389,6 +2536,7 @@ class Selector:
             if fd["binary"] or fd["deleted"] or (old_rel and old_rel != rel):
                 paths = {p for p in (rel, old_rel) if p}
                 if any(p.endswith(IMPORTABLE) or p in self.config or p in PYTEST_CONFIGS
+                       or (os.path.basename(p) in PYTEST_CONFIGS and p.startswith("tests/"))
                        or os.path.basename(p) in ("conftest.py", "__init__.py") for p in paths):
                     raise Fallback(f"binary, deleted or renamed file {rel}")
                 # a file that isn't code or configuration and is replaced, removed or moved reaches
@@ -2407,10 +2555,27 @@ class Selector:
                 readers = self.tpc_file_mask(rel, fd, readers)
             m |= readers
             if rel in ("pyproject.toml", "setup.cfg") and fd["hunks"] and not fd["new_file"] and all(
-                    piece[:1] == " " or is_comment_or_blank(piece[1:]) for _, _, body in fd["hunks"] for piece in body):
-                # only comment and blank lines come or go: neither file has a multi-line string at
-                # the pinned commit that such a line could land in, so it parses to the same settings
+                    piece[:1] == " " or is_comment_or_blank(piece[1:])
+                    or (rel == "setup.cfg" and piece[1:].lstrip().startswith(";"))
+                    for _, _, body in fd["hunks"] for piece in body):
+                # only comment and blank lines come or go (pytest's parser of setup.cfg drops a
+                # line that starts with # or ; wherever it stands): neither file has a multi-line
+                # string at the pinned commit that such a line could land in, so each parses to
+                # the same settings
                 continue
+            if rel == "pyproject.toml" and fd["hunks"] and not fd["new_file"] and pyproject_inert(fd["hunks"]):
+                continue  # still TOML, still without settings for pytest
+            if rel == "setup.py" and fd["hunks"] and not fd["new_file"]:
+                # the root setup.py: pytest looks whether it exists, and nothing runs or reads it
+                # when the tests run from the checkout (tests/test_sqlglotc.py runs sqlglotc's)
+                continue
+            if os.path.basename(rel) in PYTEST_CONFIGS and rel.startswith("tests/"):
+                # pytest takes its settings and root from the first such file it finds going up
+                # from the paths it is given
+                raise Fallback(f"pytest config file {rel}")
+            if rel.endswith(".py") and rel.startswith("tests/") and fd["hunks"] and not fd["new_file"] \
+                    and self.unchanged_code(rel, fd):
+                continue  # shared test code (tests/helpers.py) with only its layout or comments changed
             if rel in self.config or os.path.basename(rel) == "conftest.py" or rel in PYTEST_CONFIGS:
                 raise Fallback(f"config file {rel}")
             if not rel.endswith(".py"):
