@@ -395,6 +395,73 @@ def is_comment_or_blank(text):
 
 
 IMPORTABLE = (".py", ".pyi", ".pyc", ".so", ".pyd", ".pth")
+# folders whose Python no test imports and no build of the package reads
+UNBUILT_DIRS = ("benchmarks/", "docs/", "posts/", "pdoc/", ".github/")
+# The two TPC query files and the tests that use what they hold (the rest of TestExecutor only
+# loads them in setUpClass): "cases" read whole (meta, input, expected) cases, "inputs" only
+# the meta lines and the input query. From tests/test_executor.py and tests/test_optimizer.py.
+TPC_QUERY_FILES = {
+    "tests/fixtures/optimizer/tpc-h/tpc-h.sql": {
+        "cases": ("tests/test_optimizer.py::TestOptimizer::test_tpch",
+                  "tests/test_executor.py::TestExecutor::test_optimized_tpch"),
+        "inputs": ("tests/test_executor.py::TestExecutor::test_execute_tpch",)},
+    "tests/fixtures/optimizer/tpc-ds/tpc-ds.sql": {
+        "cases": ("tests/test_optimizer.py::TestOptimizer::test_tpcds",),
+        "inputs": ("tests/test_executor.py::TestExecutor::test_execute_tpcds",)},
+}
+
+
+def fixture_pairs(text):
+    """The (meta, input, expected) cases of a fixture text, split exactly as the tests' own
+    load_sql_fixture_pairs and _extract_meta (tests/helpers.py) split the file; raises where
+    they would."""
+    body = "\n".join(line for line in text.splitlines() if line and not line.startswith("--"))
+    statements = body.split(";")
+    out = []
+    for i in range(0, len(statements), 2):
+        if i + 1 < len(statements):
+            lines = statements[i].strip().split("\n")
+            meta, j = {}, 0
+            while lines[j].startswith("#"):
+                key, val = lines[j].split(":", maxsplit=1)
+                meta[key.lstrip("#").strip()] = val.strip()
+                j += 1
+            out.append((meta, "\n".join(lines[j:]), statements[i + 1].strip()))
+    return out
+# files pytest reads its settings from when they sit at the repository root
+PYTEST_CONFIGS = frozenset(("pytest.toml", ".pytest.toml", "pytest.ini", ".pytest.ini", "tox.ini", "setup.cfg",
+                            "pyproject.toml"))
+_SITE_LOADED = []
+
+
+def new_module_risk(rel):
+    """Why a new importable file can change tests although nothing at the pinned commit imports
+    it, or None. The tests run with the repository root first on sys.path, so a new top-level
+    module or package hides a standard-library or installed one of the same name (a root
+    enum.py breaks everything). A new package directory hides the module file of the same
+    name beside it, and a new __init__.py changes what pytest takes for a package."""
+    parts = rel.split("/")
+    base = parts[-1]
+    if base in ("__init__.py", "sitecustomize.py", "usercustomize.py") or base.endswith(".pth"):
+        return "changes what gets imported"
+    if len(parts) > 2:
+        return None  # inside an existing package or folder: only an import of its own name finds it
+    name = parts[0] if len(parts) == 2 else base.rsplit(".", 1)[0]
+    if len(parts) == 2 and (SRC / parts[0]).is_dir():
+        return None  # a module added to a folder that exists (sqlglot/x.py, tests/x.py)
+    if name in sys.stdlib_module_names or name in sys.builtin_module_names or name in ("sqlglot", "tests", "sqlglotc"):
+        return "hides a module of the same name"
+    try:
+        import importlib.util
+
+        if not _SITE_LOADED:
+            import site
+
+            site.main()  # installed packages count too (the selector itself starts without them)
+            _SITE_LOADED.append(True)
+        return "hides a module of the same name" if importlib.util.find_spec(name) is not None else None
+    except Exception:
+        return "may hide a module of the same name"
 CODING_RE = re.compile(r"^[ \t\f]*#.*?coding[:=][ \t]*([-\w.]+)")
 
 
@@ -2245,6 +2312,39 @@ class Selector:
                     return file_mask
         return m
 
+    def tpc_file_mask(self, rel, fd, readers):
+        """Which readers of a TPC query file an edit to it can reach. TestExecutor.setUpClass loads
+        both files for the whole class, so all 60 of its tests count as readers, but only three of
+        them use what was loaded (TPC_QUERY_FILES, from the tests' source): while the edited file
+        still loads into the same number of cases, the others see no difference. A test that
+        reads whole cases is selected if any case changed; one that reads only the meta lines
+        and the input query, if one of those changed. Anything unexpected keeps every reader."""
+        spec = TPC_QUERY_FILES[rel]
+        users = 0
+        for name in spec["cases"] + spec["inputs"]:
+            bit = self.test_bit.get(name)
+            if not bit or not bit & readers:
+                return readers
+            users |= bit
+        if readers & ~(users | self.doc["test_classes"].get("tests/test_executor.py::TestExecutor", 0)):
+            return readers  # a reader this rule doesn't know about
+        try:
+            old_text = (SRC / rel).read_text("utf-8")
+            new_text, _ = apply_hunks(old_text, fd["hunks"])
+            old, new = fixture_pairs(old_text), fixture_pairs(new_text)
+        except Exception:  # the patch doesn't apply here, or the new file no longer loads
+            return readers
+        if len(old) != len(new):
+            return readers
+        changed = [i for i in range(len(old)) if old[i] != new[i]]
+        inputs = [i for i in changed if old[i][:2] != new[i][:2]]
+        m = 0
+        for name in (spec["cases"] if changed else ()) + (spec["inputs"] if inputs else ()):
+            m |= self.test_bit[name]
+        log(f"{rel}: {len(changed)} cases changed ({len(inputs)} in their input or meta lines): "
+            f"{bin(m).count('1')} of {bin(readers).count('1')} readers")
+        return m
+
     def select(self, text):
         """The tests one patch can break (a bit mask), with what the checks need left on self."""
         self.flag_narrowing = True
@@ -2288,11 +2388,13 @@ class Selector:
                 continue  # only the file's mode changed: what Python and the tests read is as before
             if fd["binary"] or fd["deleted"] or (old_rel and old_rel != rel):
                 paths = {p for p in (rel, old_rel) if p}
-                if any(p.endswith(IMPORTABLE) or not p.startswith("tests/") or p in self.config
-                       or os.path.basename(p) == "conftest.py" for p in paths):
+                if any(p.endswith(IMPORTABLE) or p in self.config or p in PYTEST_CONFIGS
+                       or os.path.basename(p) in ("conftest.py", "__init__.py") for p in paths):
                     raise Fallback(f"binary, deleted or renamed file {rel}")
-                # a data file under tests/ that is replaced, removed or moved reaches the tests that
-                # opened it under its old or new name (no test lists a directory); no check runs them
+                # a file that isn't code or configuration and is replaced, removed or moved reaches
+                # the tests that opened it under its old or new name (the tests open their data
+                # files by name; the one test that lists a directory reads Python sources); no
+                # check runs them
                 for p in paths:
                     readers = doc["file_opens"].get(p, 0)
                     m |= readers
@@ -2300,13 +2402,16 @@ class Selector:
                     self.data_mask |= readers
                 self.touched.append((rel, 0, 0, "other"))
                 continue
-            m |= doc["file_opens"].get(rel, 0)  # tests that read this file's text
+            readers = doc["file_opens"].get(rel, 0)  # tests that read this file's text
+            if rel in TPC_QUERY_FILES and readers and fd["hunks"] and not fd["new_file"]:
+                readers = self.tpc_file_mask(rel, fd, readers)
+            m |= readers
             if rel in ("pyproject.toml", "setup.cfg") and fd["hunks"] and not fd["new_file"] and all(
                     piece[:1] == " " or is_comment_or_blank(piece[1:]) for _, _, body in fd["hunks"] for piece in body):
                 # only comment and blank lines come or go: neither file has a multi-line string at
                 # the pinned commit that such a line could land in, so it parses to the same settings
                 continue
-            if rel in self.config or os.path.basename(rel) == "conftest.py":
+            if rel in self.config or os.path.basename(rel) == "conftest.py" or rel in PYTEST_CONFIGS:
                 raise Fallback(f"config file {rel}")
             if not rel.endswith(".py"):
                 # data files and the like: we only overlay Python sources, so a check may only
@@ -2319,7 +2424,17 @@ class Selector:
             if fd["new_file"]:
                 self.verifiable = False
                 self.code_blocks += rel.endswith(".py")
-                continue  # a new file nothing imports or opens can't change a test
+                if rel.endswith(IMPORTABLE) or os.path.basename(rel) in ("__init__.py", "sitecustomize.py"):
+                    reason = new_module_risk(rel)
+                    if reason:
+                        raise Fallback(f"new file {rel} {reason}")
+                    # a test that reads the sources of a package lists its directory (test_typing
+                    # reads every module of sqlglot/typing): a new module there is read too
+                    folder = os.path.dirname(rel)
+                    for other, readers in doc["file_opens"].items():
+                        if other.endswith(".py") and os.path.dirname(other) == folder:
+                            m |= readers
+                continue  # any other new file: nothing imports or opens it, so it can't change a test
             if rel.endswith(".py"):
                 if not fd["hunks"]:
                     raise Fallback(f"no hunks for {rel}")
@@ -2329,7 +2444,8 @@ class Selector:
                 self.code_blocks += 1  # Python outside sqlglot/ (test_source counts its blocks again)
                 if rel.startswith("tests/"):
                     m |= self.test_source(rel, fd)
-                else:
+                elif not rel.startswith(UNBUILT_DIRS):
+                    # Python that the build of the compiled extension may read (setup scripts, sqlglotc/)
                     m |= doc["test_files"].get("tests/test_sqlglotc.py", 0) | doc["test_files"].get("tests/test_build.py", 0)
             self.touched.append((rel, 0, 0, "other"))
         return m
@@ -3467,6 +3583,8 @@ def preload_sqlglot():
     import importlib
 
     global _PRELOADED
+    if _PRELOADED:
+        return  # done already (the import checks preload too)
     src = str(SRC)
     before = set(sys.modules)
     added = src not in sys.path
@@ -4202,8 +4320,11 @@ def child_imports(patched, test_modules, wfd):
 
     limit_cpu(IMPORT_CPU_S)
     limit_memory()
+    # as in the checks: sqlglot's core, imported once by the parent from the pinned sources,
+    # is kept when the patch changes none of its files (enter_overlay forgets it otherwise);
+    # everything else is imported here, the patched files through the overlay
     overlay = enter_overlay(patched)
-    for name in [n for n in sys.modules if n.split(".")[0] in ("sqlglot", "tests")]:
+    for name in [n for n in sys.modules if n.split(".")[0] == "tests"]:
         del sys.modules[name]
     failed = import_failures(test_modules)
     shutil.rmtree(overlay, ignore_errors=True)
@@ -4220,6 +4341,8 @@ def import_checks(jobs, budget_s):
     if not jobs:
         return {}
     warm_stdlib()  # with site-packages, as in the checks: the test modules import from there
+    if PRELOAD and sum(1 for patched in jobs.values() if patched and not set(patched) & CORE_FILES) >= 2:
+        preload_sqlglot()
     import gc
     gc.freeze()  # the children are forks: keep their collector off the maps loaded here
     mods = tuple((load_imports() or {}).get("test_modules", ()))
@@ -4324,9 +4447,18 @@ def needs_import_check(selector, snap, every):
     return False
 
 
+def phase(name):
+    """With BR_PHASES set: log this process's CPU so far and that of the children it has reaped."""
+    if os.environ.get("BR_PHASES"):
+        import resource
+        me, ch = resource.getrusage(resource.RUSAGE_SELF), resource.getrusage(resource.RUSAGE_CHILDREN)
+        log(f"PHASE {name}: self {me.ru_utime + me.ru_stime:.3f}s children {ch.ru_utime + ch.ru_stime:.3f}s")
+
+
 def main():
     import time
     started = time.monotonic()
+    phase("start")
     tests = json.loads((DATA / "tests.json").read_text("utf-8"))["tests"]
     duration = {t["number"]: math.floor(t["seconds"] * 1000 + 0.5) for t in tests}
     every = sorted(duration)
@@ -4382,6 +4514,7 @@ def main():
                 "data_files": set(selector.data_files), "import_widened": selector.import_widened,
                 "state_masks": list(selector.state_masks), "line_blocks": dict(selector.line_blocks)}
 
+    phase("maps loaded")
     # 1. selections, and the commits whose selection an unchanged import-time state would shrink
     snaps, narrow, state_jobs = {}, {}, {}
     for patch in sorted((DATA / "commits").glob("*.patch")):
@@ -4426,6 +4559,7 @@ def main():
                 narrow[commit] = alt
                 state_jobs[commit] = (snap["patched"], tuple((load_imports() or {}).get("test_modules", ())),
                                       tuple(alt["state_masks"]), snap["line_blocks"])
+    phase("selected")
     everything = {"chosen": every, "patched": {}, "verifiable": False, "unreadable": set(), "touched": [],
                   "data_files": set(), "import_widened": False, "state_masks": [], "line_blocks": {}}
     imports_known = set()  # commits whose patched imports were seen to succeed as the pinned ones do
@@ -4441,6 +4575,7 @@ def main():
                 snaps[commit] = narrow[commit]
             if same is not None:
                 imports_known.add(commit)
+    phase("state checks")
     if IMPORT_CHECK and RUN and selector is not None:
         imp_jobs = {commit: snap["patched"] for commit, snap in snaps.items()
                     if commit not in imports_known and needs_import_check(selector, snap, every)}
@@ -4454,6 +4589,7 @@ def main():
                         log(f"{commit}: no time for the import check: running every test")
                     snaps[commit] = dict(everything)
 
+    phase("import checks")
     # 2. the checks each selection is worth
     answers = {}
     jobs, tpcds_jobs = [], []
@@ -4521,10 +4657,12 @@ def main():
                 jobs.append((commit, patched, [id_of[n] for n in check], limits, limit))
         log(f"{commit}: {len(chosen)} tests")
 
+    phase("checks planned")
     jobs = tpcds_jobs + jobs
     if jobs:
         budget = float(os.environ.get("BR_BUDGET", "140")) - (time.monotonic() - started)
         warm(jobs)
+        phase("warm")
         # every check is a fork of this process: keep the collector in each child away from
         # the maps and imports already here (walking them would also copy their pages)
         import gc
@@ -4539,6 +4677,7 @@ def main():
             log(f"{commit}: ran {len(test_ids)}, {len(test_ids) - len(passed)} failed")
             answers[commit] = [n for n in answers[commit] if n not in passed]
 
+    phase("checks run")
     out = [json.dumps({"commit": c, "workers": pack(answers[c], duration)}, separators=(",", ":"))
            for c in answers]
     sys.stdout.write("\n".join(out) + ("\n" if out else ""))
