@@ -26,6 +26,9 @@ EXPENSIVE_CPU = float(os.environ.get("BR_EXPENSIVE_CPU", "3.0"))
 # Never spend more than this on verifying one commit.
 MAX_VERIFY_CPU = float(os.environ.get("BR_MAX_VERIFY_CPU", "20.0"))
 PARALLEL = int(os.environ.get("BR_PARALLEL", "2"))
+# Children whose patch touches the preloaded core keep the modules that cannot see the
+# patch and import only the rest again (selector/verify.py _partial_refresh).
+PARTIAL = os.environ.get("BR_PARTIAL", "1") == "1"
 # Expensive candidates are left out only when verification shows the patch is
 # inert: every changed expression was evaluated next to its original at least
 # PROBE_MIN_COUNT times, by at least PROBE_MIN_TESTS cheap tests, and the two
@@ -803,6 +806,8 @@ def verify_plans(plans: list[Plan], root: str, tmp: str, deadline: float, log, i
     for job in work:
         touched = {module_name(p) for p in job.files if p.endswith(".py")}
         job.warm = bool(loaded) and not (touched & loaded)
+        if PARTIAL and loaded and not job.warm and not job.probes:
+            job.partial = sorted(touched & loaded)
     # Cheapest first: most value per second if time runs short.
     work.sort(key=lambda j: by_key[j.key][0].verify_cpu_estimate)
     run_jobs(work, root, tmp, PARALLEL, deadline, log=log)
@@ -881,8 +886,13 @@ def preload_sqlglot(root: str, log) -> set[str]:
     any other child drops them and imports everything from its overlay."""
     import importlib
 
+    from . import verify as _verify
+
     sys_path = list(sys.path)
     sys.path.insert(0, root)
+    watch = _verify.ImportWatch() if PARTIAL else None
+    if watch is not None:
+        sys.meta_path.insert(0, watch)
     try:
         for name in CORE_MODULES:
             importlib.import_module(name)
@@ -894,6 +904,8 @@ def preload_sqlglot(root: str, log) -> set[str]:
         return set()
     finally:
         sys.path[:] = sys_path
+        if watch is not None:
+            sys.meta_path.remove(watch)
     return {name for name in sys.modules if name == "sqlglot" or name.startswith("sqlglot.")}
 
 

@@ -112,6 +112,171 @@ def _rehome_modules(root: str, overlay: str, warm: bool):
     importlib.invalidate_caches()
 
 
+# Partial refresh of the preloaded sqlglot core (ported from raunak2007/blast-radius-entry's
+# preimport/refresh_modules): module -> (start tick, end tick) of its import in the parent.
+IMPORT_ORDER: dict = {}
+
+
+class ImportWatch:
+    """Meta path hook used while the parent preloads sqlglot: records when each sqlglot
+    module's import started and finished (a module that finished importing before a
+    patched module started cannot have read anything from it during its own import)."""
+
+    def __init__(self):
+        import itertools
+
+        self.tick = itertools.count()
+
+    def find_spec(self, fullname, path, target=None):
+        import importlib.machinery
+
+        if fullname.split(".")[0] != "sqlglot":
+            return None
+        spec = importlib.machinery.PathFinder.find_spec(fullname, path)
+        loader = getattr(spec, "loader", None)
+        if loader is None or not hasattr(loader, "exec_module"):
+            return spec
+        real = loader.exec_module
+        tick = self.tick
+
+        def exec_module(module):
+            start = next(tick)
+            real(module)
+            IMPORT_ORDER[fullname] = (start, next(tick))
+
+        loader.exec_module = exec_module
+        return spec
+
+
+def _module_refs(name, module):
+    """Names of the modules whose objects this module's globals hold (one level into containers)."""
+    import types
+
+    out = set()
+    is_pkg = hasattr(module, "__path__")
+
+    def add(v):
+        if isinstance(v, types.ModuleType):
+            out.add(v.__name__)
+        elif isinstance(v, type):
+            for b in v.__mro__:
+                out.add(b.__module__)
+        elif isinstance(v, (types.FunctionType, types.BuiltinFunctionType)):
+            out.add(getattr(v, "__module__", None))
+        else:
+            out.add(type(v).__module__)
+
+    for k, v in list(vars(module).items()):
+        if is_pkg and isinstance(v, types.ModuleType) and v.__name__ == f"{name}.{k}":
+            continue  # the binding the import system makes for a submodule
+        add(v)
+        if isinstance(v, dict):
+            for x in list(v.keys()) + list(v.values()):
+                add(x)
+        elif isinstance(v, (list, tuple, set, frozenset)):
+            for x in v:
+                add(x)
+    return out
+
+
+def _holds_any(module, name, ids):
+    """Whether a module's globals, its own classes' attributes, or containers one level
+    inside either, hold an object whose id is in ids."""
+    def hit(v):
+        if id(v) in ids:
+            return True
+        if isinstance(v, dict):
+            return any(id(x) in ids for x in v.values()) or any(id(x) in ids for x in v)
+        if isinstance(v, (list, tuple, set, frozenset)):
+            return any(id(x) in ids for x in v)
+        return False
+
+    for v in list(vars(module).values()):
+        if hit(v):
+            return True
+        if isinstance(v, type) and v.__module__ == name:
+            for a in list(vars(v).values()):
+                if hit(a):
+                    return True
+    return False
+
+
+def _drop_sqlglot():
+    for name in [n for n in sys.modules if n == "sqlglot" or n.startswith("sqlglot.")]:
+        del sys.modules[name]
+
+
+def _partial_refresh(targets) -> bool:
+    """In a child with the preloaded core re-pointed at its overlay: drop the patched
+    modules, every module whose import finished after the first of them started, and
+    every module whose globals hold objects of a dropped one (transitively); import the
+    dropped sqlglot modules again from the overlay. Falls back to dropping all of
+    sqlglot (the cold path) if a re-import fails or a kept module still holds an object
+    of a dropped one. True if the partial refresh stands."""
+    import importlib
+    import types
+
+    ours = {n: m for n, m in list(sys.modules.items()) if n == "sqlglot" or n.startswith("sqlglot.")}
+    targets = {n for n in targets if n in ours}
+    if not ours or not targets or not IMPORT_ORDER or any(n not in IMPORT_ORDER for n in targets):
+        _drop_sqlglot()
+        return False
+    first = min(IMPORT_ORDER[n][0] for n in targets)
+    drop = set(targets)
+    for n in ours:
+        o = IMPORT_ORDER.get(n)
+        if o is None or o[1] > first:
+            drop.add(n)
+    refs = {n: _module_refs(n, m) for n, m in ours.items() if n not in drop}
+    grew = True
+    while grew:
+        grew = False
+        for n, r in refs.items():
+            if n not in drop and r & drop:
+                drop.add(n)
+                grew = True
+    old = {n: sys.modules.pop(n) for n in drop}
+    # a kept package still binds a dropped submodule as an attribute, and
+    # `from pkg import sub` reads that attribute first: unbind it
+    for n, m in old.items():
+        parent, _, leaf = n.rpartition(".")
+        pkg = sys.modules.get(parent)
+        if pkg is not None and vars(pkg).get(leaf) is m:
+            delattr(pkg, leaf)
+    signal.signal(signal.SIGALRM, _raise_timeout)
+    signal.setitimer(signal.ITIMER_REAL, 20)
+    try:
+        for n in sorted(drop):
+            if n not in sys.modules:
+                importlib.import_module(n)
+    except BaseException:  # noqa: BLE001 - the cold path imports (and reports) it again
+        _drop_sqlglot()
+        return False
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+    # a package imported again does not bind the submodules we kept
+    for n, m in list(sys.modules.items()):
+        if n.startswith("sqlglot."):
+            parent, _, leaf = n.rpartition(".")
+            pkg = sys.modules.get(parent)
+            if pkg is not None and parent in drop and leaf not in vars(pkg):
+                setattr(pkg, leaf, m)
+    old_ids = {id(m) for m in old.values()}
+    for n, m in old.items():
+        for v in list(vars(m).values()):
+            if isinstance(v, (type, types.FunctionType)) and getattr(v, "__module__", None) == n:
+                old_ids.add(id(v))
+    kept = [(n, m) for n, m in sys.modules.items()
+            if (n == "sqlglot" or n.startswith("sqlglot.")) and n not in drop]
+    metas = {type(v) for _, m in kept for v in list(vars(m).values()) if isinstance(v, type) and type(v) is not type}
+    if any(_holds_any(m, n, old_ids) for n, m in kept) or any(
+            any(id(x) in old_ids for x in (a.values() if isinstance(a, dict) else ()))
+            for meta in metas for a in list(vars(meta).values())):
+        _drop_sqlglot()
+        return False
+    return True
+
+
 PROBE_STATS: dict = {}
 
 
@@ -286,7 +451,7 @@ def _install_probes(overlay: str, probes: dict):
     return current
 
 
-def _child(overlay: str, root: str, files: dict, tests: list[str], limits: dict, check_modules: list[str], out_fd: int, memory_limit: int | None, warm: bool = False, probes: dict | None = None, groups: list | None = None):
+def _child(overlay: str, root: str, files: dict, tests: list[str], limits: dict, check_modules: list[str], out_fd: int, memory_limit: int | None, warm: bool = False, probes: dict | None = None, groups: list | None = None, partial=None):
     result = {"failed": [], "import_errors": {}, "durations": {}, "error": None}
     try:
         if memory_limit:
@@ -295,7 +460,7 @@ def _child(overlay: str, root: str, files: dict, tests: list[str], limits: dict,
             except (ValueError, OSError):
                 pass
         build_overlay(overlay, root, dict(files))
-        _rehome_modules(root, overlay, warm)
+        _rehome_modules(root, overlay, warm or bool(partial))
         os.chdir(overlay)
         sys.path[:] = [overlay] + [p for p in sys.path if os.path.realpath(p or ".") != os.path.realpath(root) and p not in ("", ".")]
         sys.dont_write_bytecode = True
@@ -306,6 +471,9 @@ def _child(overlay: str, root: str, files: dict, tests: list[str], limits: dict,
         sys.stdout = open(os.devnull, "w")
         sys.stderr = open(os.devnull, "w")
         import importlib
+
+        if partial:
+            result["partial"] = _partial_refresh(partial)
 
         from selector import runner
         from selector.runner import run_tests
@@ -425,11 +593,12 @@ def _raise_timeout(signum, frame):
 
 
 class Job:
-    def __init__(self, key, files, tests, limits, check_modules, budget, warm=False, probes=None, groups=None):
+    def __init__(self, key, files, tests, limits, check_modules, budget, warm=False, probes=None, groups=None, partial=None):
         # groups: [(fixture -> case ordinals to keep, [test ids])], run in order in
         # the same child; None runs `tests` with every case.
         self.groups = groups
         self.warm = warm
+        self.partial = partial  # patched preloaded modules: refresh only what depends on them
         self.probes = probes
         self.key = key
         self.files = files
@@ -471,7 +640,7 @@ def run_jobs(jobs: list[Job], root: str, tmp_base: str, parallel: int, deadline:
                 os.close(read_fd)
                 code = 0
                 try:
-                    _child(overlay, root, job.files, job.tests, job.limits, job.check_modules, write_fd, memory_limit, job.warm, job.probes, job.groups)
+                    _child(overlay, root, job.files, job.tests, job.limits, job.check_modules, write_fd, memory_limit, job.warm, job.probes, job.groups, job.partial)
                 except BaseException:  # noqa: BLE001
                     code = 1
                 os._exit(code)
@@ -516,7 +685,8 @@ def run_jobs(jobs: list[Job], root: str, tmp_base: str, parallel: int, deadline:
                 shutil.rmtree(os.path.join(tmp_base, f"ov_{job.key}"), ignore_errors=True)
                 if log:
                     rss = usage.ru_maxrss / (1 << 20 if sys.platform == "darwin" else 1 << 10)  # MB
-                    log(f"verify {job.key}: {len(job.tests)} tests, cpu {job.cpu:.2f}s wall {job.wall:.2f}s rss {rss:.0f}MB -> "
+                    log(f"verify {job.key}: {len(job.tests)} tests, cpu {job.cpu:.2f}s wall {job.wall:.2f}s rss {rss:.0f}MB"
+                        f"{'' if not job.partial else (' partial' if job.result and job.result.get('partial') else ' partial-fallback')} -> "
                         f"{'none' if job.result is None else len(job.result.get('failed', []))} failed"
                         f"{' ERROR ' + str(job.result.get('error')) if job.result and job.result.get('error') else ''}"
                         f"{' IMPORT ' + str(list(job.result.get('import_errors', {}))) if job.result and job.result.get('import_errors') else ''}")
