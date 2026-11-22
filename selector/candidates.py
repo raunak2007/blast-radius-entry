@@ -18,6 +18,28 @@ from .patch import FileChange, apply_hunks
 from . import tokcore
 
 PYTEST_CONFIG = {"pytest.ini", "tox.ini", "setup.cfg", "pyproject.toml", "conftest.py"}
+# Readers of the TPC fixtures that loop over cases, and what each takes from every case
+# (meta, sql, expected), as read from the tests at the pinned commit:
+#   "pair"  test_optimizer's check_file: the whole case
+#   "sql_expected"  test_optimized_tpch: duckdb runs the input and the expected output
+#   "exec"  test_execute_tpc*: parse_one(input) for every case and, if its meta says
+#           execute, the Python executor's rows against duckdb's on that input
+# Every other TestExecutor test only needs setUpClass, which loads both files with
+# load_sql_fixture_pairs. (Same rule as raunak2007/blast-radius-entry's FIXTURE_VIEWS.)
+FIXTURE_VIEWS = {
+    "tests/fixtures/optimizer/tpc-ds/tpc-ds.sql": {
+        "tests/test_optimizer.py::TestOptimizer::test_tpcds": "pair",
+        "tests/test_executor.py::TestExecutor::test_execute_tpcds": "exec",
+    },
+    "tests/fixtures/optimizer/tpc-h/tpc-h.sql": {
+        "tests/test_optimizer.py::TestOptimizer::test_tpch": "pair",
+        "tests/test_executor.py::TestExecutor::test_optimized_tpch": "sql_expected",
+        "tests/test_executor.py::TestExecutor::test_execute_tpch": "exec",
+    },
+}
+FIXTURE_LOAD_CLASS = "tests/test_executor.py::TestExecutor::"
+# test sources whose change could change how the cases above are read or used
+FIXTURE_READER_FILES = {"tests/helpers.py", "tests/test_executor.py", "tests/test_optimizer.py", "tests/__init__.py"}
 # Class-level dicts whose string keys are SQL text (function names, keywords...).
 
 
@@ -91,6 +113,8 @@ class CandidateFinder:
         self.maps = maps
         self.root = repo_root
         self._py_files = None
+        self._helpers_space = None
+        self._changed_paths: set = set()
 
     def _read(self, rel: str) -> bytes | None:
         try:
@@ -105,6 +129,7 @@ class CandidateFinder:
 
     def analyze(self, changes: list[FileChange]) -> CommitCandidates:
         result = CommitCandidates()
+        self._changed_paths = {p for c in changes for p in (c.path, c.old_path) if p}
         try:
             self._tokcore_on = self._tokcore_enabled(changes)
         except Exception:  # noqa: BLE001 - only a narrowing: off
@@ -196,7 +221,77 @@ class CandidateFinder:
                 report.detail = "only blank or -- comment lines changed"
                 return report
             report.data = maps.open_mask(old_rel)
+            if old_rel in FIXTURE_VIEWS and report.data:
+                try:
+                    narrowed = self._fixture_view_mask(old_rel, old_raw, new_text, report.data)
+                except Exception:  # noqa: BLE001 - only a narrowing: keep every reader
+                    narrowed = None
+                if narrowed is not None:
+                    report.detail = "TPC fixture: readers whose view of a case changed"
+                    report.data = narrowed
         return report
+
+    def _fixture_pairs(self, raw: bytes):
+        """The cases of a fixture file's bytes, by the pinned tests/helpers.py's own
+        load_sql_fixture_pairs (reading these bytes as its open() would)."""
+        if self._helpers_space is None:
+            path = os.path.join(self.root, "tests", "helpers.py")
+            with open(path, encoding="utf-8") as handle:
+                source = handle.read()
+            space = {"__name__": "br_fixture_helpers", "__file__": path}
+            exec(compile(source, path, "exec"), space)
+            self._helpers_space = space
+        space = self._helpers_space
+        space["open"] = lambda *args, **kwargs: io.TextIOWrapper(io.BytesIO(raw), encoding=kwargs.get("encoding"))
+        try:
+            return list(space["load_sql_fixture_pairs"]("x.sql"))
+        finally:
+            del space["open"]
+
+    def _fixture_view_mask(self, rel, old_raw, new_text, opens):
+        """Readers of a TPC fixture whose view of some case changed, or None (keep all).
+
+        Each reader of tpc-h.sql / tpc-ds.sql at the pinned commit takes a fixed part of
+        every case (FIXTURE_VIEWS); every other TestExecutor test only needs its
+        setUpClass, which parses both files with load_sql_fixture_pairs and stores the
+        lists (still loading = still passing). Any other reader keeps the file-level rule.
+        Off when the commit touches the code that reads the cases."""
+        if old_raw is None or new_text is None or self._changed_paths & FIXTURE_READER_FILES:
+            return None
+        old = self._fixture_pairs(old_raw)
+        try:
+            new = self._fixture_pairs(new_text.encode("utf-8"))
+        except Exception:  # noqa: BLE001 - the file no longer loads: setUpClass fails
+            return None
+        views = FIXTURE_VIEWS[rel]
+        n = max(len(old), len(new))
+        old_c = old + [None] * (n - len(old))
+        new_c = new + [None] * (n - len(new))
+
+        def view(kind, case):
+            if case is None:
+                return None
+            meta, sql, expected = case
+            if kind == "pair":
+                return case
+            if kind == "sql_expected":
+                return sql, expected
+            return meta.get("execute"), sql  # "exec": parse_one(sql), mp_execute(expr, meta)
+
+        changed_kind = {kind: any(view(kind, old_c[i]) != view(kind, new_c[i]) for i in range(n))
+                        for kind in set(views.values())}
+        out = 0
+        for i, node in enumerate(self.maps.tests):
+            bit = 1 << i
+            if not opens & bit:
+                continue
+            kind = views.get(node)
+            if kind is not None:
+                if changed_kind[kind]:
+                    out |= bit
+            elif "[" in node or not node.startswith(FIXTURE_LOAD_CLASS):
+                out |= bit  # per-case pseudo-tests, and readers we do not model
+        return out
 
     @staticmethod
     def _sql_fixture_noop(rel, old_raw, new_text) -> bool:
