@@ -1,68 +1,23 @@
-# Blast Radius entry
+# blast-radius
 
-Picks the sqlglot tests each patch can break, then packs them onto workers.
+Entry for the RWX "Blast Radius" track of the Builders Buildathon: given a patch to
+[sqlglot](https://github.com/tobymao/sqlglot) (pinned commit `eb11aec4`), choose which
+tests to run and how to split them across up to 8 workers.
 
-**Sample set (30 commits):** 97.3 s simulated, 0 misses, about 3 s of CPU. The starter scores 1210.5 s.
+## Approach
+Maps derived from the pinned sqlglot commit (coverage, imports, fixtures) pick a
+candidate set. There is no table from a patch, or from a kind of edit, to the tests
+it breaks. A docstring edit does not select tests: the scored suite does not run doctests.
+An unparsable leaf dialect, parser, or generator module selects the tests that load
+that module (the load map is imports, fixture headers, and covered loader lines).
 
-## How it decides
+- `blast/patch.py`: strict unified-diff parser and applier (anything odd -> run everything).
+- `blast/split.py`: picks the worker count k (1..8) that minimises busiest-load + 2k.
+- `selector.py`: AST-level classification of each patch.
 
-Every map comes from running sqlglot's own tests at the pinned commit (`eb11aec4`), which the track rules allow. No patch or answer file is used to build anything.
+Status: coverage, semantic diff, a dialect-module load map, plain KEYWORDS narrowing, clean side-effect test narrowing, redundant assignment elimination, repeated statements whose import fingerprint does not change, version compares that a 3-tuple cannot distinguish, and numeric-escape values narrowed to tests that write the escape. test_execute_tpcds is dropped when its DuckDB SQL and optimized tree match, and also when only a few executed queries differ and those frames still match DuckDB. The patch must stay out of the executor. test_max_nodes is dropped when a depth-100 prefix of its statement has the same node count as the pristine parser and the limit error still names the limit. A renamed keyword, SQL function, or clause name keeps only the tests that spell it. The short runner is off unless BR_RUN=1.
 
-- **Comment-only hunks** (comments or blank lines outside strings) change nothing Python runs, so they select nothing.
-- **A changed statement inside a function** selects the tests that executed it (per-test line coverage). For a statement spread over several lines, the function is compiled before and after the edit and only the lines holding changed instructions count (a jump whose target moved counts where it stands), so a short-circuited condition or an untaken branch on its own line doesn't pull in every test that ran the statement.
-- **A changed class attribute, or a new method** selects the tests that used that class: the dialects it serves (and their subclasses), or the expression type and its subclasses.
-- **A changed fixture or data file** selects the tests that opened it.
-- **TPC-H and TPC-DS query files are read case by case.** Both versions of `tpc-h.sql`/`tpc-ds.sql` are split into (meta, input, expected) cases by the tests' own `load_sql_fixture_pairs` (executed from `tests/helpers.py`). A reader is selected only if a case it reads changed: `test_tpch`/`test_tpcds` read whole cases, `test_optimized_tpch` inputs and expected outputs, `test_execute_tpch`/`test_execute_tpcds` the `execute` meta and the input. The rest of `TestExecutor` only needs `setUpClass` to load both files, so it is dropped while the new file still loads. If the new file doesn't load, or the commit also edits `tests/helpers.py`, `test_executor.py` or `test_optimizer.py`, every reader stays.
-- **A changed case of `test_execute_tpc*` is re-run the test's way.** Unless the rest of the commit already selects the test, a forked check on the patched sources parses and pickles each changed input as the test does; a case the meta doesn't execute then passes. An executed TPC-DS case passes if it parses to the same tree as before. Otherwise the check runs sqlglot's executor on the recorded tables (memory-capped), then duckdb on its duckdb transpilation over the same CSV views `setUpClass` creates, and compares the frames with the test's `assert_frame_equal(check_dtype=False, check_index_type=False)`. A frame-shape mismatch fails before pandas is imported. Any error, any difference or running past the budget keeps the test. Most corrupted inputs fail at the parse (about 0.07 s); a case that passes costs about 3 s, against 21.2 s for the test.
-- **A changed test file** selects the edited tests (or their class or file).
-- **Anything risky** runs every test: a patch that won't apply, a syntax error, a module-level change other modules import, config files, renames and deletions.
+Libraries: the standard library, plus DuckDB, pandas, and numpy so the TPC-DS frames can be checked.
+`make sample` builds the image and scores the 30 sample commits.
 
-- **Cheap selections are checked by running them.** When the selected tests cost less to run than to schedule (each worker costs 2 s), they run on the patched sources in a forked child (patched imports, process pools forked and capped at 2 workers) and the ones that pass are dropped. Anything that crashes, times out or can't run faithfully stays selected. The parent freezes its heap before forking (`gc.freeze()`), so a check's collector never walks, or copies the pages of, the maps and imports it inherited, and checks collect young objects less often.
-- **Class-attribute edits are narrowed** to the tests that read the attribute, ran the edited lambda, or built the `exp.X` keyed by the edited dict entry. For the parser's function tables, an entry is narrowed to the tests that looked up its old or new name unless an import-time parse looks that name up or something writes it at runtime (`tools/build_key_level.py`). Tokenizer `KEYWORDS` entries likewise, unless the key is popped or checked at import time, looked up by a tokenizer while modules import, or has a space or single-token character (the keyword trie) (`tools/build_keywords_level.py`).
-
-- **The 21 s TPC-DS test is replayed instead of run** when every change is ordinary function code in `sqlglot/` that the test's table setup doesn't run. Only the queries whose recorded coverage reaches a changed line are replayed, each checked by what the line can affect for that query. If it only runs in parsing, `optimize()` or the duckdb transpilation, the optimizer output is compared. If it also runs in the debug-log rendering `execute()` does next (whose text is dropped), that rendering must not raise or change the expression. If it runs in planning or execution, the full result is compared. The duckdb transpilation is always compared. An optimizer output that differs only in node metadata counts as unchanged for queries whose rendering, planning and execution never read metadata (all 57, checked by `tools/build_tpcds_meta.py`). Any difference, error or timeout keeps the test, and the replay only happens when its estimated CPU is well under the time it saves.
-
-- **Recorded operands** (`tools/operand_plugin.py`, a second profiled run of the suite at the pinned commit). Every single-operator comparison in `sqlglot/` is compiled to record the operands it sees per test, and every module- or class-level dict literal is wrapped when it is created, so its reads are recorded per key even through a reference another object keeps (the tokenizer holds on to `NUMERIC_ESCAPES`), and reads made while modules import are recorded so those keys are refused. An edit that only swaps a comparison's operator or changes a literal operand is re-evaluated on those operands, and tests whose recorded results can't change are dropped. A one-line edit to one dict entry's plain value, where our own per-name key index gives up, selects the tests that read that key or read the dict in bulk. Both files are packed per source file so a run unpickles only what its commits touch.
-
-- **Import-time effects are judged per instruction.** A statement in a function that also runs at import (a builder called in a class body) only widens the selection to everything importing the module when a changed instruction itself ran at import. The body of a lambda or closure such a builder returns never runs then, so an edit there selects the tests that ran it. Every line a fresh process runs while importing all of sqlglot and its tests is in the map's import-time lines, which is what this relies on.
-
-- **A changed def line** (a default value, say) selects the tests that ran the function, and, when its body also runs while modules are imported, everything an import-time change selects: a default the import-time template parses take differently can stop a module importing at all. Overload stubs (`...` bodies) are exempt.
-
-- **Import-time state is checked, not assumed changed.** When a changed function line also ran while modules were imported (the parser runs while the DuckDB generator parses its SQL templates), the selection is normally widened to everything importing them. If the narrower selection would save at least 3 s, a fresh interpreter (fixed hash seed, CPU and memory capped) imports every sqlglot module and the six test modules whose import runs sqlglot code, once with the patch and once without, and fingerprints all module and class state: values, containers, expression trees, function defaults and closures, the objects they reach, and which imports fail. Code is left out, since what runs later is what coverage decides; tuples are compared by value and class-only sequences by name, since their identity and order follow memory addresses. Equal fingerprints mean the edit only matters where its lines run in tests, and the commit is planned (TPC-DS replay included) as ordinary function code.
-
-- **A changed class constant** (an UPPER_CASE class attribute's literal value, for names no import-time code reads, or, when some does, after the import-time state check finds nothing changed but that constant) selects the tests whose reads of it resolved to that class: `tools/attrs_plugin.py` replaces every such constant with a descriptor that returns the same value and records the reader, so a read through a subclass that doesn't override it counts, and one through a subclass that does doesn't. `ClickHouseGenerator.TABLE_HINTS` goes from the 736 tests that read any `TABLE_HINTS` to none.
-
-- **A changed default value** selects only the tests in which some call left that parameter out (`tools/defaults_plugin.py`, sys.monitoring on every module- and class-level function with defaults; an explicit argument that is the very same object counts as left out).
-
-- **Checks run on commits that also change a data file** (a fixture next to a code edit), on the tests that never open the changed file; its readers stay selected.
-
-- **A TPC-DS replay child may allocate at most 1.25 GB beyond what it inherits**, so an edit that makes one query's intermediate results explode fails its own replay instead of exhausting the run's 4 GB. (Test checks are left uncapped: duckdb reserves far more address space than it uses.)
-
-- **Code that runs while other modules import** (the trie builder every tokenizer class calls, the error formatter a dialect's import-time parse reaches) selects every test that uses those modules, a module whose import imports them, or imports one of them while it runs (`from sqlglot.dialects import X` inside a test) (`import_users.pkl.gz`), and the generator's first-use dispatch table selects every test that builds a generator.
-
-Tests are packed longest-first, trying 1 to 8 workers and keeping the cheapest.
-
-## Files
-
-| File | What it is |
-| --- | --- |
-| `selector.py` | The program the scorer runs (stdlib only) |
-| `blast_map.pkl.gz` | Coverage, file reads, and dialect/expression usage per test |
-| `tpcds.pkl.gz` | Per-query coverage, CPU and pristine outputs of `test_execute_tpcds`, plus its tables (`tools/build_tpcds.py`, then `tools/build_tpcds_ctx.py`, which records each query's coverage from a fresh pool worker, split by what checks each part) |
-| `attr_owners.pkl.gz` | Per class constant, the tests whose reads resolved to it (`tools/attrs_plugin.py`, `tools/build_attr_owners.py`) |
-| `defaults.pkl.gz` | Per function and defaulted parameter, the tests in which a call left it at its default (`tools/defaults_plugin.py`, `tools/build_defaults.py`) |
-| `operands.pkl.gz`, `dictreads.pkl.gz` | Per test, the operands each comparison saw and the keys each module/class-level dict literal gave out (`tools/operand_plugin.py`, `tools/build_operands.py`, repacked by `tools/build_lazy.py`) |
-| `import_users.pkl.gz` | Function-body lines that run while other modules are imported, with the modules that affects (`tools/build_import_users.py`) |
-| `sqlglot_src.tar.gz` | The pinned commit's Python sources, which patches are applied to |
-| `tools/` | Rebuilds both data files from the pinned commit (`tools/build_map.sh`) |
-| `Makefile`, `score.py`, `requirements.lock` | From the starter kit, unchanged |
-
-The build needs no network beyond the base image.
-
-## Test locally
-
-Copy the kit's `sample/` folder in (it's git-ignored), then:
-
-```sh
-make sample
-```
+License: MIT.

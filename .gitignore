@@ -1,3 +1,8 @@
-sample/
+.cache/
 output.jsonl
+err.log
 __pycache__/
+*.pyc
+.claude/settings.local.json
+.claude/stop_hook.sh
+.claude/STOP
