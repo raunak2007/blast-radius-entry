@@ -4628,8 +4628,10 @@ def _zygote_test_imports(jobs, deadline):
     import importlib
     import select
     import signal
+    import site
     import time
 
+    site.main()  # the test modules import third-party packages (setuptools, duckdb, pandas)
     for name in ("numpy", "pandas", "pandas.testing", "duckdb"):  # what the heavy test modules import
         try:
             importlib.import_module(name)
