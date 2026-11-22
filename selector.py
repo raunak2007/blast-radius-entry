@@ -47,6 +47,8 @@ OPERANDS_DATA = Path(os.environ.get("BR_OPERANDS", str(Path(__file__).with_name(
 DICTREADS_DATA = Path(os.environ.get("BR_DICTREADS", str(Path(__file__).with_name("dictreads.pkl.gz"))))
 DEFAULTS_DATA = Path(os.environ.get("BR_DEFAULTS", str(Path(__file__).with_name("defaults.pkl.gz"))))
 ATTR_OWNERS_DATA = Path(os.environ.get("BR_ATTR_OWNERS", str(Path(__file__).with_name("attr_owners.pkl.gz"))))
+TPCDS_ENV_DATA = Path(os.environ.get("BR_TPCDS_ENV", str(Path(__file__).with_name("tpcds_env.pkl.gz"))))
+ENV_FILE = "sqlglot/executor/env.py"
 IMPORT_LAMBDAS_DATA = Path(os.environ.get("BR_IMPORT_LAMBDAS", str(Path(__file__).with_name("import_lambdas.pkl.gz"))))
 CMP_NAMES = {ast.Is: "is", ast.IsNot: "is not", ast.Eq: "==", ast.NotEq: "!=", ast.Lt: "<", ast.LtE: "<=",
              ast.Gt: ">", ast.GtE: ">=", ast.In: "in", ast.NotIn: "not in"}
@@ -850,6 +852,10 @@ class Selector:
                 if st["scope"] == "class":
                     return self.class_change(rel, idx, st, line, blk) & mask
                 return mask
+        if rel == ENV_FILE and st["kind"] == "stmt" and st["scope"] == "module" and blk is not None:
+            entry = self.env_entry_mask(rel, idx, st, line, blk)
+            if entry is not None:
+                return entry
         self.touched.append((rel, lo, hi, "other"))
         if st["kind"] == "def":
             body_lo, body_hi = st["full"]
@@ -896,6 +902,57 @@ class Selector:
             if entry is not None:
                 return entry | self.subprocess
         return self.module_fallback(rel, idx, st["node"])
+
+    # ---- an edit to entries of the executor's ENV table
+
+    def env_entry_mask(self, rel, idx, st, line, blk):
+        """A line-for-line edit of sqlglot.executor.env.ENV that changes only some entries
+        (a key, or a value: `null_if_any(ord)`, a lambda, `PYTHON_VERSION >= (3, 8)`). ENV is
+        read only by the executor, which copies it into the globals its generated code runs
+        with, so only lookups of the edited keys can see the change: the tests that read those
+        keys (every executor test, through the copy) or the whole dict, from the wrapped-literal
+        run. Unless the new value raises while the module is imported, which would break every
+        importer: the commit then keeps its usual (module-wide) selection, until a check child
+        has imported the patched module (`guard_mask`). None if not provable."""
+        if not blk["removed"] or len(blk["removed"]) != len(blk["added"]) or self.new_idx is None:
+            return None
+        node = st["node"]
+        if not (isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name)
+                and node.targets[0].id == "ENV" and isinstance(node.value, ast.Dict)):
+            return None
+        new_line = blk["added"][blk["removed"].index(line)]
+        new_st, _ = self.new_idx.stmt_at(new_line)
+        new = new_st["node"] if new_st is not None and new_st["scope"] == "module" else None
+        if not (isinstance(new, ast.Assign) and len(new.targets) == 1 and isinstance(new.targets[0], ast.Name)
+                and new.targets[0].id == "ENV" and isinstance(new.value, ast.Dict)):
+            return None
+        a, b = node.value, new.value
+        if len(a.keys) != len(b.keys):
+            return None
+        keys = set()
+        for ka, va, kb, vb in zip(a.keys, a.values, b.keys, b.values):
+            if ka is None or kb is None:
+                return None
+            if ast.dump(ka) == ast.dump(kb) and ast.dump(va) == ast.dump(vb):
+                continue
+            for k in (ka, kb):
+                if not (isinstance(k, ast.Constant) and isinstance(k.value, str)):
+                    return None
+                keys.add(k.value)
+        if not keys:
+            return None
+        ops = load_dictreads()
+        d = ops.dict_at(rel, a.lineno, a.col_offset) if ops is not None else None
+        if d is None or d["import_bulk"] or any(r == ("?",) or (r[0] == "v" and r[2] in keys) for r in d["import_keys"]):
+            return None
+        m = d["bulk"]
+        for r, mask in d["reads"].items():
+            if r == ("?",) or (len(r) == 3 and r[0] == "v" and r[2] in keys):
+                m |= mask
+        self.guard_mask |= self.module_fallback(rel, idx, node)
+        self.env_keys |= keys
+        self.touched.append((rel, node.lineno, node.end_lineno or node.lineno, "env"))
+        return m | self.subprocess
 
     # ---- an edit inside the body of a module- or class-level lambda
 
@@ -1858,6 +1915,8 @@ class Selector:
         self.verifiable = True
         self.data_files = set()  # changed files we don't overlay: their readers can't be checked
         self.state_masks = []  # bindings the import-time state check leaves out (the edited ones)
+        self.guard_mask = 0  # the selection to fall back to unless a check child imports the patch
+        self.env_keys = set()  # executor ENV keys whose entries changed
         self.import_widened = False
         self.data_mask = 0
         self.touched = []
@@ -2016,7 +2075,7 @@ class Selector:
             if rel in self.data_files or (rel.startswith("tests/") and rel.endswith(".py") and lo == hi == 0
                                           and rel not in TPCDS_TEST_MODULES):
                 continue
-            if kind not in ("function", "lambda") or not rel.startswith("sqlglot/"):
+            if kind not in ("function", "lambda", "env") or not rel.startswith("sqlglot/"):
                 return None
             code.append((rel, lo, hi, kind))
         if not code:
@@ -2029,6 +2088,16 @@ class Selector:
             lines = sets.get(rel)
             return bool(lines) and any(ln in lines for ln in range(lo, hi + 1))
 
+        env_queries = None
+        if any(kind == "env" for *_, kind in code):
+            # an ENV entry reaches only the queries whose execution looks its key up (calls
+            # it, or names it in generated code: tools/build_tpcds_env.py)
+            env_data = load_tpcds_env()
+            if env_data is None or not self.env_keys:
+                return None
+            env_queries = {i for i, u in env_data["queries"].items()
+                           if self.env_keys & (set(u["called"]) | set(u["names"]))}
+        code = [c for c in code if c[3] != "env"]
         spans = [(rel, lo, hi) for rel, lo, hi, _ in code]
         # a lambda's lines run in the setup when it's created (at import); the lambdas allowed
         # here are never called there (tools/build_import_lambdas.py)
@@ -2043,11 +2112,12 @@ class Selector:
         for q in data["queries"]:
             in_exec = any(hits(q["exec_sets"], *s) for s in spans)
             in_log = any(hits(q["log_sets"], *s) for s in spans)
-            if not (in_exec or in_log or any(hits(q["front_sets"], *s) for s in spans)):
+            in_env = env_queries is not None and q["index"] in env_queries
+            if not (in_exec or in_log or in_env or any(hits(q["front_sets"], *s) for s in spans)):
                 continue
-            modes[q["index"]] = "full" if in_exec or digest_hit else ("log" if in_log else "front")
+            modes[q["index"]] = "full" if in_exec or in_env or digest_hit else ("log" if in_log else "front")
             reached.append(q)
-        if not reached:
+        if not reached and env_queries is None:
             return None  # the test runs this code somewhere the replay doesn't: keep it
 
         def cost(q):
@@ -2063,7 +2133,7 @@ class Selector:
         # The child stops and keeps the test once it has used this much CPU. It also re-runs
         # to the end the front queries whose optimizer output changed, if that still fits,
         # since a different plan often gives the same rows.
-        budget = TPCDS_BUDGET * saving
+        budget = max(TPCDS_BUDGET * saving, estimate + 1.0)
         mode = "full" if full == len(reached) else "front"
         log(f"TPC-DS replay planned: {len(reached)} queries ({full} full, "
             f"{sum(1 for m in modes.values() if m == 'log')} with the log line), "
@@ -2234,6 +2304,21 @@ _ATTR_OWNERS = None
 
 
 _IMPORT_LAMBDAS = None
+_TPCDS_ENV = None
+
+
+def load_tpcds_env():
+    """Per executed TPC-DS query, the executor ENV keys its execution calls and the names its
+    generated code refers to (tools/build_tpcds_env.py)."""
+    global _TPCDS_ENV
+    if _TPCDS_ENV is None:
+        try:
+            with gzip.open(TPCDS_ENV_DATA, "rb") as fh:
+                _TPCDS_ENV = pickle.load(fh)
+        except Exception as error:
+            log(f"no TPC-DS ENV data ({error!r}); ENV edits keep the test")
+            _TPCDS_ENV = False
+    return _TPCDS_ENV or None
 
 
 def load_import_lambdas():
@@ -2611,6 +2696,8 @@ def child_tpcds(patched, plan, wfd):
     if debug:
         print(f"tpcds child: {plan.get('commit')} same={same} spent={spent():.2f}s", file=sys.stderr)
     shutil.rmtree(overlay, ignore_errors=True)
+    if plan.get("keep"):
+        same = False  # only the import was checked
     os.write(wfd, json.dumps([] if same else [TPCDS_TEST]).encode())
     os.close(wfd)
 
@@ -3734,7 +3821,9 @@ def main():
         return {"chosen": chosen, "patched": dict(selector.patched), "verifiable": selector.verifiable,
                 "unreadable": set(to_numbers(selector.data_mask)), "touched": list(selector.touched),
                 "data_files": set(selector.data_files), "import_widened": selector.import_widened,
-                "state_masks": list(selector.state_masks), "fixture_checks": dict(selector.fixture_checks)}
+                "state_masks": list(selector.state_masks), "fixture_checks": dict(selector.fixture_checks),
+                "env_keys": set(selector.env_keys),
+                "guard": to_numbers(selector.guard_mask) if selector.guard_mask else None}
 
     # 1. selections, and the commits whose selection an unchanged import-time state would shrink
     snaps, narrow, state_jobs = {}, {}, {}
@@ -3748,7 +3837,8 @@ def main():
         except Exception as error:
             log(f"{commit}: running every test ({error})")
             snap = {"chosen": every, "patched": {}, "verifiable": False, "unreadable": set(), "touched": [],
-                    "data_files": set(), "import_widened": False, "state_masks": [], "fixture_checks": {}}
+                    "data_files": set(), "import_widened": False, "state_masks": [], "fixture_checks": {},
+                    "env_keys": set(), "guard": None}
         snaps[commit] = snap
         if RUN and snap["verifiable"] and snap["import_widened"] and not snap["data_files"] and snap["patched"]:
             try:
@@ -3764,6 +3854,7 @@ def main():
                     # as ordinary function code the commit may also get a TPC-DS replay
                     selector.patched, selector.verifiable = alt["patched"], alt["verifiable"]
                     selector.touched, selector.data_files = alt["touched"], alt["data_files"]
+                    selector.env_keys = alt["env_keys"]
                     if selector.tpcds_plan(alt["chosen"], duration, tpcds_number):
                         gain += (pack_cost(alt["chosen"], duration)
                                  - pack_cost([n for n in alt["chosen"] if n != tpcds_number], duration)) // 2
@@ -3781,6 +3872,7 @@ def main():
     # 2. the checks each selection is worth
     answers = {}
     jobs, tpcds_jobs = [], []
+    guards = {}  # commit -> the selection it falls back to unless its TPC-DS child imports the patch
     tpcds_number = number_of.get(TPCDS_TEST)
     genmem_number = number_of.get(GENMEM_TEST)
     for commit, snap in snaps.items():
@@ -3788,14 +3880,25 @@ def main():
         if selector is not None:
             selector.patched, selector.verifiable = patched, verifiable
             selector.touched, selector.data_files = snap["touched"], snap["data_files"]
+            selector.env_keys = snap["env_keys"]
+        if snap["guard"] is not None:
+            wide = sorted(set(chosen) | set(snap["guard"]))
+            if tpcds_number not in chosen:
+                chosen = wide  # (the narrowed selection always has it: it reads ENV)
+            guards[commit] = wide
         answers[commit] = chosen
         if RUN and verifiable and selector is not None and tpcds_number in chosen:
             plan = selector.tpcds_plan(chosen, duration, tpcds_number)
+            if not plan and commit in guards:
+                # too dear to replay: the child only imports the patched sources and keeps the test
+                plan = {"mode": "full", "modes": {}, "queries": [], "estimate": 1.0, "budget": 10.0, "keep": True}
             if plan:
                 plan["commit"] = commit
                 tpcds_jobs.append(((commit, "tpcds"), patched, [TPCDS_TEST],
                                    {"__tpcds__": plan, TPCDS_TEST: duration[tpcds_number] / 1000},
                                    10 + max(3 * plan["estimate"], 1.5 * plan["budget"])))
+        if commit in guards and not any(job[0] == (commit, "tpcds") for job in tpcds_jobs):
+            answers[commit] = chosen = guards.pop(commit)  # nothing will import the patch
         if RUN and verifiable and selector is not None and snap.get("fixture_checks"):
             fplan = fixture_plan(snap["fixture_checks"], chosen, duration, number_of)
             if fplan:
@@ -3830,6 +3933,9 @@ def main():
         import gc
         gc.freeze()
         results = run_checks(jobs, budget)
+        for commit in list(guards):
+            if results.get((commit, "tpcds")) is None:  # the patched sources didn't import, or no verdict
+                answers[commit] = guards.pop(commit)
         for key, _, test_ids, _, _ in jobs:
             commit = key[0] if isinstance(key, tuple) else key
             failed = results.get(key)
