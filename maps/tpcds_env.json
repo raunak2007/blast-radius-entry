@@ -1,0 +1,1004 @@
+{
+"version": 1,
+"source": "tools/build_tpcds_env.py (raunak2007/blast-radius-entry 1a930fc) on the pinned commit, scorer image python 3.13",
+"queries": {
+"0": {
+"called": [
+"EQ"
+],
+"names": [
+"AND",
+"AVG",
+"EQ",
+"LT",
+"MUL",
+"ORDERED",
+"SUM",
+"scope"
+]
+},
+"1": {
+"called": [
+"EQ"
+],
+"names": [
+"AND",
+"DIV",
+"EQ",
+"ORDERED",
+"ROUND",
+"SUB",
+"SUM",
+"scope"
+]
+},
+"2": {
+"called": [
+"EQ"
+],
+"names": [
+"AND",
+"EQ",
+"ORDERED",
+"SUM",
+"scope"
+]
+},
+"3": {
+"called": [
+"AND"
+],
+"names": [
+"ADD",
+"AND",
+"DIV",
+"EQ",
+"GT",
+"ORDERED",
+"SUB",
+"SUM",
+"scope"
+]
+},
+"5": {
+"called": [
+"AND",
+"AVG",
+"EQ"
+],
+"names": [
+"AND",
+"AVG",
+"COUNT",
+"EQ",
+"GT",
+"GTE",
+"MUL",
+"ORDERED",
+"scope"
+]
+},
+"6": {
+"called": [
+"AND",
+"EQ",
+"OR"
+],
+"names": [
+"AND",
+"AVG",
+"EQ",
+"OR",
+"ORDERED",
+"scope"
+]
+},
+"8": {
+"called": [
+"AND",
+"AVG",
+"COUNT",
+"EQ",
+"GT",
+"GTE",
+"LTE"
+],
+"names": [
+"AND",
+"AVG",
+"COUNT",
+"EQ",
+"GT",
+"GTE",
+"LTE",
+"scope"
+]
+},
+"9": {
+"called": [
+"AND",
+"EQ",
+"GTE",
+"IN",
+"LTE",
+"NOT"
+],
+"names": [
+"AND",
+"COUNT",
+"EQ",
+"GTE",
+"IN",
+"LTE",
+"NOT",
+"OR",
+"ORDERED",
+"scope"
+]
+},
+"10": {
+"called": [
+"AND"
+],
+"names": [
+"AND",
+"DIV",
+"EQ",
+"GT",
+"LT",
+"ORDERED",
+"SUB",
+"SUM",
+"scope"
+]
+},
+"14": {
+"called": [
+"AND",
+"EQ"
+],
+"names": [
+"AND",
+"EQ",
+"GT",
+"IN",
+"OR",
+"ORDERED",
+"SUBSTRING",
+"SUM",
+"scope"
+]
+},
+"16": {
+"called": [
+"EQ",
+"IN"
+],
+"names": [
+"AND",
+"AVG",
+"COUNT",
+"DIV",
+"EQ",
+"IN",
+"ORDERED",
+"STDDEVSAMP",
+"scope"
+]
+},
+"18": {
+"called": [
+"AND",
+"EQ"
+],
+"names": [
+"AND",
+"EQ",
+"NEQ",
+"ORDERED",
+"SUBSTRING",
+"SUM",
+"scope"
+]
+},
+"22": {
+"called": [
+"AND",
+"EQ",
+"IN",
+"LT",
+"MAX",
+"MUL",
+"SUM"
+],
+"names": [
+"AND",
+"COUNT",
+"EQ",
+"GT",
+"IN",
+"LT",
+"MAX",
+"MUL",
+"NOT",
+"SUBSTRING",
+"SUM",
+"scope"
+]
+},
+"23": {
+"called": [
+"AND",
+"AVG",
+"EQ",
+"MUL",
+"UPPER"
+],
+"names": [
+"AND",
+"AVG",
+"EQ",
+"LT",
+"MAX",
+"MUL",
+"SUM",
+"UPPER",
+"scope"
+]
+},
+"24": {
+"called": [
+"AND",
+"EQ",
+"GTE",
+"LTE"
+],
+"names": [
+"AND",
+"EQ",
+"GTE",
+"LTE",
+"MAX",
+"ORDERED",
+"scope"
+]
+},
+"25": {
+"called": [
+"AND",
+"EQ",
+"OR"
+],
+"names": [
+"AND",
+"AVG",
+"EQ",
+"OR",
+"ORDERED",
+"scope"
+]
+},
+"28": {
+"called": [
+"AND",
+"EQ",
+"GTE",
+"IN",
+"LTE"
+],
+"names": [
+"AND",
+"AVG",
+"EQ",
+"GTE",
+"IN",
+"LTE",
+"ORDERED",
+"scope"
+]
+},
+"30": {
+"called": [
+"AND"
+],
+"names": [
+"AND",
+"DIV",
+"EQ",
+"GT",
+"LT",
+"ORDERED",
+"SUM",
+"scope"
+]
+},
+"32": {
+"called": [
+"AND",
+"EQ",
+"IN"
+],
+"names": [
+"AND",
+"EQ",
+"IN",
+"NOT",
+"ORDERED",
+"SUM",
+"scope"
+]
+},
+"33": {
+"called": [
+"AND",
+"DIV",
+"EQ",
+"GT",
+"IN",
+"OR"
+],
+"names": [
+"AND",
+"COUNT",
+"DIV",
+"EQ",
+"GT",
+"GTE",
+"IN",
+"LTE",
+"OR",
+"ORDERED",
+"scope"
+]
+},
+"34": {
+"called": [
+"AND",
+"EQ",
+"LT",
+"NOT"
+],
+"names": [
+"AND",
+"AVG",
+"COUNT",
+"EQ",
+"LT",
+"MAX",
+"NOT",
+"OR",
+"ORDERED",
+"STDDEVSAMP",
+"scope"
+]
+},
+"37": {
+"called": [
+"AND",
+"COUNT",
+"GTE",
+"LTE"
+],
+"names": [
+"AND",
+"COUNT",
+"GTE",
+"LTE",
+"scope"
+]
+},
+"41": {
+"called": [
+"AND",
+"EQ"
+],
+"names": [
+"AND",
+"EQ",
+"ORDERED",
+"SUM",
+"scope"
+]
+},
+"42": {
+"called": [
+"EQ"
+],
+"names": [
+"AND",
+"EQ",
+"ORDERED",
+"SUM",
+"scope"
+]
+},
+"44": {
+"called": [
+"AND",
+"EQ",
+"IN"
+],
+"names": [
+"AND",
+"EQ",
+"IN",
+"NOT",
+"OR",
+"ORDERED",
+"SUBSTRING",
+"SUM",
+"scope"
+]
+},
+"45": {
+"called": [
+"AND",
+"EQ",
+"IN",
+"OR"
+],
+"names": [
+"AND",
+"EQ",
+"IN",
+"NEQ",
+"OR",
+"ORDERED",
+"SUM",
+"scope"
+]
+},
+"47": {
+"called": [
+"AND",
+"EQ",
+"GTE",
+"IN",
+"LTE",
+"OR",
+"SUM"
+],
+"names": [
+"AND",
+"EQ",
+"GTE",
+"IN",
+"LTE",
+"OR",
+"SUM",
+"scope"
+]
+},
+"49": {
+"called": [
+"AND",
+"EQ"
+],
+"names": [
+"AND",
+"EQ",
+"GT",
+"LTE",
+"ORDERED",
+"SUB",
+"SUM",
+"scope"
+]
+},
+"51": {
+"called": [
+"AND",
+"EQ"
+],
+"names": [
+"AND",
+"EQ",
+"ORDERED",
+"SUM",
+"scope"
+]
+},
+"53": {
+"called": [
+"AND",
+"EQ"
+],
+"names": [
+"ADD",
+"AND",
+"CAST",
+"COUNT",
+"DIV",
+"DType",
+"EQ",
+"GTE",
+"INT",
+"LTE",
+"MUL",
+"ORDERED",
+"SUM",
+"exp",
+"scope"
+]
+},
+"54": {
+"called": [
+"AND",
+"EQ"
+],
+"names": [
+"AND",
+"EQ",
+"ORDERED",
+"SUM",
+"scope"
+]
+},
+"55": {
+"called": [
+"AND",
+"EQ",
+"IN"
+],
+"names": [
+"AND",
+"EQ",
+"IN",
+"NOT",
+"ORDERED",
+"SUM",
+"scope"
+]
+},
+"58": {
+"called": [
+"AND",
+"GTE",
+"LTE"
+],
+"names": [
+"AND",
+"DIV",
+"EQ",
+"GTE",
+"LTE",
+"ORDERED",
+"SUB",
+"SUM",
+"scope"
+]
+},
+"59": {
+"called": [
+"AND",
+"EQ",
+"IN"
+],
+"names": [
+"AND",
+"EQ",
+"IN",
+"NOT",
+"ORDERED",
+"SUM",
+"scope"
+]
+},
+"61": {
+"called": [
+"AND",
+"GTE",
+"LTE"
+],
+"names": [
+"AND",
+"GT",
+"GTE",
+"LTE",
+"ORDERED",
+"SUB",
+"SUBSTRING",
+"SUM",
+"scope"
+]
+},
+"64": {
+"called": [
+"AND",
+"GTE",
+"LTE"
+],
+"names": [
+"AND",
+"AVG",
+"GTE",
+"LTE",
+"MUL",
+"ORDERED",
+"SUM",
+"scope"
+]
+},
+"65": {
+"called": [
+"AND",
+"EQ",
+"GTE",
+"IN",
+"LTE"
+],
+"names": [
+"AND",
+"DIV",
+"EQ",
+"GTE",
+"IN",
+"LTE",
+"MUL",
+"ORDERED",
+"SUM",
+"scope"
+]
+},
+"67": {
+"called": [
+"AND",
+"EQ",
+"GTE",
+"IN",
+"LTE",
+"OR"
+],
+"names": [
+"AND",
+"EQ",
+"GTE",
+"IN",
+"LTE",
+"NEQ",
+"OR",
+"ORDERED",
+"SUM",
+"scope"
+]
+},
+"68": {
+"called": [
+"AND",
+"EQ",
+"GTE",
+"IN",
+"LTE",
+"NOT"
+],
+"names": [
+"AND",
+"COUNT",
+"EQ",
+"GTE",
+"IN",
+"LTE",
+"NOT",
+"ORDERED",
+"scope"
+]
+},
+"70": {
+"called": [
+"AND",
+"EQ",
+"OR"
+],
+"names": [
+"AND",
+"EQ",
+"OR",
+"ORDERED",
+"SUM",
+"scope"
+]
+},
+"72": {
+"called": [
+"AND",
+"DIV",
+"EQ",
+"GT",
+"GTE",
+"IN",
+"LTE",
+"OR"
+],
+"names": [
+"AND",
+"COUNT",
+"DIV",
+"EQ",
+"GT",
+"GTE",
+"IN",
+"LTE",
+"OR",
+"ORDERED",
+"scope"
+]
+},
+"73": {
+"called": [
+"AND",
+"IN"
+],
+"names": [
+"AND",
+"DIV",
+"EQ",
+"GT",
+"IN",
+"LT",
+"ORDERED",
+"SUM",
+"scope"
+]
+},
+"74": {
+"called": [
+"AND",
+"EQ"
+],
+"names": [
+"AND",
+"CAST",
+"COALESCE",
+"DECIMAL",
+"DIV",
+"DType",
+"EQ",
+"LT",
+"ORDERED",
+"SUB",
+"SUM",
+"exp",
+"scope"
+]
+},
+"75": {
+"called": [],
+"names": [
+"AND",
+"COUNT",
+"ORDERED",
+"SUM",
+"scope"
+]
+},
+"77": {
+"called": [
+"AND"
+],
+"names": [
+"ADD",
+"AND",
+"COALESCE",
+"DIV",
+"EQ",
+"GT",
+"ORDERED",
+"ROUND",
+"SUM",
+"scope"
+]
+},
+"78": {
+"called": [
+"AND",
+"EQ",
+"GT",
+"GTE",
+"IN",
+"LTE",
+"OR"
+],
+"names": [
+"AND",
+"EQ",
+"GT",
+"GTE",
+"IN",
+"LTE",
+"OR",
+"ORDERED",
+"SUBSTRING",
+"SUM",
+"scope"
+]
+},
+"80": {
+"called": [
+"AND",
+"EQ"
+],
+"names": [
+"AND",
+"AVG",
+"EQ",
+"LT",
+"MUL",
+"ORDERED",
+"SUM",
+"scope"
+]
+},
+"82": {
+"called": [
+"AND",
+"IN",
+"NOT"
+],
+"names": [
+"ADD",
+"AND",
+"DIV",
+"IN",
+"MUL",
+"NOT",
+"ORDERED",
+"SUM",
+"scope"
+]
+},
+"83": {
+"called": [
+"AND",
+"EQ",
+"GTE",
+"LTE"
+],
+"names": [
+"AND",
+"EQ",
+"GTE",
+"LTE",
+"ORDERED",
+"SAFECONCAT",
+"scope"
+]
+},
+"84": {
+"called": [
+"EQ"
+],
+"names": [
+"AND",
+"AVG",
+"EQ",
+"GTE",
+"IN",
+"LTE",
+"OR",
+"ORDERED",
+"SUBSTRING",
+"scope"
+]
+},
+"86": {
+"called": [
+"AND",
+"COUNT",
+"GTE",
+"LTE"
+],
+"names": [
+"AND",
+"COUNT",
+"GTE",
+"LTE",
+"scope"
+]
+},
+"87": {
+"called": [
+"AND",
+"COUNT",
+"EQ",
+"LTE",
+"OR"
+],
+"names": [
+"AND",
+"COUNT",
+"EQ",
+"GTE",
+"LT",
+"LTE",
+"OR",
+"scope"
+]
+},
+"90": {
+"called": [
+"AND",
+"EQ",
+"LIKE",
+"OR"
+],
+"names": [
+"AND",
+"EQ",
+"LIKE",
+"OR",
+"ORDERED",
+"SUM",
+"scope"
+]
+},
+"92": {
+"called": [
+"AND",
+"EQ"
+],
+"names": [
+"AND",
+"EQ",
+"MUL",
+"NOT",
+"ORDERED",
+"SUB",
+"SUM",
+"scope"
+]
+},
+"95": {
+"called": [
+"AND",
+"COUNT",
+"EQ",
+"ORDERED"
+],
+"names": [
+"AND",
+"COUNT",
+"EQ",
+"GTE",
+"ORDERED",
+"scope"
+]
+},
+"96": {
+"called": [
+"AND",
+"GTE",
+"LTE",
+"SUM"
+],
+"names": [
+"AND",
+"GTE",
+"LTE",
+"NOT",
+"SUM",
+"scope"
+]
+},
+"98": {
+"called": [
+"AND",
+"GTE",
+"LTE"
+],
+"names": [
+"AND",
+"GT",
+"GTE",
+"LTE",
+"ORDERED",
+"SUB",
+"SUBSTRING",
+"SUM",
+"scope"
+]
+}
+},
+"noncallable": [
+"exp"
+]
+}

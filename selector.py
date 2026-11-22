@@ -1003,6 +1003,94 @@ def _tests_with_escapes(keys: set[str], maps) -> set[int]:
     return out
 
 
+_ENV_FILE = "sqlglot/executor/env.py"
+ID_TO_NUMBER: dict = {}  # test id -> scorer number
+_TPCDS_ID = "tests/test_executor.py::TestExecutor::test_execute_tpcds"
+_TPCDS_ENV_KEYS = None
+
+
+def _tpcds_env_keys():
+    """Every ENV key an executed TPC-DS query of test_execute_tpcds looks up: called, or named by
+    its generated code (maps/tpcds_env.json, tools/build_tpcds_env.py). None when unavailable."""
+    global _TPCDS_ENV_KEYS
+    if _TPCDS_ENV_KEYS is None:
+        try:
+            raw = json.loads((MAPS_DIR / "tpcds_env.json").read_text())
+            keys = set(raw.get("noncallable") or ())
+            for u in raw["queries"].values():
+                keys |= set(u["called"]) | set(u["names"])
+            _TPCDS_ENV_KEYS = keys if raw["queries"] else set()
+        except (OSError, ValueError, KeyError, TypeError):
+            _TPCDS_ENV_KEYS = set()
+    return _TPCDS_ENV_KEYS or None
+
+
+def _env_entry_keys(text: str, lines) -> set | None:
+    """The ENV keys whose entries (key through value) hold every one of `lines`, or None."""
+    try:
+        tree = ast.parse(text)
+    except (SyntaxError, ValueError):
+        return None
+    env = None
+    for n in tree.body:
+        if isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "ENV" for t in n.targets):
+            env = n.value
+    if not isinstance(env, ast.Dict):
+        return None
+    spans = []
+    for k, v in zip(env.keys, env.values):
+        if not (isinstance(k, ast.Constant) and isinstance(k.value, str)):
+            return None  # a ** splat or computed key: do not reason about it
+        spans.append((k.value, k.lineno, v.end_lineno))
+    out = set()
+    for ln in lines:
+        hit = [key for key, lo, hi in spans if lo <= ln <= hi]
+        if len(hit) != 1:
+            return None
+        out.add(hit[0])
+    return out
+
+
+def _env_edit_misses_tpcds(files) -> bool:
+    """The patch only edits entries of sqlglot/executor/env.py's ENV, line for line, and no
+    executed TPC-DS query looks any old or new key of those entries up. ENV is the generated
+    code's globals, so such an entry cannot reach test_execute_tpcds once the module imports
+    (the caller only asks after the semantic import succeeded)."""
+    if len(files) != 1:
+        return False
+    fp = files[0]
+    if fp.path != _ENV_FILE or fp.special or fp.old_path != fp.new_path:
+        return False
+    used = _tpcds_env_keys()
+    if not used:
+        return False
+    old_lines, new_lines = [], []
+    for h in fp.hunks:
+        o, n = h.old_start, h.new_start
+        removed = added = 0
+        for ln in h.lines:
+            tag = ln[:1]
+            if tag == "-":
+                old_lines.append(o); o += 1; removed += 1
+            elif tag == "+":
+                new_lines.append(n); n += 1; added += 1
+            elif tag == " ":
+                o += 1; n += 1
+        if removed != added:
+            return False
+    if not old_lines:
+        return False
+    old = (SRC / _ENV_FILE).read_text()
+    try:
+        new = P.apply(old, fp)
+    except P.PatchError:
+        return False
+    ko, kn = _env_entry_keys(old, old_lines), _env_entry_keys(new, new_lines)
+    if ko is None or kn is None:
+        return False
+    return not ((ko | kn) & used)
+
+
 def select(patch_text: str, maps, all_tests: set, sem) -> set:
     global _IMPORTER_HIT
     _IMPORTER_HIT = False
@@ -1090,6 +1178,13 @@ def select(patch_text: str, maps, all_tests: set, sem) -> set:
                 out &= _tests_mentioning_full(vocab, maps)
         except Exception as e:
             log("vocab skip:", repr(e))
+        try:
+            tpcds = ID_TO_NUMBER.get(_TPCDS_ID)
+            if tpcds in out and semantic_needed and _env_edit_misses_tpcds(files):
+                log("ENV entries no TPC-DS query looks up: test_execute_tpcds dropped")
+                out = set(out) - {tpcds}
+        except Exception as e:
+            log("env skip:", repr(e))
         return out
     except All as e:
         log("ALL:", e)
@@ -1136,6 +1231,7 @@ def main() -> None:
     all_tests = set(ms)
     id_to_number = {t["id"]: t["number"] for t in tests}
     number_to_id = {t["number"]: t["id"] for t in tests}
+    ID_TO_NUMBER.update(id_to_number)
     load_dialect_tests(id_to_number)
     # Off. The wide runner cut 6.4s of schedule and added 16s of CPU, and the
     # tight one added about 4s of CPU without moving the hidden batch. Set
