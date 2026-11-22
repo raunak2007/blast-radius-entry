@@ -2572,6 +2572,18 @@ def child_tpcds(patched, plan, wfd):
     from sqlglot.executor import execute
     from sqlglot.executor.table import Table
 
+    if plan.get("guard"):
+        # the patched sources imported (sqlglot.executor.env with them), which is what the
+        # commit's narrowed selection waits for: from here on, any failure is a verdict
+        # (the test stays selected), not a reason to fall back
+        import sqlglot.executor.env  # noqa: F401
+
+        def give_up(*_):
+            os.write(wfd, json.dumps([TPCDS_TEST]).encode())
+            os._exit(0)
+
+        if budget != float("inf"):
+            signal.signal(signal.SIGPROF, give_up)
     tables = {t: Table(columns=c, rows=data["tables"][t]) for t, c in data["schema"].items()}
     schema, tables = pickle.loads(pickle.dumps((data["schema"], tables)))
     by_index = {q["index"]: q for q in data["queries"]}
@@ -2691,6 +2703,10 @@ def child_tpcds(patched, plan, wfd):
                               f"rows={current.get('rows_debug')}", file=sys.stderr)
                     same = False
                     break
+    except Exception:
+        if not plan.get("guard"):
+            raise
+        same = False  # a query raised: the test fails
     finally:
         executor_module.optimize = original_optimize
     if debug:
@@ -3894,6 +3910,7 @@ def main():
                 plan = {"mode": "full", "modes": {}, "queries": [], "estimate": 1.0, "budget": 10.0, "keep": True}
             if plan:
                 plan["commit"] = commit
+                plan["guard"] = commit in guards
                 tpcds_jobs.append(((commit, "tpcds"), patched, [TPCDS_TEST],
                                    {"__tpcds__": plan, TPCDS_TEST: duration[tpcds_number] / 1000},
                                    10 + max(3 * plan["estimate"], 1.5 * plan["budget"])))
