@@ -51,6 +51,7 @@ DEFAULTS_DATA = Path(os.environ.get("BR_DEFAULTS", str(Path(__file__).with_name(
 ATTR_OWNERS_DATA = Path(os.environ.get("BR_ATTR_OWNERS", str(Path(__file__).with_name("attr_owners.pkl.gz"))))
 TPCDS_ENV_DATA = Path(os.environ.get("BR_TPCDS_ENV", str(Path(__file__).with_name("tpcds_env.pkl.gz"))))
 ENV_FILE = "sqlglot/executor/env.py"
+TPCDS_CMP_DATA = Path(os.environ.get("BR_TPCDS_CMP", str(Path(__file__).with_name("tpcds_cmp.pkl.gz"))))
 IMPORT_LAMBDAS_DATA = Path(os.environ.get("BR_IMPORT_LAMBDAS", str(Path(__file__).with_name("import_lambdas.pkl.gz"))))
 CMP_NAMES = {ast.Is: "is", ast.IsNot: "is not", ast.Eq: "==", ast.NotEq: "!=", ast.Lt: "<", ast.LtE: "<=",
              ast.Gt: ">", ast.GtE: ">=", ast.In: "in", ast.NotIn: "not in"}
@@ -760,6 +761,9 @@ class Selector:
         self.subprocess = doc.get("subprocess_tests", 0)
         # every changed span of the current commit: (rel, lo, hi, "function" | "other")
         self.touched = []
+        # (rel, lo, hi) of a "function" span -> [cmp site, times touched by that site's swap]
+        self.cmp_filters = {}
+        self.last_cmp_site = None
         self._class_users_by_file = None
         self.new_idx = None
         self.last_differs = None
@@ -853,6 +857,7 @@ class Selector:
         if st["scope"] == "function":
             cm = None
             self.last_differs = None
+            self.last_cmp_site = None
             if blk is not None:
                 cm = self.compare_mask(rel, st, line, blk, span)
                 if cm is None:
@@ -889,6 +894,7 @@ class Selector:
                 self.touched.append((rel, lo, hi, "other"))
             else:
                 self.touched.append((rel, lo, hi, "function"))
+                self.note_cmp_filter(rel, lo, hi, cm is not None and self.last_cmp_site or None)
             return m
         if st["kind"] == "stmt" and st["scope"] in ("module", "class") and blk is not None:
             lam = self.lambda_body_mask(rel, st, line, blk)
@@ -1109,6 +1115,7 @@ class Selector:
             return None  # only the neighbouring operator was computed; any other swap flips results
         m = data["differs"].get(key, 0)
         self.last_differs = m
+        self.last_cmp_site = key
         # tests the instrumented run couldn't see (fresh interpreters) or that failed there
         return m | (self.line_union(rel, span[0], span[1]) & (self.subprocess | data["failed"]))
 
@@ -1151,6 +1158,7 @@ class Selector:
             return None
         m = data["differs"].get(key, 0)
         self.last_differs = m
+        self.last_cmp_site = key
         return m | (self.line_union(rel, span[0], span[1]) & (self.subprocess | data["failed"]))
 
     # ---- module-level constants
@@ -1891,7 +1899,109 @@ class Selector:
                 module = module[: -len(".__init__")]
             self.state_masks.append((module, st["cls"], name))
         log(f"class constant edit in {rel}:{blk['removed'][0]} narrowed to the reads of {st['cls']}.{name}")
+        core = self.core_field_mask(name)
+        if core is not None:
+            log(f"  {name} only reaches the tokenizer core: {bin(entry['mask'] & core).count('1')} of "
+                f"{bin(entry['mask']).count('1')} readers ran a line that reads its field")
+            return entry["mask"] & core
         return entry["mask"]
+
+    CORE_FILE = "sqlglot/tokenizer_core.py"
+    CORE_BUILDER = "sqlglot/tokens.py"
+
+    def core_field_mask(self, name):
+        """For a tokenizer setting that is only ever read to build the tokenizer's core
+        (`Tokenizer._init_core`: `TokenizerCore(field=self.NAME, ...)`), the tests that ran a
+        line of tokenizer_core.py reading that field (outside its __init__); a test that never
+        did can't see the value. None unless every other mention of NAME in sqlglot/ and
+        tests/ is a class-body binding of it (`NAME = ...`, `NAME: type`), the field is
+        mentioned nowhere outside the core and that one keyword, and neither file is patched."""
+        if self.CORE_FILE in self.patched or self.CORE_BUILDER in self.patched:
+            return None
+        cache = getattr(self, "_core_field_cache", None)
+        if cache is None:
+            cache = self._core_field_cache = {}
+        if name not in cache:
+            cache[name] = self._core_field_lines(name)
+        lines = cache[name]
+        if lines is None:
+            return None
+        m = 0
+        for ln in lines:
+            m |= self.line_union(self.CORE_FILE, ln, ln)
+        return m
+
+    def _core_field_lines(self, name):
+        if getattr(self, "_all_texts", None) is None:
+            self.name_used_elsewhere(name, None)  # loads the texts
+        texts = dict(self._all_texts)
+        for r, text in self.patched.items():
+            if r.endswith(".py") and (r.startswith("sqlglot/") or r.startswith("tests/")):
+                texts[r] = text
+        binding = re.compile(r"^\s*" + re.escape(name) + r"\s*(:[^=]*)?(=[^=].*)?$")
+        keyword = re.compile(r"^\s*(\w+)=self\." + re.escape(name) + r",\s*$")
+        field = None
+        for r, text in texts.items():
+            if not has_word(text, name):
+                continue
+            for line in text.splitlines():
+                if not has_word(line, name):
+                    continue
+                if r.startswith("sqlglot/") and binding.match(line):
+                    continue
+                k = keyword.match(line) if r == self.CORE_BUILDER else None
+                if k is None or field is not None:
+                    return None
+                field = k.group(1)
+        if field is None:
+            return None
+        for r, text in texts.items():
+            if r in (self.CORE_FILE, self.CORE_BUILDER) or not has_word(text, field):
+                continue
+            return None
+        if sum(1 for line in texts[self.CORE_BUILDER].splitlines() if has_word(line, field)) != 1:
+            return None
+        try:
+            tree = ast.parse(texts[self.CORE_FILE])
+        except SyntaxError:
+            return None
+        lines = set()
+
+        def visit(node, in_init):
+            for child in ast.iter_child_nodes(node):
+                init = in_init or (isinstance(child, ast.FunctionDef) and child.name == "__init__")
+                if isinstance(child, ast.Attribute) and child.attr == field:
+                    if not (isinstance(child.value, ast.Name) and child.value.id == "self"):
+                        raise Unknown
+                    if not in_init:
+                        if not isinstance(child.ctx, ast.Load):
+                            raise Unknown  # written outside __init__
+                        lines.update(range(child.lineno, (child.end_lineno or child.lineno) + 1))
+                elif isinstance(child, ast.Constant) and child.value == field and not in_init:
+                    # its name in __slots__ is fine; anywhere else (getattr) it could be read
+                    pass
+                visit(child, init)
+
+        try:
+            visit(tree, False)
+        except Unknown:
+            return None
+        # reads by computed name in the core class (getattr(self, k), vars(self), ...) could
+        # reach the field unseen
+        cores = [n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "TokenizerCore"]
+        if len(cores) != 1:
+            return None
+        for n in ast.walk(cores[0]):
+            if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and \
+                    n.func.id in ("getattr", "setattr", "vars", "hasattr", "delattr"):
+                return None
+            if isinstance(n, ast.Attribute) and n.attr in ("__dict__", "__slots__", "__getstate__", "__reduce__",
+                                                            "__reduce_ex__", "__copy__", "__deepcopy__"):
+                return None
+            if isinstance(n, ast.FunctionDef) and n.name in ("__getstate__", "__reduce__", "__reduce_ex__",
+                                                             "__copy__", "__deepcopy__", "__eq__", "__repr__"):
+                return None
+        return sorted(lines)
 
     @staticmethod
     def plain_data_class(cls_node):
@@ -2953,6 +3063,7 @@ class Selector:
         self.deferred = []
         self.data_mask = 0
         self.touched = []
+        self.cmp_filters = {}
         self.fixture_checks = {}  # test id -> changed cases it alone is selected for
         fixture_m = 0
         diffs = parse_patch(text)
@@ -3095,6 +3206,42 @@ class Selector:
 
     # ---- the 21 s TPC-DS executor test: replay what the edit can reach instead of running it
 
+    def note_cmp_filter(self, rel, lo, hi, site):
+        """Remember that this function span was touched by a single operator swap at `site`
+        (one the weak-mutation run settles); any other touch of the span cancels it."""
+        cur = self.cmp_filters.get((rel, lo, hi))
+        if site is None or (cur is not None and cur[0] != site):
+            self.cmp_filters[(rel, lo, hi)] = [None, 0]
+        elif cur is None:
+            self.cmp_filters[(rel, lo, hi)] = [site, 1]
+        elif cur[0] is not None:
+            cur[1] += 1
+
+    def cmp_query_filter(self, rel, lo, hi, queries):
+        """The TPC-DS queries that can see the operator swap on this span, or None to go by
+        line coverage. Only for a span every touch of which is one swap at one site, a site
+        the per-query run saw differ in no context outside a query, and evaluated by every
+        query whose recorded coverage reaches its line (code run once per process is filed
+        under the first query in that run, so it gets no narrowing)."""
+        cur = self.cmp_filters.get((rel, lo, hi))
+        if cur is None or cur[0] is None:
+            return None
+        if cur[1] != sum(1 for t in self.touched if t == (rel, lo, hi, "function")):
+            return None
+        data = load_tpcds_cmp()
+        if data is None:
+            return None
+        site = data["sites"].get(cur[0])
+        cmp_data = load_cmp()
+        if site is None or site["other_differs"] or cmp_data is None or cmp_data["ops"].get(cur[0]) != site["op"]:
+            return None
+        line = cur[0][1]
+        covering = {q["index"] for q in queries
+                    if any(line in q[k].get(rel, ()) for k in ("front_sets", "exec_sets", "log_sets"))}
+        if not covering <= site["ran"]:
+            return None
+        return set(site["differs"])
+
     def tpcds_plan(self, chosen, duration, tpcds_number):
         """A replay plan when it is provably enough and clearly cheaper than the test, else None.
 
@@ -3154,12 +3301,19 @@ class Selector:
         # "log" (also the dropped debug-log rendering: it must not raise or alter the
         # expression), or "full" (planning and execution, or the digest code itself: the rows).
         digest_hit = any(hits(data["digest_sets"], *s) for s in spans)
+        # a span whose only change is an operator swap the per-query weak-mutation run
+        # settles reaches only the queries where that swap gives another result
+        only = {s: self.cmp_query_filter(*s, data["queries"]) for s in spans}
+        if any(f is not None for f in only.values()):
+            log("TPC-DS: operator swap reaches queries " + ", ".join(
+                f"{s[0]}:{s[1]} {sorted(f)}" for s, f in only.items() if f is not None))
         modes, reached = {}, []
         for q in data["queries"]:
-            in_exec = any(hits(q["exec_sets"], *s) for s in spans)
-            in_log = any(hits(q["log_sets"], *s) for s in spans)
+            live = [s for s in spans if only[s] is None or q["index"] in only[s]]
+            in_exec = any(hits(q["exec_sets"], *s) for s in live)
+            in_log = any(hits(q["log_sets"], *s) for s in live)
             in_env = env_queries is not None and q["index"] in env_queries
-            if not (in_exec or in_log or in_env or any(hits(q["front_sets"], *s) for s in spans)):
+            if not (in_exec or in_log or in_env or any(hits(q["front_sets"], *s) for s in live)):
                 continue
             modes[q["index"]] = "full" if in_exec or in_env or digest_hit else ("log" if in_log else "front")
             reached.append(q)
@@ -3423,6 +3577,27 @@ def load_tpcds_env():
             log(f"no TPC-DS ENV data ({error!r}); ENV edits keep the test")
             _TPCDS_ENV = False
     return _TPCDS_ENV or None
+
+
+_TPCDS_CMP = None
+
+
+def load_tpcds_cmp():
+    """Per comparison or and/or site test_execute_tpcds evaluates, the TPC-DS queries that
+    evaluated it and those where its neighbouring operator would have given another result
+    (tools/build_tpcds_cmp.py)."""
+    global _TPCDS_CMP
+    if _TPCDS_CMP is None:
+        try:
+            with gzip.open(TPCDS_CMP_DATA, "rb") as fh:
+                data = pickle.load(fh)
+            if data.get("format") != 1 or data.get("test_id") != TPCDS_TEST:
+                raise ValueError("unexpected format")
+            _TPCDS_CMP = data
+        except Exception as error:
+            log(f"no per-query comparison data ({error!r}); comparison edits replay every query they reach")
+            _TPCDS_CMP = False
+    return _TPCDS_CMP or None
 
 
 def load_import_lambdas():
@@ -5431,6 +5606,7 @@ def main():
                 "state_masks": list(selector.state_masks), "fixture_checks": dict(selector.fixture_checks),
                 "state_needs": {k: sorted(v) for k, v in selector.state_needs.items()},
                 "env_keys": set(selector.env_keys),
+                "cmp_filters": {k: list(v) for k, v in selector.cmp_filters.items()},
                 "guard": to_numbers(selector.guard_mask) if selector.guard_mask else None}
 
     # 1. selections, and the commits whose selection an unchanged import-time state would shrink
@@ -5446,7 +5622,7 @@ def main():
             log(f"{commit}: running every test ({error})")
             snap = {"chosen": every, "patched": {}, "verifiable": False, "unreadable": set(), "touched": [],
                     "data_files": set(), "import_widened": False, "state_masks": [], "fixture_checks": {},
-                    "env_keys": set(), "guard": None}
+                    "env_keys": set(), "cmp_filters": {}, "guard": None}
         snaps[commit] = snap
         if RUN and snap["verifiable"] and snap["import_widened"] and not snap["data_files"] and snap["patched"]:
             try:
@@ -5463,6 +5639,7 @@ def main():
                     selector.patched, selector.verifiable = alt["patched"], alt["verifiable"]
                     selector.touched, selector.data_files = alt["touched"], alt["data_files"]
                     selector.env_keys = alt["env_keys"]
+                    selector.cmp_filters = alt["cmp_filters"]
                     if selector.tpcds_plan(alt["chosen"], duration, tpcds_number):
                         gain += (pack_cost(alt["chosen"], duration)
                                  - pack_cost([n for n in alt["chosen"] if n != tpcds_number], duration)) // 2
@@ -5574,6 +5751,7 @@ def main():
             selector.patched, selector.verifiable = patched, verifiable
             selector.touched, selector.data_files = snap["touched"], snap["data_files"]
             selector.env_keys = snap["env_keys"]
+            selector.cmp_filters = snap.get("cmp_filters", {})
         if snap["guard"] is not None:
             wide = sorted(set(chosen) | set(snap["guard"]))
             if tpcds_number not in chosen:

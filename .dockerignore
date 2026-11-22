@@ -16,3 +16,4 @@
 !attr_owners.pkl.gz
 !import_lambdas.pkl.gz
 !tpcds_env.pkl.gz
+!tpcds_cmp.pkl.gz
