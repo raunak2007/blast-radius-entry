@@ -51,6 +51,18 @@ GENMEM_TEST = "tests/test_generator.py::TestGenerator::test_generator_memory"
 # file -> (function that builds a per-process cache on first use, the cache's name)
 FIRST_USE = {"sqlglot/generator.py": ("_build_dispatch", "_DISPATCH_CACHE")}
 TPCDS_TEST = "tests/test_executor.py::TestExecutor::test_execute_tpcds"
+# test_max_nodes (28.8 s, the slowest test) parses 10,000 copies of a depth-100 comparison
+# against node limits of 1,000,000 and 50,000. At the pinned commit the statement makes
+# 1,000,001 counted nodes, so the first limit trips on its very last node. A child
+# (child_maxnodes) runs the test's small asserts as written and the two limit asserts on
+# prefixes of the statement: the patched parser's node count must be exactly linear in the
+# number of copies (10, 40 and 160 of them) and put 10,000 copies past 1,000,000; a limit one
+# below a prefix's count must trip on that prefix's last node with the error the test looks
+# for, and a prefix long enough to pass 50,000 nodes must raise it mid-statement.
+MAXNODES_TEST = "tests/test_parser.py::TestParser::test_max_nodes"
+MAXNODES_CPU_S = 1.5  # the child's CPU: the test module's imports and about 85,000 counted nodes
+MAXNODES_BUDGET_S = 4.0  # past this much CPU the child stops and the test stays (an edit that slows parsing)
+MAXNODES_P_PASS = 0.9  # how often the test passes where the check is planned
 LAZY_LOAD_TEST = "tests/dialects/test_dialect.py::TestDialect::test_lazy_load"
 # Plan a TPC-DS replay only if its estimated CPU is at most this share of the time it would
 # save. Full replays run the executor on changed code, where outputs often differ late and
@@ -107,7 +119,8 @@ def parse_patch(text):
     diffs, cur, i, n = [], None, 0, len(lines)
 
     def new_diff():
-        d = {"old": None, "new": None, "hunks": [], "binary": False, "new_file": False, "deleted": False}
+        d = {"old": None, "new": None, "hunks": [], "binary": False, "new_file": False, "deleted": False,
+             "mode": False}
         diffs.append(d)
         return d
 
@@ -167,6 +180,8 @@ def parse_patch(text):
                 cur["deleted"] = True
             elif line.startswith(("Binary files", "GIT binary patch")):
                 cur["binary"] = True
+            elif line.startswith(("old mode ", "new mode ")):
+                cur["mode"] = True
             elif line.startswith("rename from "):
                 cur["old"] = line[len("rename from "):]
             elif line.startswith("rename to "):
@@ -216,7 +231,7 @@ def apply_hunks(old_text, hunks):
                 nn += 1
                 continue
             if cur is None:
-                cur = {"removed": [], "added": [], "anchor": o, "removed_text": [], "added_text": []}
+                cur = {"removed": [], "added": [], "anchor": o, "new_anchor": nn, "removed_text": [], "added_text": []}
                 blocks.append(cur)
             if tag == "-":
                 cur["removed"].append(o)
@@ -377,6 +392,147 @@ def changed_range(old, new):
 def is_comment_or_blank(text):
     s = text.strip()
     return not s or s.startswith("#")
+
+
+IMPORTABLE = (".py", ".pyi", ".pyc", ".so", ".pyd", ".pth")
+CODING_RE = re.compile(r"^[ \t\f]*#.*?coding[:=][ \t]*([-\w.]+)")
+
+
+def declared_coding(text):
+    """The source encoding a Python file declares in its first two lines, if any."""
+    for line in text.split("\n", 2)[:2]:
+        m = CODING_RE.match(line)
+        if m:
+            return m.group(1).lower()
+    return None
+
+
+def same_code(a, b):
+    """Whether two syntax trees compile to the same code up to line numbers and docstrings:
+    equal once statements that are a bare constant (docstrings among them) are left out."""
+    stack = [(a, b)]
+    while stack:
+        x, y = stack.pop()
+        if type(x) is not type(y):
+            return False
+        if isinstance(x, ast.AST):
+            for field in x._fields:
+                stack.append((getattr(x, field, None), getattr(y, field, None)))
+        elif isinstance(x, list):
+            if (x and isinstance(x[0], ast.stmt)) or (y and isinstance(y[0], ast.stmt)):
+                x = [n for n in x if not (isinstance(n, ast.Expr) and isinstance(n.value, ast.Constant))]
+                y = [n for n in y if not (isinstance(n, ast.Expr) and isinstance(n.value, ast.Constant))]
+            if len(x) != len(y):
+                return False
+            stack.extend(zip(x, y))
+        elif isinstance(x, (float, complex)):
+            if repr(x) != repr(y):
+                return False
+        elif x != y:
+            return False
+    return True
+
+
+def scope_signature(func):
+    """What decides how the names in a function's body resolve and what calling it returns: its
+    parameters, the names its own body binds (not those of nested functions and classes), its
+    global and nonlocal declarations, and whether it yields or awaits."""
+    args = func.args
+    params = [a.arg for a in args.posonlyargs + args.args + args.kwonlyargs]
+    params += ["*" + a.arg for a in (args.vararg,) if a] + ["**" + a.arg for a in (args.kwarg,) if a]
+    binds, declared, flags = set(), set(), set()
+    todo = list(func.body)
+    while todo:
+        node = todo.pop()
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            binds.add(node.name)
+            todo.extend(node.decorator_list)  # evaluated in this scope, like defaults and bases
+            if isinstance(node, ast.ClassDef):
+                todo.extend(node.bases)
+                todo.extend(k.value for k in node.keywords)
+            else:
+                todo.extend(node.args.defaults)
+                todo.extend(d for d in node.args.kw_defaults if d is not None)
+            continue
+        if isinstance(node, ast.Lambda):
+            todo.extend(node.args.defaults)
+            todo.extend(d for d in node.args.kw_defaults if d is not None)
+            continue
+        if isinstance(node, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)):
+            # its own scope: only a `:=` in it binds here
+            binds.update(sub.target.id for sub in ast.walk(node) if isinstance(sub, ast.NamedExpr))
+            continue
+        if isinstance(node, ast.Name):
+            if isinstance(node.ctx, (ast.Store, ast.Del)):
+                binds.add(node.id)
+        elif isinstance(node, (ast.Global, ast.Nonlocal)):
+            declared.update((type(node).__name__, name) for name in node.names)
+        elif isinstance(node, (ast.Yield, ast.YieldFrom)):
+            flags.add("yield")
+        elif isinstance(node, (ast.Await, ast.AsyncFor, ast.AsyncWith)):
+            flags.add("await")
+        elif isinstance(node, ast.alias):
+            binds.add((node.asname or node.name).split(".")[0])
+        elif isinstance(node, ast.ExceptHandler):
+            if node.name:
+                binds.add(node.name)
+        elif isinstance(node, (ast.MatchAs, ast.MatchStar)):
+            if node.name:
+                binds.add(node.name)
+        elif isinstance(node, ast.MatchMapping):
+            if node.rest:
+                binds.add(node.rest)
+        todo.extend(ast.iter_child_nodes(node))
+    return (tuple(params), frozenset(binds), frozenset(declared), frozenset(flags), type(func).__name__)
+
+
+def bound_names(tree):
+    """The names a module's top level and its class bodies bind, as (scope, name): defs, classes,
+    assignment targets and imports, also inside if/try/for/with blocks there."""
+    out = set()
+
+    def targets(node, scope):
+        if isinstance(node, ast.Name):
+            out.add((scope, node.id))
+        elif isinstance(node, (ast.Tuple, ast.List)):
+            for e in node.elts:
+                targets(e, scope)
+        elif isinstance(node, ast.Starred):
+            targets(node.value, scope)
+
+    def walk(body, scope):
+        for st in body:
+            if isinstance(st, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                out.add((scope, st.name))
+            elif isinstance(st, ast.ClassDef):
+                out.add((scope, st.name))
+                walk(st.body, scope + st.name + ".")
+            elif isinstance(st, ast.Assign):
+                for t in st.targets:
+                    targets(t, scope)
+            elif isinstance(st, (ast.AnnAssign, ast.AugAssign)):
+                targets(st.target, scope)
+            elif isinstance(st, (ast.Import, ast.ImportFrom)):
+                for a in st.names:
+                    out.add((scope, a.asname or a.name.split(".")[0]))
+            else:
+                if isinstance(st, (ast.For, ast.AsyncFor)):
+                    targets(st.target, scope)
+                if isinstance(st, (ast.With, ast.AsyncWith)):
+                    for item in st.items:
+                        if item.optional_vars is not None:
+                            targets(item.optional_vars, scope)
+                for field in ("body", "orelse", "finalbody"):
+                    part = getattr(st, field, None)
+                    if isinstance(part, list):
+                        walk(part, scope)
+                for handler in getattr(st, "handlers", None) or ():
+                    walk(handler.body, scope)
+                for case in getattr(st, "cases", None) or ():
+                    walk(case.body, scope)
+
+    walk(tree.body, "")
+    return out
 
 
 class Blobs:
@@ -742,6 +898,7 @@ class Selector:
         self.new_idx = None
         self.last_differs = None
         self.no_import_widen = False  # set to see the selection an unchanged import-time state allows
+        self.scope_funcs = {}  # functions of the file in hand whose names resolve differently (scope_changes)
         self.flag_narrowing, self.flag_narrowed, self.code_blocks = True, False, 0  # see select()
         self._test_texts = None  # the test sources, read when a patch changes a test module
         self.defaults_only = False
@@ -804,6 +961,10 @@ class Selector:
             return self.module_fallback(rel, idx)
         lo, hi = span
         if st["scope"] == "function":
+            func = st.get("func")
+            if func is not None and id(func) in self.scope_funcs:
+                # its names resolve differently: any line of it may now behave differently
+                lo, hi, blk = func.lineno, func.end_lineno, None
             cm = None
             self.last_differs = None
             if blk is not None:
@@ -1605,6 +1766,10 @@ class Selector:
                 module = module[: -len(".__init__")]
             self.state_masks.append((module, st["cls"], name))
         log(f"class constant edit in {rel}:{blk['removed'][0]} narrowed to the reads of {st['cls']}.{name}")
+        if not read_at_import and self.touched and self.touched[-1][0] == rel and self.touched[-1][3] == "other":
+            # no import-time code reads the name, and the statement itself only binds a literal:
+            # importing does what it did (needs_import_check leaves such an edit alone)
+            self.touched[-1] = self.touched[-1][:3] + ("constant",)
         old, cur = node.value, new.value
         if self.flag_narrowing and isinstance(old, ast.Constant) and isinstance(cur, ast.Constant) \
                 and isinstance(old.value, bool) and isinstance(cur.value, bool) and old.value is not cur.value:
@@ -1880,6 +2045,16 @@ class Selector:
         except SyntaxError:
             raise Fallback(f"syntax error in {rel}")
         self.new_idx = new_idx
+        if declared_coding(old_text) != declared_coding(new_text):
+            raise Fallback(f"source encoding declaration changed in {rel}")
+        if self.maybe_layout_only(blocks, idx, new_idx) and same_code(idx.tree, new_idx.tree):
+            # layout only (line ends, spacing, wrapping, comments) or the text of a docstring:
+            # the file compiles to the same code, as with a comment-only hunk, and nothing in
+            # sqlglot or its tests reads a docstring
+            log(f"{rel}: same code as before")
+            return 0
+        lost = bound_names(idx.tree) - bound_names(new_idx.tree)
+        self.scope_funcs = self.scope_changes(rel, idx, new_idx, blocks, new_text)
         readers = self.doc["file_opens"].get(rel, 0)
         if readers and self.import_statements(idx.tree) != self.import_statements(new_idx.tree):
             # A test that reads this source file as text sees the unpatched file in a check (only
@@ -1896,7 +2071,71 @@ class Selector:
                 m |= self.mask_for_old_line(rel, idx, ln, blk)
             if blk["added"]:
                 m |= self.mask_for_added(rel, idx, new_idx, blk)
+        self.scope_funcs = {}
+        if lost:
+            # a module- or class-level name is gone (a def renamed or removed): other modules'
+            # imports of it fail, lookups of it raise, an override stops overriding. Coverage of
+            # the old lines doesn't say who relies on the name, so everything is selected (the
+            # checks that run the patched sources still apply).
+            log(f"{rel} no longer binds {', '.join(sorted(scope + name for scope, name in lost)[:3])}: every test")
+            return self.ALL
         return m
+
+    @staticmethod
+    def squeezed(lines):
+        """The lines' characters without white space and without what follows a `#`."""
+        return "".join("".join(t.split("#", 1)[0].split()) for t in lines)
+
+    def maybe_layout_only(self, blocks, idx, new_idx):
+        """A cheap necessary condition for an edit that changes no code: every block is comments
+        and blank lines, or the same characters once white space and comments are dropped, or
+        lies inside string literals on both sides (a docstring's text). same_code then decides."""
+        for blk in blocks:
+            if all(is_comment_or_blank(t) for t in blk["removed_text"] + blk["added_text"]):
+                continue
+            if self.squeezed(blk["removed_text"]) == self.squeezed(blk["added_text"]):
+                continue
+            if all(idx.in_string(ln) for ln in blk["removed"]) and all(new_idx.in_string(ln) for ln in blk["added"]):
+                continue
+            return False
+        return True
+
+    def scope_changes(self, rel, idx, new_idx, blocks, new_text):
+        """{id of an old function node: True} for the functions an edit changes as a whole: the
+        names its body binds, its parameters, its global/nonlocal declarations, or whether it is
+        a generator (scope_signature). Then lines the edit doesn't touch behave differently (a
+        name read before a new assignment to it is now an unbound local; a call returns a
+        generator), so every test that entered the function is selected (mask_for_old_line).
+        An edit that adds or removes lines also has the new file compiled: ast.parse doesn't
+        report what only the compiler rejects (`break` outside a loop, a duplicate argument)."""
+        changed = {}
+        compiled = False
+        for blk in blocks:
+            if all(is_comment_or_blank(t) for t in blk["removed_text"] + blk["added_text"]):
+                continue
+            old_lines = blk["removed"] or [blk["anchor"] - 1, blk["anchor"]]
+            new_lines = blk["added"] or [blk["new_anchor"] - 1, blk["new_anchor"]]
+            old_funcs, new_funcs = {}, {}
+            for lines, index, funcs in ((old_lines, idx, old_funcs), (new_lines, new_idx, new_funcs)):
+                for ln in lines:
+                    st, _ = index.stmt_at(ln)
+                    func = st.get("func") if st is not None and st["scope"] == "function" else None
+                    if func is not None:
+                        funcs[id(func)] = func
+            differs = False
+            for func in old_funcs.values():
+                twins = [g for g in new_funcs.values() if g.name == func.name]
+                if not twins or any(scope_signature(g) != scope_signature(func) for g in twins):
+                    changed[id(func)] = True
+                    differs = True
+                    log(f"{rel}: the names of {func.name} resolve differently: every test that entered it")
+            if (differs or len(blk["removed"]) != len(blk["added"])) and not compiled:
+                compiled = True
+                try:
+                    compile(new_text.encode("utf-8", "surrogateescape"), rel, "exec", dont_inherit=True)
+                except (SyntaxError, ValueError) as error:
+                    raise Fallback(f"{rel} does not compile ({type(error).__name__})")
+        return changed
 
     @staticmethod
     def import_statements(tree):
@@ -1978,6 +2217,10 @@ class Selector:
             new_idx = SourceIndex(new_text)
         except SyntaxError:
             return file_mask
+        if declared_coding(old_text) != declared_coding(new_text):
+            raise Fallback(f"source encoding declaration changed in {rel}")
+        if ast.dump(idx.tree) == ast.dump(new_idx.tree):
+            return 0  # layout only: the module compiles to the same code
         m = 0
         for blk in blocks:
             if self.comment_only(blk, idx, new_idx):
@@ -2040,9 +2283,29 @@ class Selector:
             old_rel = fd["old"]
             if rel is None:
                 continue
+            if fd["mode"] and not fd["hunks"] and not fd["binary"] and not fd["deleted"] and not fd["new_file"] \
+                    and (not old_rel or old_rel == rel):
+                continue  # only the file's mode changed: what Python and the tests read is as before
             if fd["binary"] or fd["deleted"] or (old_rel and old_rel != rel):
-                raise Fallback(f"binary, deleted or renamed file {rel}")
+                paths = {p for p in (rel, old_rel) if p}
+                if any(p.endswith(IMPORTABLE) or not p.startswith("tests/") or p in self.config
+                       or os.path.basename(p) == "conftest.py" for p in paths):
+                    raise Fallback(f"binary, deleted or renamed file {rel}")
+                # a data file under tests/ that is replaced, removed or moved reaches the tests that
+                # opened it under its old or new name (no test lists a directory); no check runs them
+                for p in paths:
+                    readers = doc["file_opens"].get(p, 0)
+                    m |= readers
+                    self.data_files.add(p)
+                    self.data_mask |= readers
+                self.touched.append((rel, 0, 0, "other"))
+                continue
             m |= doc["file_opens"].get(rel, 0)  # tests that read this file's text
+            if rel in ("pyproject.toml", "setup.cfg") and fd["hunks"] and not fd["new_file"] and all(
+                    piece[:1] == " " or is_comment_or_blank(piece[1:]) for _, _, body in fd["hunks"] for piece in body):
+                # only comment and blank lines come or go: neither file has a multi-line string at
+                # the pinned commit that such a line could land in, so it parses to the same settings
+                continue
             if rel in self.config or os.path.basename(rel) == "conftest.py":
                 raise Fallback(f"config file {rel}")
             if not rel.endswith(".py"):
@@ -2947,6 +3210,73 @@ def child_genmem(patched, plan, wfd):
     os.close(wfd)
 
 
+def child_maxnodes(patched, plan, wfd):
+    """In a forked child: test_max_nodes on the patched sources, with its two limit asserts on
+    prefixes of its statement (see MAXNODES_TEST). Reports the test as failing on any doubt;
+    an exception or running past the budget fails the child, which keeps the test."""
+    import importlib
+    import shutil
+    import signal
+
+    signal.signal(signal.SIGPROF, lambda *_: os._exit(3))
+    signal.setitimer(signal.ITIMER_PROF, plan["budget"])
+    overlay = enter_overlay(patched)
+    importlib.import_module("tests.test_parser")  # an import error fails the test (and this child)
+    from sqlglot import exp, parse_one
+    from sqlglot.dialects.dialect import Dialect
+    from sqlglot.errors import ParseError
+
+    phrase = "Maximum number of AST nodes"
+
+    def raises(sql, limit):
+        try:
+            parse_one(sql, max_nodes=limit)
+        except ParseError as error:
+            return str(error)
+        return None
+
+    expr = "x" + "=x" * 100
+
+    def statement(copies):
+        return "SELECT " + ",".join([expr] * copies)
+
+    def count(copies):
+        sql = statement(copies)
+        dialect = Dialect.get_or_raise(None)
+        parser = dialect.parser(max_nodes=10**12)
+        parser.parse(dialect.tokenize(sql), sql)
+        return parser._node_count
+
+    # the asserts before the big statement, as written
+    ok = isinstance(parse_one("SELECT 1", max_nodes=1_000_000), exp.Select)
+    cols = [f"col{i}" for i in range(500)]
+    ok = ok and isinstance(parse_one(f"SELECT {','.join(cols)} FROM t", max_nodes=1_000_000), exp.Select)
+    per = 0
+    if ok:
+        # 10,000 copies against 1,000,000: exact, not with a margin (the pinned sources count
+        # 1,001 + 100 per further copy, 1,000,001 in all)
+        c10, c40, c160 = count(10), count(40), count(160)
+        per, rest = divmod(c160 - c40, 120)
+        ok = rest == 0 and per >= 1 and c40 - c10 == 30 * per and c10 + 9990 * per > 1_000_000
+    if ok:
+        # the limit trips on the statement's last node there: the same on a prefix, through
+        # parse_one, with a limit one below its count (and not with a limit equal to it)
+        msg = raises(statement(40), c40 - 1)
+        ok = msg is not None and phrase in msg and f"({c40 - 1})" in msg
+        ok = ok and isinstance(parse_one(statement(40), max_nodes=c40), exp.Select)
+    if ok:
+        # 50,000 trips mid-statement: a prefix just long enough to get there
+        msg = raises(statement(60_000 // per + 20), 50_000)
+        ok = msg is not None and "(50000)" in msg and phrase in msg
+    if ok:
+        # the asserts after it, as written
+        ok = raises("SELECT " + ",".join(f"x={i}" for i in range(100)), 5) is not None
+        ok = ok and isinstance(parse_one("SELECT 1, 2, 3"), exp.Select)
+    shutil.rmtree(overlay, ignore_errors=True)
+    os.write(wfd, json.dumps([] if ok else [MAXNODES_TEST]).encode())
+    os.close(wfd)
+
+
 def child_run(patched, test_ids, limits, wfd):
     """Runs in a forked child: import patched sqlglot, run the tests, report failures."""
     import importlib
@@ -3160,20 +3490,42 @@ def preload_sqlglot():
     _PRELOADED = frozenset(loaded)
 
 
+_WARM_STDLIB = []
+
+
+def warm_stdlib():
+    """Import, once in this process, the standard-library modules sqlglot and its tests import,
+    so no forked child imports them again; returns their names."""
+    import importlib
+    import site
+
+    names = ("typing collections re itertools logging datetime decimal functools enum json copy "
+             "string inspect gc threading tempfile shutil pathlib multiprocessing multiprocessing.context "
+             "concurrent.futures dataclasses contextlib ast unittest unittest.mock difflib heapq csv "
+             "sqlite3 importlib.metadata importlib.abc importlib.util select signal zoneinfo uuid hashlib "
+             "textwrap pprint operator numbers weakref types pkgutil math time os sys abc builtins "
+             "collections.abc argparse traceback warnings").split()
+    if not _WARM_STDLIB:
+        site.main()
+        for name in names:
+            try:
+                importlib.import_module(name)
+            except Exception:
+                pass
+        _WARM_STDLIB.append(True)
+    return names
+
+
 def warm(jobs):
     """Import, once in the parent, what every check would otherwise import again after forking.
     None of it depends on sqlglot, so the children still load the patched sources."""
     import importlib
     import site
 
-    site.main()
-    names = ("typing collections re itertools logging datetime decimal functools enum json copy "
-             "string inspect gc threading tempfile shutil pathlib multiprocessing multiprocessing.context "
-             "concurrent.futures dataclasses contextlib ast unittest unittest.mock difflib heapq csv "
-             "sqlite3 importlib.metadata importlib.abc importlib.util select signal zoneinfo uuid hashlib "
-             "textwrap pprint operator numbers weakref types").split()
+    names = warm_stdlib()
     if any(t.split("::")[0] in HEAVY_FILES for job in jobs
-           if "__tpcds__" not in job[3] and "__genmem__" not in job[3] for t in job[2]):
+           if "__tpcds__" not in job[3] and "__genmem__" not in job[3] and "__maxnodes__" not in job[3]
+           for t in job[2]):
         names += ["numpy", "pandas", "pandas.testing", "duckdb"]
     for name in names:
         try:
@@ -3271,6 +3623,8 @@ def run_checks(jobs, budget_s):
                         child_tpcds(patched, limits["__tpcds__"], w)
                     elif "__genmem__" in limits:
                         child_genmem(patched, limits["__genmem__"], w)
+                    elif "__maxnodes__" in limits:
+                        child_maxnodes(patched, limits["__maxnodes__"], w)
                     else:
                         limit_cpu(limits.get("__cpu__", limit))
                         child_run(patched, test_ids, limits, w)
@@ -3643,7 +3997,7 @@ def state_digests(failed, masks=(), linemap=None):
     # one digest over all of it: two states are the same when every module's digest and the
     # failed imports are (and a short answer can't fill the pipe it is sent through)
     whole = hashlib.sha256(json.dumps([sorted(digests.items()), failed]).encode()).hexdigest()
-    return {"digest": whole, "modules": len(digests)}
+    return {"digest": whole, "modules": len(digests), "failed": failed[:40]}
 
 
 def state_main(args):
@@ -3775,8 +4129,199 @@ def import_states(jobs, budget_s):
     verdict = {}
     for key, (_, mods, masks, _blocks) in jobs.items():
         mine, base = outputs.get(key), outputs.get((tuple(mods), tuple(sorted(masks))))
-        verdict[key] = bool(mine and base and mine == base)
+        if mine and base:
+            mine_failed, base_failed = mine.pop("failed", None) or [], base.get("failed") or []
+            mine_same = dict(mine) == {k: v for k, v in base.items() if k != "failed"}
+            # an import that no longer succeeds is more than changed state: see import_checks
+            verdict[key] = "broken" if set(mine_failed) - set(base_failed) else bool(mine_same)
+            mine["failed"] = mine_failed
+        else:
+            verdict[key] = None  # no answer (out of time, killed, crashed): not known either way
     return verdict
+
+
+# An edit that runs while modules are imported (class and module level statements, function
+# lines the imports run) can make an import fail. Then every test of a test file that imports
+# the module fails at collection, and every test that loads it later (a dialect by name) fails
+# when it does, whatever lines those tests ran at the pinned commit: coverage of the edited
+# line says nothing about them. So such commits are imported for real: a forked child with the
+# patched sources imports sqlglot, every sqlglot module, every dialect by name and the test
+# modules whose import runs sqlglot code. Anything that fails and didn't before (the pinned
+# sources are imported the same way, once, only when some commit reports a failure), or a
+# child that crashes or runs out of time, selects every test.
+IMPORT_CHECK = os.environ.get("BR_IMPORT_CHECK", "1") != "0"
+IMPORT_CPU_S = 6.0  # all of it takes about 0.3 s; an edit can make an import-time parse loop
+IMPORT_WALL_S = 25.0
+
+
+def import_failures(test_modules):
+    """Import sqlglot, every sqlglot module, every dialect by name and the given test modules;
+    the ones that raise, with the exception's type."""
+    import importlib
+    import pkgutil
+
+    failed = []
+    try:
+        import sqlglot
+    except BaseException as error:  # noqa: BLE001
+        return [f"sqlglot: {type(error).__name__}"]
+    found = []
+    try:
+        found = sorted(m.name for m in pkgutil.walk_packages(sqlglot.__path__, "sqlglot.",
+                                                             onerror=lambda name: failed.append(f"{name}: package"))
+                       if not m.name.endswith("__main__"))
+    except BaseException as error:  # noqa: BLE001
+        failed.append(f"walk: {type(error).__name__}")
+    for name in found:
+        try:
+            importlib.import_module(name)
+        except BaseException as error:  # noqa: BLE001
+            failed.append(f"{name}: {type(error).__name__}")
+    try:
+        from sqlglot.dialects.dialect import DIALECT_MODULE_NAMES, Dialect
+        keys = sorted(DIALECT_MODULE_NAMES)
+    except BaseException as error:  # noqa: BLE001
+        failed.append(f"dialect registry: {type(error).__name__}")
+        keys = []
+    for key in keys:
+        try:
+            Dialect.get_or_raise(key)
+        except BaseException as error:  # noqa: BLE001
+            failed.append(f"dialect {key}: {type(error).__name__}")
+    for name in sorted(test_modules):
+        try:
+            importlib.import_module(name)
+        except BaseException as error:  # noqa: BLE001
+            failed.append(f"{name}: {type(error).__name__}")
+    return failed
+
+
+def child_imports(patched, test_modules, wfd):
+    """In a forked child: what fails to import with the patched sources (import_failures)."""
+    import shutil
+
+    limit_cpu(IMPORT_CPU_S)
+    limit_memory()
+    overlay = enter_overlay(patched)
+    for name in [n for n in sys.modules if n.split(".")[0] in ("sqlglot", "tests")]:
+        del sys.modules[name]
+    failed = import_failures(test_modules)
+    shutil.rmtree(overlay, ignore_errors=True)
+    os.write(wfd, json.dumps(failed).encode())
+    os.close(wfd)
+
+
+def import_checks(jobs, budget_s):
+    """jobs: {commit: patched sources}. Returns {commit: True if an import newly fails (or the
+    child gave no answer), False if all is as with the pinned sources, None if it wasn't run}."""
+    import select
+    import time
+
+    if not jobs:
+        return {}
+    warm_stdlib()  # with site-packages, as in the checks: the test modules import from there
+    import gc
+    gc.freeze()  # the children are forks: keep their collector off the maps loaded here
+    mods = tuple((load_imports() or {}).get("test_modules", ()))
+    deadline = time.monotonic() + budget_s
+    got = {}
+    used = [0.0]
+
+    def run(batch):
+        pending, running = list(batch), {}
+        while pending or running:
+            while pending and len(running) < PARALLEL and time.monotonic() < deadline:
+                key, patched = pending.pop(0)
+                r, w = os.pipe()
+                sys.stdout.flush()
+                sys.stderr.flush()
+                pid = os.fork()
+                if pid == 0:
+                    try:
+                        try:
+                            os.setpgid(0, 0)
+                        except OSError:
+                            pass
+                        os.close(r)
+                        devnull = os.open(os.devnull, os.O_WRONLY)
+                        os.dup2(devnull, 1)
+                        if not os.environ.get("BR_DEBUG"):
+                            os.dup2(devnull, 2)
+                        child_imports(patched, mods, w)
+                        os._exit(0)
+                    except BaseException:
+                        os._exit(1)
+                os.close(w)
+                running[pid] = (key, r, time.monotonic() + IMPORT_WALL_S, bytearray())
+            if not running:
+                break
+            fds = {v[1]: pid for pid, v in running.items()}
+            ready, _, _ = select.select(list(fds), [], [], 0.05)
+            for fd in ready:
+                pid = fds[fd]
+                chunk = os.read(fd, 1 << 16)
+                if chunk:
+                    running[pid][3].extend(chunk)
+                    continue
+                key, _, _, buf = running.pop(pid)
+                os.close(fd)
+                _, status, ru = os.wait4(pid, 0)
+                kill_group(pid)
+                used[0] += ru.ru_utime + ru.ru_stime
+                try:
+                    got[key] = json.loads(buf.decode()) if os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0 else None
+                except ValueError:
+                    got[key] = None
+                got[key] = ("done", got[key])
+            now = time.monotonic()
+            for pid, (key, fd, until, _) in list(running.items()):
+                if now > until:
+                    kill_group(pid)
+                    try:
+                        os.kill(pid, 9)
+                    except OSError:
+                        pass
+                    os.close(fd)
+                    os.wait4(pid, 0)
+                    running.pop(pid)
+                    got[key] = ("done", None)
+
+    run(list(jobs.items()))
+    suspects = [k for k, v in got.items() if v[1] is None or v[1]]
+    base = []
+    if suspects:
+        run([("__pinned__", {})])
+        base = (got.pop("__pinned__", None) or (None, None))[1]
+        if base is None:
+            base = []  # the pinned sources import cleanly; without an answer assume they did
+    log(f"import check of {len(jobs)} commits used {used[0]:.2f}s CPU")
+    verdict = {}
+    for key in jobs:
+        if key not in got:
+            verdict[key] = None
+        else:
+            failed = got[key][1]
+            verdict[key] = failed is None or bool(set(failed) - set(base))
+            if verdict[key]:
+                log(f"{key}: imports fail with the patch: {'no answer' if failed is None else sorted(set(failed) - set(base))[:4]}")
+    return verdict
+
+
+def needs_import_check(selector, snap, every):
+    """Whether a commit's edit can change what importing does: it changes sqlglot code at
+    class or module level, or a function line that runs while modules are imported, and its
+    selection is short of every test. Not for an edit confined to the body of a lambda that
+    no import runs (the statement builds the same objects), nor for the literal value of a
+    class constant that no import-time code reads ("constant", owner_reads_mask)."""
+    if len(snap["chosen"]) >= len(every) or not snap["patched"]:
+        return False
+    for rel, lo, hi, kind in snap["touched"]:
+        if rel.startswith("sqlglot/") and rel.endswith(".py") and rel in snap["patched"]:
+            if kind in ("lambda", "constant"):
+                continue
+            if kind != "function" or selector.touches_import(rel, lo, hi):
+                return True
+    return False
 
 
 def main():
@@ -3881,18 +4426,40 @@ def main():
                 narrow[commit] = alt
                 state_jobs[commit] = (snap["patched"], tuple((load_imports() or {}).get("test_modules", ())),
                                       tuple(alt["state_masks"]), snap["line_blocks"])
+    everything = {"chosen": every, "patched": {}, "verifiable": False, "unreadable": set(), "touched": [],
+                  "data_files": set(), "import_widened": False, "state_masks": [], "line_blocks": {}}
+    imports_known = set()  # commits whose patched imports were seen to succeed as the pinned ones do
     if state_jobs:
         verdict = import_states(state_jobs, max(5.0, STATE_BUDGET_S))
         for commit, same in sorted(verdict.items()):
+            if same == "broken":
+                log(f"{commit}: imports fail with the patch (state check): running every test")
+                snaps[commit] = dict(everything)
+                continue
             log(f"{commit}: import-time state {'unchanged' if same else 'changed or unknown'}")
             if same:
                 snaps[commit] = narrow[commit]
+            if same is not None:
+                imports_known.add(commit)
+    if IMPORT_CHECK and RUN and selector is not None:
+        imp_jobs = {commit: snap["patched"] for commit, snap in snaps.items()
+                    if commit not in imports_known and needs_import_check(selector, snap, every)}
+        if imp_jobs:
+            budget = float(os.environ.get("BR_BUDGET", "140")) - (time.monotonic() - started)
+            verdict = import_checks(imp_jobs, max(5.0, min(40.0, budget - 60)))
+            for commit, broken in sorted(verdict.items()):
+                if broken or broken is None:
+                    # an import fails, or there was no time to find out: every test
+                    if broken is None:
+                        log(f"{commit}: no time for the import check: running every test")
+                    snaps[commit] = dict(everything)
 
     # 2. the checks each selection is worth
     answers = {}
     jobs, tpcds_jobs = [], []
     tpcds_number = number_of.get(TPCDS_TEST)
     genmem_number = number_of.get(GENMEM_TEST)
+    maxnodes_number = number_of.get(MAXNODES_TEST)
     for commit, snap in snaps.items():
         chosen, patched, verifiable, unreadable = snap["chosen"], snap["patched"], snap["verifiable"], snap["unreadable"]
         if selector is not None:
@@ -3905,6 +4472,16 @@ def main():
                 tpcds_jobs.append(((commit, "tpcds"), patched, [TPCDS_TEST],
                                    {"__tpcds__": plan, TPCDS_TEST: duration[tpcds_number] / 1000},
                                    10 + max(3 * plan["estimate"], 1.5 * plan["budget"])))
+        if RUN and verifiable and patched and maxnodes_number in chosen and maxnodes_number not in unreadable \
+                and all(rel.endswith(".py") and rel.startswith(("sqlglot/", "tests/")) and rel != "tests/test_parser.py"
+                        for rel in patched):
+            # every changed source is overlaid and the test's own module is as recorded
+            saving = (pack_cost(chosen, duration)
+                      - pack_cost([n for n in chosen if n != maxnodes_number], duration)) / 1000
+            if MAXNODES_P_PASS * saving > 1.5 * MAXNODES_CPU_S:
+                tpcds_jobs.append(((commit, "maxnodes"), patched, [MAXNODES_TEST],
+                                   {"__maxnodes__": {"budget": MAXNODES_BUDGET_S},
+                                    MAXNODES_TEST: duration[maxnodes_number] / 1000}, 10 + MAXNODES_BUDGET_S))
         if RUN and verifiable and selector is not None and genmem_number in chosen:
             gplan = selector.genmem_plan(chosen, duration, genmem_number, unreadable)
             if gplan is not None and not gplan["dialects"] and not gplan["import_check"]:
