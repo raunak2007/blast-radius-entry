@@ -43,6 +43,7 @@ OPERANDS_DATA = Path(os.environ.get("BR_OPERANDS", str(Path(__file__).with_name(
 DICTREADS_DATA = Path(os.environ.get("BR_DICTREADS", str(Path(__file__).with_name("dictreads.pkl.gz"))))
 DEFAULTS_DATA = Path(os.environ.get("BR_DEFAULTS", str(Path(__file__).with_name("defaults.pkl.gz"))))
 ATTR_OWNERS_DATA = Path(os.environ.get("BR_ATTR_OWNERS", str(Path(__file__).with_name("attr_owners.pkl.gz"))))
+FIXTURES_DATA = Path(os.environ.get("BR_FIXTURES", str(Path(__file__).with_name("fixtures.pkl.gz"))))
 CMP_NAMES = {ast.Is: "is", ast.IsNot: "is not", ast.Eq: "==", ast.NotEq: "!=", ast.Lt: "<", ast.LtE: "<=",
              ast.Gt: ">", ast.GtE: ">=", ast.In: "in", ast.NotIn: "not in"}
 CMP_ALT = {"is": "==", "is not": "!=", "<": "<=", "<=": "<", ">": ">=", ">=": ">"}  # as tools/cmp_plugin.py
@@ -61,8 +62,10 @@ TPCDS_EARLY_RERUNS = 3  # changed plans run to the end at once, before deferring
 # The replay child also stops once its CPU passes this allowance plus this many times the
 # recorded CPU of the work it has started: an edit that makes a plan explode (a cross join
 # where there was a filter) used to burn the whole budget before failing.
-TPCDS_SETUP_S = float(os.environ.get("BR_TPCDS_SETUP", "2.0"))
-TPCDS_PACE = float(os.environ.get("BR_TPCDS_PACE", "4.0"))
+# A normal replay uses about 0.3 s to set up and 0.7 times the recorded CPU here, so this
+# leaves room for a machine several times slower.
+TPCDS_SETUP_S = float(os.environ.get("BR_TPCDS_SETUP", "3.0"))
+TPCDS_PACE = float(os.environ.get("BR_TPCDS_PACE", "6.0"))
 WORKER_MS = 2000
 MAX_WORKERS = 8
 
@@ -1890,14 +1893,46 @@ class Selector:
             return False  # the interpreter it starts imports nothing from tests/
         return rel in CORE_FILES or not (rel.startswith("sqlglot/") and rel.endswith(".py"))
 
+    def plain_function_commit(self):
+        """Whether every change is ordinary function code in sqlglot/: nothing an import builds
+        changed, so a piece of a test that never runs a changed line does what it did before."""
+        return bool(self.verifiable and not self.data_files and self.patched and self.touched
+                    and all(rel.startswith("sqlglot/") for rel in self.patched)
+                    and all(kind == "function" and rel.startswith("sqlglot/") for rel, _, _, kind in self.touched))
+
     def bare_ok(self):
         """Whether a check of this commit may skip the setUpClass of BARE_CLASSES: every change
         is ordinary function code in sqlglot/ (so nothing an import builds changed), and none
         of it is in a file that setUpClass runs code from."""
-        return bool(self.verifiable and not self.data_files and self.patched and self.touched
-                    and all(rel.startswith("sqlglot/") for rel in self.patched)
-                    and all(kind == "function" and rel.startswith("sqlglot/") and rel not in BARE_SETUP_FILES
-                            for rel, _, _, kind in self.touched))
+        return self.plain_function_commit() and all(rel not in BARE_SETUP_FILES for rel, _, _, _ in self.touched)
+
+    def fixture_entries(self, tid):
+        """For a fixture-driven test (one that loops over the entries of a .sql fixture), the
+        entries whose processing can run a changed line: ({"calls": the loader calls as
+        recorded, "keep": {call: entry indexes}}, their share of all entries, the CPU ms of a
+        full run). None when the whole test has to run: not such a test, a changed line every
+        entry depends on, or one no entry accounts for. Only for a plain_function_commit."""
+        data = load_fixtures()
+        entry = data.get(tid) if data is not None else None
+        if entry is None:
+            return None
+        hit = 0
+        for rel, lo, hi, _ in self.touched:
+            base, per = entry["base"].get(rel), entry["lines"].get(rel)
+            for line in range(lo, hi + 1):
+                if base and line in base:
+                    return None
+                if per:
+                    hit |= per.get(line, 0)
+        if not hit:
+            return None
+        keep, start = {}, 0
+        for k, (_, _, count) in enumerate(entry["calls"]):
+            part = (hit >> start) & ((1 << count) - 1)
+            start += count
+            if part:
+                keep[k] = [i for i in range(count) if part >> i & 1]
+        return {"calls": entry["calls"], "keep": keep}, hit.bit_count() / max(1, entry["entries"]), entry["full_ms"]
 
     # ---- the 21 s TPC-DS executor test: replay what the edit can reach instead of running it
 
@@ -2040,12 +2075,24 @@ COMMIT_OVERHEAD_MS = 300  # fork, importing the patched sqlglot, plus a safety m
 FILE_OVERHEAD_MS = {"tests/test_executor.py": 4000}
 DEFAULT_FILE_OVERHEAD_MS = 150
 BARE_FILE_OVERHEAD_MS = 300
+# Fixture-driven tests (they loop over the entries of a .sql fixture) are checked on just the
+# entries whose processing can run a changed line, when those are at most this share of them.
+# The estimate: a fixed part, plus that share of a full run's CPU with a margin for the pool.
+FIXTURE_FILES = {"tests/test_optimizer.py", "tests/test_transpile.py", "tests/test_serde.py"}
+FIXTURE_MAX_SHARE = 0.2
+FIXTURE_SETUP_MS = 60
+FIXTURE_MARGIN = 1.5
 # A class whose setUpClass a check may skip, and the only sqlglot files that setUpClass runs
 # code from (traced at the pinned commit): when a commit changes nothing but ordinary function
 # code in other sqlglot files, setUpClass does exactly what it did before, so it can't fail,
 # and a test that never touches what it builds runs the same without it.
 BARE_CLASSES = {"tests/test_executor.py": "TestExecutor"}
 BARE_SETUP_FILES = {"sqlglot/executor/table.py"}
+# The tests of those classes that touch what setUpClass builds, as fixture_tests() finds them
+# in the pinned test file (kept here because parsing that file costs 50 ms a run).
+BARE_NEEDS_SETUP = {
+    ("tests/test_executor.py", "TestExecutor"): frozenset(("test_execute_tpcds", "test_execute_tpch", "test_optimized_tpch")),
+}
 # test_optimizer's heavy tests. Most run fixtures through a process pool, so a check costs
 # more CPU than their recorded wall time, and they are the tests an edit most often breaks:
 # a check that finds a failure has only cost CPU. Each is charged 3.7 times its measured check
@@ -2133,7 +2180,9 @@ def bare_classes(test_ids):
         mine = [t.split("::")[2] for t in test_ids if t.startswith(f"{rel}::{cls_name}::")]
         if not mine:
             continue
-        need = fixture_tests(rel, cls_name)
+        need = BARE_NEEDS_SETUP.get((rel, cls_name))
+        if need is None:
+            need = fixture_tests(rel, cls_name)
         if need is not None and not need & set(mine):
             out.add((rel, cls_name))
     return out
@@ -2146,11 +2195,17 @@ def pack_cost(numbers, duration):
     return max(sum(duration[n] for n in w) for w in workers) + WORKER_MS * len(workers)
 
 
-def plan_check(chosen, duration, info, excluded=(), want_gain=False, bare=False):
+def plan_check(chosen, duration, info, excluded=(), want_gain=False, bare=False, cost_ms=None):
     """The cheapest-first prefix of runnable tests whose check is expected to pay off (with
     want_gain, the ms it is expected to save if they all pass, instead). bare: the check may
-    skip the setUpClass of BARE_CLASSES."""
-    runnable = sorted((n for n in chosen if info[n]["runnable"] and n not in excluded), key=lambda n: (duration[n], n))
+    skip the setUpClass of BARE_CLASSES. cost_ms: what running some tests is expected to cost
+    instead of their recorded time (a fixture-driven test checked on a few entries)."""
+    cost_ms = cost_ms or {}
+
+    def cost(n):
+        return cost_ms[n] if n in cost_ms else duration[n] + info[n].get("extra", 0)
+
+    runnable = sorted((n for n in chosen if info[n]["runnable"] and n not in excluded), key=lambda n: (cost(n), n))
     if not runnable:
         return 0 if want_gain else []
 
@@ -2169,7 +2224,7 @@ def plan_check(chosen, duration, info, excluded=(), want_gain=False, bare=False)
     prev = 0
     for k in ks:
         for n in runnable[prev:k]:
-            run_ms += (duration[n] + info[n].get("extra", 0)) * TIME_FACTOR
+            run_ms += cost(n) * TIME_FACTOR
             files.add(info[n]["file"])
         prev = k
         overhead = COMMIT_OVERHEAD_MS + sum(file_ms(f) for f in files)
@@ -2223,6 +2278,21 @@ _OPERANDS = None
 _DICTREADS = None
 _DEFAULTS = None
 _ATTR_OWNERS = None
+_FIXTURES = None
+
+
+def load_fixtures():
+    """Per fixture-driven test, the lines each fixture entry's processing runs
+    (tools/build_fixture_cov.py), one pickle per test; loaded on first use."""
+    global _FIXTURES
+    if _FIXTURES is None:
+        try:
+            with gzip.open(FIXTURES_DATA, "rb") as fh:
+                _FIXTURES = Blobs(pickle.load(fh)["by_test"])
+        except Exception as error:
+            log(f"no fixture-entry data ({error!r}); fixture-driven tests are checked whole")
+            _FIXTURES = False
+    return _FIXTURES or None
 
 
 def load_attr_owners():
@@ -2405,6 +2475,16 @@ def load_tpcds():
     return _TPCDS or None
 
 
+def tpcds_rows(data, name):
+    """The rows of one TPC-DS table. The rows are most of the data file and only a replay that
+    runs a query to the end reads them, for the tables that query uses, so each table stays
+    pickled until then (tools/pack_tpcds.py)."""
+    tables = data.setdefault("tables", {})
+    if name not in tables:
+        tables[name] = pickle.loads(data["table_blobs"][name])
+    return tables[name]
+
+
 def enter_overlay(patched):
     """In a forked child: serve the patched sources to this Python and to any it starts."""
     import tempfile
@@ -2465,8 +2545,20 @@ def child_tpcds(patched, plan, wfd):
     from sqlglot.executor import execute
     from sqlglot.executor.table import Table
 
-    tables = {t: Table(columns=c, rows=data["tables"][t]) for t, c in data["schema"].items()}
-    schema, tables = pickle.loads(pickle.dumps((data["schema"], tables)))
+    schema = pickle.loads(pickle.dumps(data["schema"]))
+    # A run that stops right after optimize() never reads a row: execute() only wraps the
+    # tables it is given before it optimizes. Those runs get tables without rows, and the real
+    # ones (unpickled, then pickled across as the test's pool does) are built for the first
+    # run that goes to the end.
+    empty_tables = {t: Table(columns=c, rows=[]) for t, c in data["schema"].items()}
+    loaded = {}
+
+    def real_table(name):
+        if name not in loaded:
+            built = Table(columns=data["schema"][name], rows=tpcds_rows(data, name))
+            loaded[name] = pickle.loads(pickle.dumps(built))
+        return loaded[name]
+
     by_index = {q["index"]: q for q in data["queries"]}
     front = plan["mode"] == "front"
     # per query: "front" (stop after optimize() and compare its digest), "log" (also render
@@ -2543,7 +2635,8 @@ def child_tpcds(patched, plan, wfd):
         current.clear()
         current["q"] = q
         expression = pickle.loads(pickle.dumps(parse_one(q["sql"])))
-        used = {t.name: tables[t.name] for t in find_tables(expression)}
+        to_end = modes.get(q["index"]) == "full" or q["index"] in optimized or not hooked
+        used = {t.name: real_table(t.name) if to_end else empty_tables[t.name] for t in find_tables(expression)}
         try:
             result = pickle.loads(pickle.dumps(execute(expression, schema=schema, tables=used)))
         except Stop:
@@ -2556,7 +2649,8 @@ def child_tpcds(patched, plan, wfd):
 
     same = True
     early = 0
-    if any(m != "full" for m in modes.values()):
+    hooked = any(m != "full" for m in modes.values())
+    if hooked:
         executor_module.optimize = optimize_hook
     try:
         for i in plan["queries"]:
@@ -2673,6 +2767,36 @@ def child_run(patched, test_ids, limits, wfd):
         os.process_cpu_count = lambda: cpus
 
     failed = set()
+    # fixture-driven tests run on a subset of their entries: {test id: {"calls", "keep"}}
+    entries = limits.get("__entries__") or {}
+    current = {"tid": None, "calls": 0}
+
+    def filter_loaders(mod):
+        """The module's fixture loaders, yielding only the planned entries to a test that has
+        a plan (and everything to any other caller). A call that isn't the one recorded for
+        that test (name, file, number of entries) runs whole and the test stays selected."""
+        for name in ("load_sql_fixtures", "load_sql_fixture_pairs"):
+            original = getattr(mod, name, None)
+            if original is None:
+                continue
+
+            def loader(filename, _name=name, _original=original):
+                plan = entries.get(current["tid"])
+                if plan is None:
+                    yield from _original(filename)
+                    return
+                k = current["calls"]
+                current["calls"] = k + 1
+                items = list(_original(filename))
+                calls = plan["calls"]
+                if k >= len(calls) or tuple(calls[k]) != (_name, filename, len(items)):
+                    failed.add(current["tid"])
+                    yield from items
+                    return
+                for i in plan["keep"].get(k, ()):
+                    yield items[i]
+
+            setattr(mod, name, loader)
 
     class Result(unittest.TestResult):
         def _mark(self, test, err=None):
@@ -2691,10 +2815,15 @@ def child_run(patched, test_ids, limits, wfd):
         def startTest(self, test):
             super().startTest(test)
             self._t0 = time.perf_counter()
+            current["tid"], current["calls"] = getattr(test, "test_id", None), 0
 
         def stopTest(self, test):
             super().stopTest(test)
             tid = getattr(test, "test_id", None)
+            plan = entries.get(tid)
+            if plan is not None and current["calls"] != len(plan["calls"]):
+                failed.add(tid)  # it didn't load its fixtures the way it did when recorded
+            current["tid"] = None
             # far slower than recorded: it may have timed out where it was labeled
             if tid is not None and time.perf_counter() - self._t0 > 2 + 5 * limits.get(tid, 0):
                 failed.add(tid)
@@ -2734,6 +2863,8 @@ def child_run(patched, test_ids, limits, wfd):
             failed.update(t for ms in classes.values() for _, t in ms)
             continue
         mark(f"imported {modname}")
+        if any(t.startswith(f + "::") for t in entries):
+            filter_loaders(mod)
         for cls_name, meths in classes.items():
             cls = getattr(mod, cls_name, None)
             if cls is None:
@@ -3472,13 +3603,27 @@ def main():
                                    10 + 3 * gplan["estimate"]))
         if RUN and verifiable and chosen:
             bare = selector is not None and selector.bare_ok()
-            check = plan_check(chosen, duration, info, unreadable, bare=bare)
+            replay = {}  # fixture-driven tests that only need a few of their entries checked
+            if selector is not None and selector.plain_function_commit():
+                for n in chosen:
+                    if info[n]["file"] in FIXTURE_FILES and info[n]["runnable"] and n not in unreadable:
+                        got = selector.fixture_entries(id_of[n])
+                        if got is not None and got[1] <= FIXTURE_MAX_SHARE:
+                            replay[n] = (got[0], FIXTURE_SETUP_MS + FIXTURE_MARGIN * got[1] * got[2])
+            check = plan_check(chosen, duration, info, unreadable, bare=bare,
+                               cost_ms={n: ms for n, (_, ms) in replay.items()})
             if check:
                 expected = sum(duration[n] for n in check) / 1000
                 limit = 10 + 4 * expected
                 limits = {id_of[n]: duration[n] / 1000 for n in check}
                 if bare:
                     limits["__bare__"] = bare_classes(list(limits))
+                entries = {id_of[n]: replay[n][0] for n in check if n in replay}
+                if entries:
+                    limits["__entries__"] = entries
+                    log(f"{commit}: " + ", ".join(
+                        f"{t.split('::')[-1]} on {sum(len(v) for v in e['keep'].values())} of "
+                        f"{sum(c[2] for c in e['calls'])} entries" for t, e in sorted(entries.items())))
                 jobs.append((commit, patched, [id_of[n] for n in check], limits, limit))
         log(f"{commit}: {len(chosen)} tests")
 
