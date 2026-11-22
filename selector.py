@@ -3496,7 +3496,7 @@ def pack_cost(numbers, duration):
 
 # What a second of check CPU costs, in simulated seconds: the board bills CPU at about twice
 # what it measures here, and a check whose tests fail saves nothing at all.
-CHECK_CPU_PRICE = float(os.environ.get("BR_CHECK_PRICE", "2.0"))
+CHECK_CPU_PRICE = float(os.environ.get("BR_CHECK_PRICE", "1.5"))
 
 
 def pack_floor(total, top):
