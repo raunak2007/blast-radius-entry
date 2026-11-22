@@ -325,6 +325,105 @@ def tests_module_tests(maps, path: str) -> set:
     return out
 
 
+_ALL_SOURCES = None
+
+
+def _all_sources() -> dict:
+    """{rel: text} of every Python file under sqlglot/ and tests/ at the pinned commit."""
+    global _ALL_SOURCES
+    if _ALL_SOURCES is None:
+        out = {}
+        for top in ("sqlglot", "tests"):
+            for f in (SRC / top).rglob("*.py"):
+                try:
+                    out[str(f.relative_to(SRC))] = f.read_text(errors="replace")
+                except OSError:
+                    pass
+        _ALL_SOURCES = out
+    return _ALL_SOURCES
+
+
+def _inert_def(node, postponed: bool) -> bool:
+    """Defining this function runs nothing that can fail or be seen, and no lookup by name finds it."""
+    name = node.name
+    if name.startswith("__") or name.endswith("_sql") or name.startswith("test"):
+        return False
+    if any(not (isinstance(d, ast.Name) and d.id in ("staticmethod", "classmethod", "property"))
+           for d in node.decorator_list):
+        return False
+    args = node.args
+    if any(not isinstance(d, ast.Constant) for d in args.defaults + [d for d in args.kw_defaults if d is not None]):
+        return False
+    every = args.posonlyargs + args.args + args.kwonlyargs + [a for a in (args.vararg, args.kwarg) if a]
+    if not postponed and (node.returns is not None or any(a.annotation is not None for a in every)):
+        return False
+    if getattr(node, "type_params", None):
+        return False
+    try:  # what ast.parse lets through but compiling rejects (a stray nonlocal, break, ...)
+        compile(ast.Module(body=[node], type_ignores=[]), "<new def>", "exec", dont_inherit=True)
+    except (SyntaxError, ValueError, TypeError):
+        return False
+    return True
+
+
+def _adds_def(fp) -> bool:
+    """Cheap gate: some added line defines a function, and every removed line is blank."""
+    lines = [ln for h in fp.hunks for ln in h.lines]
+    return any(ln.startswith("+") and ln[1:].lstrip().startswith("def ") for ln in lines) and \
+        all(not ln.startswith("-") or not ln[1:].strip() for ln in lines)
+
+
+def _only_inert_new_defs(path: str, old: str, new: str) -> bool:
+    """The edit only adds module- or class-level functions that nothing can call: a new name
+    (no old def of that scope has it) spelled nowhere else in sqlglot/ or tests/, not a dunder,
+    not a generator handler (`*_sql`, found by dir()), not a test, and whose definition runs
+    nothing (only staticmethod/classmethod/property decorators, constant defaults, annotations
+    postponed or absent). With those removed, the new module's AST equals the old one."""
+    try:
+        to, tn = ast.parse(old), ast.parse(new)
+    except (SyntaxError, ValueError):
+        return False
+    postponed = any(isinstance(n, ast.ImportFrom) and n.module == "__future__"
+                    and any(a.name == "annotations" for a in n.names) for n in tn.body)
+    old_defs = set()
+
+    def collect(body, scope):
+        for n in body:
+            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                old_defs.add((scope, n.name))
+            if isinstance(n, ast.ClassDef):
+                collect(n.body, scope + (n.name,))
+
+    collect(to.body, ())
+    added = []
+
+    def strip(body, scope):
+        keep = []
+        for n in body:
+            if isinstance(n, ast.FunctionDef) and (scope, n.name) not in old_defs:
+                added.append(n)
+                continue
+            if isinstance(n, ast.ClassDef):
+                n.body = strip(n.body, scope + (n.name,))
+            keep.append(n)
+        return keep
+
+    tn.body = strip(tn.body, ())
+    if not added or ast.dump(to) != ast.dump(tn):
+        return False
+    for node in added:
+        if not _inert_def(node, postponed):
+            return False
+        pat = _re.compile(r"(?<![\w])" + _re.escape(node.name) + r"(?![\w])")
+        hits = [i for i, line in enumerate(new.splitlines(), start=1) if pat.search(line)]
+        if hits != [node.lineno]:
+            return False
+        for rel, text in _all_sources().items():
+            if rel != path and node.name in text and pat.search(text):
+                return False
+    return True
+
+
 def select_file(fp, maps, all_tests: set, semantic_needed: dict, version_norm: bool = True) -> set:
     path = fp.path
     if fp.special or fp.old_path is None or fp.new_path is None or fp.old_path != fp.new_path:
@@ -355,6 +454,9 @@ def select_file(fp, maps, all_tests: set, semantic_needed: dict, version_norm: b
 
     old = (SRC / path).read_text()
     new = P.apply(old, fp)
+    if is_pkg and _adds_def(fp) and _only_inert_new_defs(path, old, new):
+        log(f"only new functions nothing can call: {path}")
+        return set()
     regions = astdiff.diff(old, new, version_norm=version_norm)
     if regions is None:
         # A syntax error fails the tests that import the module, not every test.
