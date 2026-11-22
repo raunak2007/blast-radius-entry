@@ -2968,6 +2968,15 @@ def static_main(args):
     data = {"src": str(SRC), "import_sites": selector.import_sites(), "test_bodies": selector.test_bodies()}
     with open(args[0], "wb") as fh:
         pickle.dump(data, fh, protocol=pickle.HIGHEST_PROTOCOL)
+    tpcds = load_tpcds()
+    if tpcds is not None and len(args) > 2:
+        rows = tpcds.pop("tables")
+        tpcds["tables"] = None
+        tpcds["ready_from"] = os.path.getsize(TPCDS_DATA)
+        with open(args[1], "wb") as fh:
+            pickle.dump(tpcds, fh, protocol=pickle.HIGHEST_PROTOCOL)
+        with open(args[2], "wb") as fh:
+            pickle.dump(rows, fh, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 def load_tpcds_env():
@@ -3142,11 +3151,35 @@ def load_globals():
     return _GLOBALS or None
 
 
+# load_tpcds()'s result, split when the image is built (`selector.py --static`): the plan part
+# (what tpcds_plan reads, already in the form it reads it), and apart from it the recorded
+# tables' rows, which only a replay or a fixture check reads (tpcds_tables()).
+TPCDS_READY = Path(os.environ.get("BR_TPCDS_READY", str(Path(__file__).with_name("tpcds_ready.pkl"))))
+TPCDS_ROWS = Path(os.environ.get("BR_TPCDS_ROWS", str(Path(__file__).with_name("tpcds_rows.pkl"))))
+
+
+def tpcds_tables(data):
+    """The recorded rows of every TPC-DS table, loaded on first use when they're kept apart."""
+    if data.get("tables") is None:
+        with open(TPCDS_ROWS, "rb") as fh:
+            data["tables"] = pickle.load(fh)
+    return data["tables"]
+
+
 def load_tpcds():
     """Per-query coverage, CPU times and pristine outputs of test_execute_tpcds, recorded at the
     pinned commit (tools/build_tpcds.py). Loaded once in the parent; forked checks share it."""
     global _TPCDS
     if _TPCDS is None:
+        try:
+            with open(TPCDS_READY, "rb") as fh:
+                data = pickle.load(fh)
+            if data.get("ready_from") != os.path.getsize(TPCDS_DATA) or not TPCDS_ROWS.is_file():
+                raise ValueError("stale")
+            _TPCDS = data
+            return _TPCDS
+        except Exception:
+            pass
         try:
             with gzip.open(TPCDS_DATA, "rb") as fh:
                 data = pickle.load(fh)
@@ -3247,16 +3280,21 @@ def child_tpcds(patched, plan, wfd):
 
         if budget != float("inf"):
             signal.signal(signal.SIGPROF, give_up)
-    raw_tables = {t: Table(columns=c, rows=data["tables"][t]) for t, c in data["schema"].items()}
     schema = pickle.loads(pickle.dumps(data["schema"]))
-    copies = {}
+    raw_tables, copies = {}, {}
+
+    def built_tables():
+        if not raw_tables:
+            rows = tpcds_tables(data)
+            raw_tables.update((t, Table(columns=c, rows=rows[t])) for t, c in data["schema"].items())
+        return raw_tables
 
     def worker_tables():
         """The tables as the test's pool worker gets them (pickled there), made only once a
         query runs past optimize(): until then nothing changed reads them (a change to the
         pickling, find_tables or ensure_tables makes every query "full")."""
         if not copies:
-            copies.update(pickle.loads(pickle.dumps(raw_tables)))
+            copies.update(pickle.loads(pickle.dumps(built_tables())))
         return copies
     by_index = {q["index"]: q for q in data["queries"]}
     front = plan["mode"] == "front"
@@ -3322,7 +3360,7 @@ def child_tpcds(patched, plan, wfd):
         expression = pickle.loads(pickle.dumps(parse_one(q["sql"])))
         stops = modes.get(q["index"]) != "full" and q["index"] not in optimized and \
             executor_module.optimize is optimize_hook
-        tables = raw_tables if stops else worker_tables()
+        tables = built_tables() if stops else worker_tables()
         used = {t.name: tables[t.name] for t in find_tables(expression)}
         try:
             result = pickle.loads(pickle.dumps(execute(expression, schema=schema, tables=used)))
@@ -3479,7 +3517,7 @@ def child_fixture(patched, plan, wfd):
             from sqlglot.executor.table import Table
 
             data = load_tpcds()
-            st["tables"][name] = pickle.loads(pickle.dumps(Table(columns=data["schema"][name], rows=data["tables"][name])))
+            st["tables"][name] = pickle.loads(pickle.dumps(Table(columns=data["schema"][name], rows=tpcds_tables(data)[name])))
         return st["tables"][name]
 
     def duck():
@@ -5105,6 +5143,9 @@ def main():
     jobs = tpcds_jobs + jobs
     if jobs:
         budget = float(os.environ.get("BR_BUDGET", "140")) - (time.monotonic() - started)
+        if any(("__tpcds__" in job[3] and not job[3]["__tpcds__"].get("keep")) or "__fixture__" in job[3]
+               for job in jobs) and load_tpcds() is not None:
+            tpcds_tables(load_tpcds())  # once here, so the checks share it
         warm(jobs)
         phase("warm")
         preimport(jobs)

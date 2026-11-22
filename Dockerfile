@@ -40,11 +40,12 @@ with tarfile.open(fileobj=io.BytesIO(data)) as tf:
 tarfile.open("/app/sqlglot_src.tar.gz").extractall("/opt/sqlglot", filter="data")
 EOF
 # static_src.pkl: every import statement and test method source of the pinned sources,
-# which the import-failure narrowing would otherwise parse again in every run. selector.py
+# which the import-failure narrowing would otherwise parse again in every run;
+# tpcds_ready.pkl / tpcds_rows.pkl: tpcds.pkl.gz as load_tpcds() uses it, the rows apart. selector.py
 # is compiled too and imported as a module, so no run compiles it again.
 RUN rm /app/sqlglot_src.tar.gz \
  && python -m compileall -q -j 0 /usr/local/lib/python3.13 /opt/sqlglot/sqlglot /opt/sqlglot/tests > /dev/null \
- && python -S /app/selector.py --static /app/static_src.pkl \
+ && python -S /app/selector.py --static /app/static_src.pkl /app/tpcds_ready.pkl /app/tpcds_rows.pkl \
  && python -m compileall -q /app/selector.py \
  && chmod -R a+rX /opt/sqlglot /opt/sqlglot_root /app
 
