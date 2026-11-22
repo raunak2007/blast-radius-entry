@@ -29,6 +29,7 @@ import importlib.abc, importlib.util, json, os, pickle, sys
 root, mode, indices = sys.argv[1], sys.argv[2], json.loads(sys.argv[3])
 sys.path.insert(0, root)
 patched = json.loads(sys.stdin.read() or "{}")
+fixtures = patched.pop("__fixtures__", {})  # fixture path (under tests/fixtures/) -> patched text
 
 class Loader(importlib.abc.Loader):
     def __init__(self, path, src):
@@ -63,6 +64,15 @@ if mode == "map":
     cov.start()
 
 import tests.test_executor as te
+if fixtures:
+    import builtins, io
+    import tests.helpers as th
+    _real_open = builtins.open
+    _served = {os.path.normpath(os.path.join(th.FIXTURES_DIR, k)): v for k, v in fixtures.items()}
+    def _open(file, *args, **kwargs):
+        text = _served.get(os.path.normpath(str(file)))
+        return io.StringIO(text) if text is not None else _real_open(file, *args, **kwargs)
+    th.open = _open  # the helper module's global shadows the builtin for its loaders
 from sqlglot import parse_one
 
 te.TestExecutor.setUpClass()
