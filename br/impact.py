@@ -41,6 +41,12 @@ FAMILY_DIRS = ("dialects", "parsers", "generators", "typing")
 FAMILY_SKIP = ("__init__", "dialect", "base")
 PACKAGE_WALKERS = {"sqlglot/typing/": "tests/test_typing.py"}
 WHOLE_FILE = (0, 10**9)
+# top-level files and script folders no test, pytest or install step reads
+UNREAD_TOP = frozenset({"Makefile", ".gitignore", ".gitmodules", ".gitpod.yml", ".pre-commit-config.yaml", "LICENSE",
+                        "MANIFEST.in", "sqlglot.png"})
+UNREAD_DIRS = ("benchmarks/", "posts/", "pdoc/")
+# pyproject.toml tables only linters and type checkers read
+INERT_TOOLS = frozenset({"ruff", "mypy", "black", "isort", "pylint", "codespell", "pyright", "uv"})
 
 
 @dataclass
@@ -481,13 +487,47 @@ class Analyzer:
         path = fd.path
         if not (path.startswith("sqlglot/") and path.endswith(".py")):
             self._unprobeable()
+        if {p for p in (fd.old_path, fd.new_path) if p} == {"sqlglot/__main__.py"}:
+            return set()  # the CLI entry point: no test or module imports it (test_docs skips it)
         if path.startswith("tests/fixtures/"):
             return self._fixture(fd)
         if path.endswith(".py") and path.startswith(("sqlglot/", "tests/")):
             return self._python(fd)
         if path.endswith(DOC_SUFFIXES) or path.startswith(("docs/", ".github/")):
             return set()
-        return ALL
+        return self._repo_file(fd)
+
+    def _repo_file(self, fd: FileDiff) -> set[int] | None:
+        """Top-level files outside sqlglot/ and tests/. pytest reads its configuration from
+        pyproject.toml / setup.cfg / setup.py; nothing in the suite opens the rest (Makefile,
+        dotfiles, scripts under benchmarks/ or posts/). An edit that leaves every setting
+        pytest or the build can read unchanged selects nothing; any doubt selects everything."""
+        paths = {p for p in (fd.old_path, fd.new_path) if p}
+        if fd.binary or len(paths) != 1:
+            return ALL
+        path = fd.path
+        if path in UNREAD_TOP or path.startswith(UNREAD_DIRS):
+            return set()
+        if path not in ("pyproject.toml", "setup.py") or fd.old_path is None or fd.new_path is None:
+            return ALL
+        try:
+            with open(os.path.join(self.src_root, path), encoding="utf-8") as handle:
+                old_text = handle.read()
+            new_text = "\n".join(apply_hunks(old_text.split("\n"), fd.hunks))
+            if path == "setup.py":
+                return set() if module_key(old_text, path) == module_key(new_text, path) else ALL
+            import tomllib
+
+            def settings(text: str) -> dict:
+                doc = tomllib.loads(text)
+                tool = doc.get("tool", {})
+                if isinstance(tool, dict):
+                    doc["tool"] = {k: v for k, v in tool.items() if k not in INERT_TOOLS}
+                return doc
+
+            return set() if settings(old_text) == settings(new_text) else ALL
+        except Exception:  # noqa: BLE001 - unparsable config stops pytest: everything fails
+            return ALL
 
     def _fixture(self, fd: FileDiff) -> set[int] | None:
         if fd.path.endswith(".sql") and not fd.binary and fd.old_path and fd.new_path:
